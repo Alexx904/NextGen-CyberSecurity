@@ -57,17 +57,17 @@
 ## 🔐 EPIC 3: Authentication & Multi-Tenant RBAC
 
 ### Story 3.1: Sicurezza e Gestione Utenti
-- [ ] **TASK-07: Servizio Autenticazione (Password Hashing & JWT Token)**
+- [x] **TASK-07: Servizio Autenticazione (Password Hashing & JWT Token)**
   - **File coinvolti:** `backend/pkg/auth/jwt.go`, `backend/pkg/auth/hasher.go`, `backend/internal/service/auth_service.go`, `backend/internal/repository/postgres/user_repo.go`
   - **Dipendenze:** TASK-05, TASK-06
   - **DoD:** Hashing sicuro delle password (Bcrypt/Argon2id), generazione e validazione token JWT contenenti `user_id`, `tenant_id` e `role`. Unit test con copertura 100%.
 
-- [ ] **TASK-08: HTTP Middleware per Tenant Isolation e RBAC**
+- [x] **TASK-08: HTTP Middleware per Tenant Isolation e RBAC**
   - **File coinvolti:** `backend/internal/delivery/http/middleware/auth_middleware.go`, `backend/internal/delivery/http/middleware/tenant_middleware.go`
   - **Dipendenze:** TASK-07
   - **DoD:** Middleware Chi che valida il Bearer token, inietta nel `context.Context` l'identificativo tenant e verifica i permessi di ruolo (es. solo `SecOps`/`Admin` possono avviare scansioni).
 
-- [ ] **TASK-09: Handler HTTP Auth e Seed Admin/Tenant di Default**
+- [x] **TASK-09: Handler HTTP Auth e Seed Admin/Tenant di Default**
   - **File coinvolti:** `backend/internal/delivery/http/handler/auth_handler.go`, `backend/internal/repository/postgres/seed.go`
   - **Dipendenze:** TASK-08
   - **DoD:** Endpoint `/api/v1/auth/login` e `/api/v1/auth/me` attivi. Script di seeding all'avvio che crea il tenant primario e l'utente SuperAdmin iniziale in assenza di record.
@@ -77,17 +77,17 @@
 ## 🎯 EPIC 4: Target & Asset Scope Management
 
 ### Story 4.1: Gestione Bersagli e Validazione Sicura
-- [ ] **TASK-10: Validatore e Parser Target (IP, CIDR, FQDN, Blacklist)**
+- [x] **TASK-10: Validatore e Parser Target (IP, CIDR, FQDN, Blacklist)**
   - **File coinvolti:** `backend/pkg/validator/target_validator.go`, `backend/pkg/validator/target_validator_test.go`
   - **Dipendenze:** TASK-01
   - **DoD:** Funzioni pure in Go per verificare la validità sintattica di IPv4, IPv6, blocchi CIDR e domini, controllando che non rientrino nella lista nera di esclusione. Unit test completi.
 
-- [ ] **TASK-11: Repository e Service Target (Multi-Tenant)**
+- [x] **TASK-11: Repository e Service Target (Multi-Tenant)**
   - **File coinvolti:** `backend/internal/repository/postgres/target_repo.go`, `backend/internal/service/target_service.go`
   - **Dipendenze:** TASK-05, TASK-10
   - **DoD:** CRUD dei target isolato rigorosamente per `tenant_id`.
 
-- [ ] **TASK-12: Handler HTTP Target**
+- [x] **TASK-12: Handler HTTP Target**
   - **File coinvolti:** `backend/internal/delivery/http/handler/target_handler.go`
   - **Dipendenze:** TASK-08, TASK-11
   - **DoD:** Endpoint REST `GET /api/v1/targets`, `POST /api/v1/targets`, `DELETE /api/v1/targets/{id}` protetti da autenticazione.

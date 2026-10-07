@@ -50,6 +50,18 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.DB.MaxConnLifetime != 1*time.Hour {
 		t.Errorf("Atteso MaxConnLifetime 1h, ottenuto %v", cfg.DB.MaxConnLifetime)
 	}
+	if cfg.Auth.JWTSecret != "nextgen_jwt_default_secret_key_change_me_in_prod" {
+		t.Errorf("Atteso default JWTSecret, ottenuto %s", cfg.Auth.JWTSecret)
+	}
+	if cfg.Auth.AccessTokenExpiration != 15*time.Minute {
+		t.Errorf("Atteso AccessTokenExpiration 15m, ottenuto %v", cfg.Auth.AccessTokenExpiration)
+	}
+	if cfg.Auth.RefreshTokenExpiration != 168*time.Hour {
+		t.Errorf("Atteso RefreshTokenExpiration 168h, ottenuto %v", cfg.Auth.RefreshTokenExpiration)
+	}
+	if cfg.Auth.BcryptCost != 12 {
+		t.Errorf("Atteso BcryptCost 12, ottenuto %d", cfg.Auth.BcryptCost)
+	}
 }
 
 func TestLoadCustomEnvAndDSN(t *testing.T) {
@@ -63,6 +75,10 @@ func TestLoadCustomEnvAndDSN(t *testing.T) {
 	os.Setenv("DB_SSLMODE", "require")
 	os.Setenv("DB_MAX_CONNS", "50")
 	os.Setenv("DB_MIN_CONNS", "10")
+	os.Setenv("JWT_SECRET", "super_custom_jwt_secret_value")
+	os.Setenv("JWT_ACCESS_EXPIRATION_MINUTES", "30")
+	os.Setenv("JWT_REFRESH_EXPIRATION_HOURS", "72")
+	os.Setenv("BCRYPT_COST", "14")
 
 	defer func() {
 		os.Unsetenv("PORT")
@@ -75,6 +91,10 @@ func TestLoadCustomEnvAndDSN(t *testing.T) {
 		os.Unsetenv("DB_SSLMODE")
 		os.Unsetenv("DB_MAX_CONNS")
 		os.Unsetenv("DB_MIN_CONNS")
+		os.Unsetenv("JWT_SECRET")
+		os.Unsetenv("JWT_ACCESS_EXPIRATION_MINUTES")
+		os.Unsetenv("JWT_REFRESH_EXPIRATION_HOURS")
+		os.Unsetenv("BCRYPT_COST")
 	}()
 
 	cfg := config.Load()
@@ -93,6 +113,18 @@ func TestLoadCustomEnvAndDSN(t *testing.T) {
 	}
 	if cfg.DB.MinConns != 10 {
 		t.Errorf("Atteso DB_MIN_CONNS 10, ottenuto %d", cfg.DB.MinConns)
+	}
+	if cfg.Auth.JWTSecret != "super_custom_jwt_secret_value" {
+		t.Errorf("Atteso JWTSecret personalizzato, ottenuto %s", cfg.Auth.JWTSecret)
+	}
+	if cfg.Auth.AccessTokenExpiration != 30*time.Minute {
+		t.Errorf("Atteso AccessTokenExpiration 30m, ottenuto %v", cfg.Auth.AccessTokenExpiration)
+	}
+	if cfg.Auth.RefreshTokenExpiration != 72*time.Hour {
+		t.Errorf("Atteso RefreshTokenExpiration 72h, ottenuto %v", cfg.Auth.RefreshTokenExpiration)
+	}
+	if cfg.Auth.BcryptCost != 14 {
+		t.Errorf("Atteso BcryptCost 14, ottenuto %d", cfg.Auth.BcryptCost)
 	}
 
 	expectedDSN := "postgres://prod_user:super_secret@db.example.com:5433/prod_cybersec?sslmode=require"

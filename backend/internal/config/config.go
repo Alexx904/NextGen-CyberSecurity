@@ -27,6 +27,14 @@ func (d DBConfig) DSN() string {
 		d.User, d.Password, d.Host, d.Port, d.Name, d.SSLMode)
 }
 
+// AuthConfig racchiude i parametri di configurazione per JWT e hashing delle password
+type AuthConfig struct {
+	JWTSecret              string
+	AccessTokenExpiration  time.Duration
+	RefreshTokenExpiration time.Duration
+	BcryptCost             int
+}
+
 // Config contiene le variabili di configurazione principali del server
 type Config struct {
 	Port        string
@@ -34,6 +42,7 @@ type Config struct {
 	AppName     string
 	AppVersion  string
 	DB          DBConfig
+	Auth        AuthConfig
 }
 
 // Load carica la configurazione dalle variabili di ambiente con fallback predefiniti
@@ -51,6 +60,11 @@ func Load() *Config {
 	maxConns := int32(getEnvAsIntOrDefault("DB_MAX_CONNS", 25))
 	minConns := int32(getEnvAsIntOrDefault("DB_MIN_CONNS", 5))
 
+	jwtSecret := getEnvOrDefault("JWT_SECRET", "nextgen_jwt_default_secret_key_change_me_in_prod")
+	accessMinutes := getEnvAsIntOrDefault("JWT_ACCESS_EXPIRATION_MINUTES", 15)
+	refreshHours := getEnvAsIntOrDefault("JWT_REFRESH_EXPIRATION_HOURS", 168) // 7 giorni
+	bcryptCost := getEnvAsIntOrDefault("BCRYPT_COST", 12)
+
 	return &Config{
 		Port:        port,
 		Environment: env,
@@ -67,6 +81,12 @@ func Load() *Config {
 			MinConns:        minConns,
 			MaxConnLifetime: 1 * time.Hour,
 			MaxConnIdleTime: 30 * time.Minute,
+		},
+		Auth: AuthConfig{
+			JWTSecret:              jwtSecret,
+			AccessTokenExpiration:  time.Duration(accessMinutes) * time.Minute,
+			RefreshTokenExpiration: time.Duration(refreshHours) * time.Hour,
+			BcryptCost:             bcryptCost,
 		},
 	}
 }

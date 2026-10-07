@@ -11,11 +11,14 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	chimw "github.com/go-chi/chi/v5/middleware"
 
 	"nextgen-cybersec/internal/config"
 	"nextgen-cybersec/internal/delivery/http/handler"
+	appmw "nextgen-cybersec/internal/delivery/http/middleware"
 	"nextgen-cybersec/internal/repository/postgres"
+	"nextgen-cybersec/internal/service"
+	"nextgen-cybersec/pkg/auth"
 )
 
 func main() {
@@ -51,18 +54,77 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 5. Configurazione Router Chi & Middleware Standard
-	r := chi.NewRouter()
-	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
+	// 5. Inizializzazione Layer di Sicurezza & Autenticazione
+	hasher := auth.NewBcryptHasher(cfg.Auth.BcryptCost)
+	tokenManager, err := auth.NewJWTManager(cfg.Auth.JWTSecret, cfg.Auth.AccessTokenExpiration, cfg.Auth.RefreshTokenExpiration)
+	if err != nil {
+		slog.Error("Inizializzazione JWTManager fallita", "error", err)
+		os.Exit(1)
+	}
 
-	// 6. Registrazione Handler di Sistema
+	// 6. Seeding Idempotente Tenant e SuperAdmin di Default
+	seedCfg := postgres.DefaultSeedConfig()
+	if envEmail := os.Getenv("ADMIN_EMAIL"); envEmail != "" {
+		seedCfg.AdminEmail = envEmail
+	}
+	if envPassword := os.Getenv("ADMIN_PASSWORD"); envPassword != "" {
+		seedCfg.AdminPassword = envPassword
+	}
+	if err := postgres.SeedDefaultAdminAndTenant(initCtx, db.Pool, hasher, seedCfg); err != nil {
+		slog.Error("Seeding iniziale tenant e superadmin fallito", "error", err)
+		os.Exit(1)
+	}
+
+	// 7. Inizializzazione Repository e Service Layer
+	userRepo := postgres.NewUserRepo(db.Pool)
+	authService := service.NewAuthService(userRepo, hasher, tokenManager)
+
+	targetRepo := postgres.NewTargetRepo(db.Pool)
+	targetGroupRepo := postgres.NewTargetGroupRepo(db.Pool)
+	targetService := service.NewTargetService(targetRepo, targetGroupRepo)
+
+	// 8. Configurazione Router Chi & Middleware Standard
+	r := chi.NewRouter()
+	r.Use(chimw.RequestID)
+	r.Use(chimw.RealIP)
+	r.Use(chimw.Logger)
+	r.Use(chimw.Recoverer)
+
+	// 9. Registrazione Handler di Sistema, Auth & Targets
 	healthHandler := handler.NewHealthHandler(cfg.AppName, cfg.AppVersion)
+	authHandler := handler.NewAuthHandler(authService)
+	targetHandler := handler.NewTargetHandler(targetService)
+
 	r.Get("/healthz", healthHandler.HealthCheck)
 	r.Route("/api/v1", func(api chi.Router) {
 		api.Get("/health", healthHandler.HealthCheck)
+
+		api.Route("/auth", func(authRouter chi.Router) {
+			authRouter.Post("/login", authHandler.Login)
+			authRouter.Post("/refresh", authHandler.RefreshToken)
+
+			authRouter.Group(func(protected chi.Router) {
+				protected.Use(appmw.Authenticate(tokenManager))
+				protected.Use(appmw.RequireTenant())
+				protected.Get("/me", authHandler.Me)
+			})
+		})
+
+		api.Route("/targets", func(targetRouter chi.Router) {
+			targetRouter.Use(appmw.Authenticate(tokenManager))
+			targetRouter.Use(appmw.RequireTenant())
+
+			// Lettura target per tutti i ruoli autenticati del tenant
+			targetRouter.Get("/", targetHandler.List)
+			targetRouter.Get("/{id}", targetHandler.GetByID)
+
+			// Creazione ed eliminazione riservate ad operatori SecOps o amministratori
+			targetRouter.Group(func(secOpsRouter chi.Router) {
+				secOpsRouter.Use(appmw.RequireSecOps())
+				secOpsRouter.Post("/", targetHandler.Create)
+				secOpsRouter.Delete("/{id}", targetHandler.Delete)
+			})
+		})
 	})
 
 	// 7. Configurazione Server HTTP con Timeout di Sicurezza
