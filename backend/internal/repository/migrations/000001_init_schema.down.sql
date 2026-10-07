@@ -1,0 +1,13 @@
+-- 000001_init_schema.down.sql
+-- NextGen CyberSecurity Platform - Rollback Initial Schema
+
+DROP TABLE IF EXISTS report_templates CASCADE;
+DROP TABLE IF EXISTS findings CASCADE;
+DROP TABLE IF EXISTS cve_entries CASCADE;
+DROP TABLE IF EXISTS schedules CASCADE;
+DROP TABLE IF EXISTS scans CASCADE;
+DROP TABLE IF EXISTS scan_profiles CASCADE;
+DROP TABLE IF EXISTS targets CASCADE;
+DROP TABLE IF EXISTS target_groups CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+DROP TABLE IF EXISTS tenants CASCADE;

@@ -1,0 +1,69 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: nextgen-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-nextgen}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-nextgen_secret_pwd}
+      POSTGRES_DB: ${DB_NAME:-nextgen_cybersec}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-nextgen} -d ${DB_NAME:-nextgen_cybersec}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - nextgen-net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nextgen-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: ${PORT:-8080}
+      APP_ENV: ${APP_ENV:-development}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-nextgen}
+      DB_PASSWORD: ${DB_PASSWORD:-nextgen_secret_pwd}
+      DB_NAME: ${DB_NAME:-nextgen_cybersec}
+      DB_SSLMODE: disable
+    ports:
+      - "${PORT:-8080}:8080"
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    networks:
+      - nextgen-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: nextgen-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+    networks:
+      - nextgen-net
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  nextgen-net:
+    driver: bridge
+

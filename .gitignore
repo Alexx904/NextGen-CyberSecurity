@@ -1,0 +1,39 @@
+# Binaries and build outputs
+bin/
+dist/
+build/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go artifacts
+*.test
+*.out
+vendor/
+
+# Node & Frontend
+node_modules/
+.npm/
+.yarn/
+*.log
+
+# Environment and sensitive files
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# IDE and OS files
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Docker
+.docker/
+
