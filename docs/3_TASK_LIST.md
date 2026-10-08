@@ -97,12 +97,12 @@
 ## 🔍 EPIC 5: Nmap Scanner Engine & XML Streaming Parser
 
 ### Story 5.1: Esecuzione Sicura e Parsing Nmap
-- [ ] **TASK-13: Nmap Command Runner Sicuro con Context Cancellation**
+- [x] **TASK-13: Nmap Command Runner Sicuro con Context Cancellation**
   - **File coinvolti:** `backend/internal/scanner/nmap_runner.go`, `backend/internal/scanner/profiles.go`, `backend/internal/scanner/nmap_runner_test.go`
   - **Dipendenze:** TASK-02
   - **DoD:** Esecuzione di `nmap` via `exec.CommandContext` (NO shell interpretation), supporto profili (Fast, Standard, Full), propagazione immediata del `SIGTERM` in caso di annullamento.
 
-- [ ] **TASK-14: Parser XML Nmap ad Alte Prestazioni**
+- [x] **TASK-14: Parser XML Nmap ad Alte Prestazioni**
   - **File coinvolti:** `backend/internal/scanner/nmap_parser.go`, `backend/internal/scanner/nmap_parser_test.go`
   - **Dipendenze:** TASK-13
   - **DoD:** Parser basato su streaming `xml.Decoder` capace di convertire l'XML di Nmap in struct Go di host, porte, protocolli, service name, versioni e banner. Test con fixture XML reali.
@@ -112,18 +112,18 @@
 ## ⚙️ EPIC 6: Scan Orchestration & Background Worker Pool
 
 ### Story 6.1: Gestione Asincrona del Ciclo di Vita delle Scansioni
-- [ ] **TASK-15: Worker Pool Asincrono e Gestore delle Code**
+- [x] **TASK-15: Worker Pool Asincrono e Gestore delle Code**
   - **File coinvolti:** `backend/internal/service/scan_orchestrator.go`, `backend/internal/repository/postgres/scan_repo.go`
   - **Dipendenze:** TASK-14
   - **DoD:** Coda in-memory / concorrente con Goroutine worker pool, controllo del limite massimo di scansioni parallele e aggiornamento transazionale degli stati (`QUEUED` -> `RUNNING` -> `COMPLETED`/`FAILED`).
 
-- [ ] **TASK-16: Cancellazione Graceful delle Scansioni**
+- [x] **TASK-16: Cancellazione Graceful delle Scansioni**
   - **File coinvolti:** `backend/internal/service/scan_service.go`, `backend/internal/delivery/http/handler/scan_handler.go`
   - **Dipendenze:** TASK-15
   - **DoD:** Endpoint `POST /api/v1/scans/{id}/cancel` che individua il context della scansione in corso, lo cancella, termina il processo Nmap e imposta lo stato a `CANCELLED`.
 
-- [ ] **TASK-17: API REST Gestione Scansioni e Risultati**
-  - **File coinvolti:** `backend/internal/delivery/http/handler/scan_handler.go`
+- [x] **TASK-17: API REST Gestione Scansioni e Risultati**
+  - **File coinvolti:** `backend/internal/delivery/http/handler/scan_handler.go`, `backend/internal/repository/postgres/finding_repo.go`, `backend/internal/service/scan_service.go`
   - **Dipendenze:** TASK-16
   - **DoD:** Endpoint `POST /api/v1/scans`, `GET /api/v1/scans`, `GET /api/v1/scans/{id}`, `GET /api/v1/scans/{id}/findings`.
 

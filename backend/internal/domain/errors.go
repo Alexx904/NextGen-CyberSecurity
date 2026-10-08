@@ -21,5 +21,10 @@ var (
 	ErrInvalidStateTransition = errors.New("transizione di stato della scansione non consentita")
 	ErrScheduleInactive       = errors.New("la pianificazione richiesta è disattivata")
 	ErrInvalidCron            = errors.New("espressione cron non valida")
+
+	// Errori specifici per Nmap Scanner
+	ErrDisallowedScanOption = errors.New("argomento di scansione non consentito o non sicuro")
+	ErrScannerExecFailed    = errors.New("esecuzione del comando di scansione fallita")
+	ErrScanTimeout          = errors.New("tempo massimo per l'esecuzione della scansione superato")
 )
 

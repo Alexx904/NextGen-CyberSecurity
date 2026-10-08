@@ -83,6 +83,23 @@ func main() {
 	targetGroupRepo := postgres.NewTargetGroupRepo(db.Pool)
 	targetService := service.NewTargetService(targetRepo, targetGroupRepo)
 
+	scanRepo := postgres.NewScanRepo(db.Pool)
+	scanProfileRepo := postgres.NewScanProfileRepo(db.Pool)
+	findingRepo := postgres.NewFindingRepo(db.Pool)
+	scannerRunner := scanner.NewNmapRunner("nmap", logger)
+	scanOrchestrator := service.NewScanOrchestrator(
+		service.DefaultOrchestratorConfig(),
+		scanRepo,
+		scanProfileRepo,
+		targetRepo,
+		scannerRunner,
+		logger,
+	)
+	scanOrchestrator.SetFindingRepo(findingRepo)
+	scanOrchestrator.Start(context.Background())
+
+	scanService := service.NewScanService(scanRepo, scanProfileRepo, targetRepo, findingRepo, scanOrchestrator)
+
 	// 8. Configurazione Router Chi & Middleware Standard
 	r := chi.NewRouter()
 	r.Use(chimw.RequestID)
@@ -90,10 +107,11 @@ func main() {
 	r.Use(chimw.Logger)
 	r.Use(chimw.Recoverer)
 
-	// 9. Registrazione Handler di Sistema, Auth & Targets
+	// 9. Registrazione Handler di Sistema, Auth, Targets & Scans
 	healthHandler := handler.NewHealthHandler(cfg.AppName, cfg.AppVersion)
 	authHandler := handler.NewAuthHandler(authService)
 	targetHandler := handler.NewTargetHandler(targetService)
+	scanHandler := handler.NewScanHandler(scanService)
 
 	r.Get("/healthz", healthHandler.HealthCheck)
 	r.Route("/api/v1", func(api chi.Router) {
@@ -123,6 +141,28 @@ func main() {
 				secOpsRouter.Use(appmw.RequireSecOps())
 				secOpsRouter.Post("/", targetHandler.Create)
 				secOpsRouter.Delete("/{id}", targetHandler.Delete)
+			})
+		})
+
+		api.Route("/scan-profiles", func(profileRouter chi.Router) {
+			profileRouter.Use(appmw.Authenticate(tokenManager))
+			profileRouter.Get("/", scanHandler.ListProfiles)
+		})
+
+		api.Route("/scans", func(scanRouter chi.Router) {
+			scanRouter.Use(appmw.Authenticate(tokenManager))
+			scanRouter.Use(appmw.RequireTenant())
+
+			// Consultazione storico, dettagli scansioni e findings
+			scanRouter.Get("/", scanHandler.List)
+			scanRouter.Get("/{id}", scanHandler.GetByID)
+			scanRouter.Get("/{id}/findings", scanHandler.GetFindings)
+
+			// Avvio e cancellazione riservati ad operatori SecOps o amministratori
+			scanRouter.Group(func(secOpsRouter chi.Router) {
+				secOpsRouter.Use(appmw.RequireSecOps())
+				secOpsRouter.Post("/", scanHandler.Start)
+				secOpsRouter.Post("/{id}/cancel", scanHandler.Cancel)
 			})
 		})
 	})
@@ -164,6 +204,9 @@ func main() {
 			_ = server.Close()
 			os.Exit(1)
 		}
+
+		// Arresto coordinato del worker pool scansioni
+		scanOrchestrator.Stop()
 		slog.Info("Server arrestato con successo in modo controllato")
 	}
 }
