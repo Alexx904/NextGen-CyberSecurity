@@ -9,23 +9,28 @@ import (
 	"nextgen-cybersec/pkg/auth"
 )
 
-// Authenticate intercetta la richiesta HTTP, estrae e valida il token Bearer JWT
+// Authenticate intercetta la richiesta HTTP, estrae e valida il token Bearer JWT.
+// Supporta l'estrazione primaria da header 'Authorization: Bearer <token>' e, come fallback,
+// dal parametro query '?token=<token>' (per download diretti di file ed esportazioni).
 func Authenticate(tokenManager auth.TokenManager) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var tokenStr string
 			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
+			if authHeader != "" {
+				parts := strings.SplitN(authHeader, " ", 2)
+				if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") || strings.TrimSpace(parts[1]) == "" {
+					response.Error(w, http.StatusUnauthorized, "UNAUTHORIZED", "Formato Authorization non valido, atteso 'Bearer <token>'")
+					return
+				}
+				tokenStr = strings.TrimSpace(parts[1])
+			} else if queryToken := r.URL.Query().Get("token"); strings.TrimSpace(queryToken) != "" {
+				tokenStr = strings.TrimSpace(queryToken)
+			} else {
 				response.Error(w, http.StatusUnauthorized, "UNAUTHORIZED", "Header Authorization mancante")
 				return
 			}
 
-			parts := strings.SplitN(authHeader, " ", 2)
-			if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") || strings.TrimSpace(parts[1]) == "" {
-				response.Error(w, http.StatusUnauthorized, "UNAUTHORIZED", "Formato Authorization non valido, atteso 'Bearer <token>'")
-				return
-			}
-
-			tokenStr := strings.TrimSpace(parts[1])
 			claims, err := tokenManager.ValidateToken(tokenStr)
 			if err != nil {
 				if errors.Is(err, auth.ErrExpiredToken) {

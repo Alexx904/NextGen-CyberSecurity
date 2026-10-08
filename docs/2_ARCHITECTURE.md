@@ -74,7 +74,7 @@ graph TD
 | **Database Migrations** | **golang-migrate/migrate/v4** | Migrazioni SQL versionate e riproducibili |
 | **Network Scanner** | **Nmap** (containerizzato) | `7.94+` con flag minimi di privilegio e parsing XML nativo |
 | **Task Scheduling** | **robfig/cron/v3** | Scheduler cron-like in memoria persistito su DB per i job ricorrenti |
-| **PDF Reporting** | **johnfercher/maroto/v2** (o Go-wkhtmltopdf) | Generazione nativa PDF con supporto tabelle, griglie, loghi e palette colori |
+| **PDF Reporting** | **jung-kurt/gofpdf** | Generazione nativa PDF pure-Go con supporto tabelle, grafiche, loghi e palette colori |
 | **Frontend Framework** | **React 18** + **TypeScript** | Web UI Single Page Application reattiva |
 | **Build Tool Frontend** | **Vite 5+** | Bundling veloce, HMR e build ottimizzata |
 | **UI & Styling** | **Tailwind CSS** + **Lucide Icons** | Design system moderno con dark mode nativo e grafici **Recharts** |
@@ -130,7 +130,6 @@ erDiagram
     TENANTS ||--o{ TARGETS : "owns"
     TENANTS ||--o{ SCANS : "runs"
     TENANTS ||--o{ SCHEDULES : "schedules"
-    TENANTS ||--o{ REPORT_TEMPLATES : "configures"
 
     TARGET_GROUPS ||--o{ TARGETS : "groups"
     TARGETS ||--o{ SCANS : "targeted_by"

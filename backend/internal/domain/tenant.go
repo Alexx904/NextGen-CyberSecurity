@@ -2,16 +2,30 @@ package domain
 
 import (
 	"context"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+var hexColorRegex = regexp.MustCompile(`^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$`)
+
+// IsValidHexColor verifica che una stringa sia un codice colore esadecimale valido (#RGB o #RRGGBB)
+func IsValidHexColor(hex string) bool {
+	return hexColorRegex.MatchString(strings.TrimSpace(hex))
+}
 
 // BrandColors rappresenta la palette colori personalizzata per i report white-label
 type BrandColors struct {
 	Primary   string `json:"primary"`
 	Secondary string `json:"secondary"`
 	Accent    string `json:"accent"`
+}
+
+// IsValid verifica che tutti i colori della palette siano codici esadecimali validi
+func (c BrandColors) IsValid() bool {
+	return IsValidHexColor(c.Primary) && IsValidHexColor(c.Secondary) && IsValidHexColor(c.Accent)
 }
 
 // DefaultBrandColors restituisce la palette colori predefinita del sistema
@@ -34,23 +48,12 @@ type Tenant struct {
 	UpdatedAt   time.Time   `json:"updated_at" db:"updated_at"`
 }
 
-// ReportTemplate rappresenta la configurazione personalizzata dei report per un tenant
-type ReportTemplate struct {
-	ID        uuid.UUID      `json:"id" db:"id"`
-	TenantID  uuid.UUID      `json:"tenant_id" db:"tenant_id"`
-	Name      string         `json:"name" db:"name"`
-	IsDefault bool           `json:"is_default" db:"is_default"`
-	Config    map[string]any `json:"config" db:"config"`
-	CreatedAt time.Time      `json:"created_at" db:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at" db:"updated_at"`
-}
-
 // TenantRepository definisce il contratto di persistenza per le entità Tenant
 type TenantRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*Tenant, error)
 	GetBySlug(ctx context.Context, slug string) (*Tenant, error)
 	Create(ctx context.Context, tenant *Tenant) error
-	UpdateBranding(ctx context.Context, id uuid.UUID, logoURL *string, colors BrandColors) error
+	UpdateBranding(ctx context.Context, id uuid.UUID, name string, logoURL *string, colors BrandColors) (*Tenant, error)
 	List(ctx context.Context) ([]*Tenant, error)
 }
 

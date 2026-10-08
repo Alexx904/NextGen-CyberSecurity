@@ -26,7 +26,7 @@ type SeedConfig struct {
 func DefaultSeedConfig() SeedConfig {
 	return SeedConfig{
 		AdminEmail:    "admin@nextgen.local",
-		AdminPassword: "AdminSecure#2026!",
+		AdminPassword: "AdminPass123!",
 		AdminFullName: "Super Administrator",
 		TenantName:    "Default Security Organization",
 		TenantSlug:    "default-org",
@@ -91,7 +91,12 @@ func SeedDefaultAdminAndTenant(
 			return fmt.Errorf("verifica esistenza utente superadmin fallita: %w", err)
 		}
 	} else {
-		slog.Info("Utente SuperAdmin già presente, skipping seed utente", "email", cfg.AdminEmail)
+		// Sincronizzazione password hash con la configurazione seed corrente
+		passwordHash, err := hasher.Hash(cfg.AdminPassword)
+		if err == nil {
+			_, _ = pool.Exec(ctx, "UPDATE users SET password_hash = $1 WHERE id = $2", passwordHash, existingUserID)
+			slog.Info("Credenziali utente SuperAdmin sincronizzate con la configurazione", "email", cfg.AdminEmail)
+		}
 	}
 
 	return nil

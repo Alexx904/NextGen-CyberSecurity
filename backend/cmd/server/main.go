@@ -77,6 +77,9 @@ func main() {
 	}
 
 	// 7. Inizializzazione Repository e Service Layer
+	tenantRepo := postgres.NewTenantRepo(db.Pool)
+	tenantService := service.NewTenantService(tenantRepo)
+
 	userRepo := postgres.NewUserRepo(db.Pool)
 	authService := service.NewAuthService(userRepo, hasher, tokenManager)
 
@@ -88,6 +91,16 @@ func main() {
 	scanProfileRepo := postgres.NewScanProfileRepo(db.Pool)
 	findingRepo := postgres.NewFindingRepo(db.Pool)
 	cveRepo := postgres.NewCVERepo(db.Pool)
+	cveSyncService := service.NewCVESyncService(cveRepo, 500)
+	cveCount, err := cveRepo.Count(initCtx)
+	if err == nil && cveCount == 0 {
+		slog.Info("Catalogo CVE locale vuoto: importazione feed predefinito incorporato...")
+		if stats, syncErr := cveSyncService.SyncDefaultFeed(initCtx); syncErr != nil {
+			slog.Warn("Importazione automatica feed CVE fallita", "error", syncErr)
+		} else {
+			slog.Info("Feed CVE predefinito importato con successo", "upserted", stats.TotalUpserted, "duration", stats.Duration)
+		}
+	}
 	cveCorrelator := service.NewCVECorrelator(cveRepo)
 
 	scannerRunner := scanner.NewNmapRunner("nmap", logger)
@@ -110,6 +123,7 @@ func main() {
 	}
 
 	scanService := service.NewScanService(scanRepo, scanProfileRepo, targetRepo, findingRepo, scanOrchestrator)
+	reportService := service.NewReportService(scanRepo, scanProfileRepo, targetRepo, findingRepo, tenantRepo, nil)
 
 	// 8. Configurazione Router Chi & Middleware Standard
 	r := chi.NewRouter()
@@ -121,8 +135,12 @@ func main() {
 	// 9. Registrazione Handler di Sistema, Auth, Targets & Scans
 	healthHandler := handler.NewHealthHandler(cfg.AppName, cfg.AppVersion)
 	authHandler := handler.NewAuthHandler(authService)
+	tenantHandler := handler.NewTenantHandler(tenantService)
 	targetHandler := handler.NewTargetHandler(targetService)
 	scanHandler := handler.NewScanHandler(scanService)
+	reportHandler := handler.NewReportHandler(reportService)
+	scheduleHandler := handler.NewScheduleHandler(schedulerService, targetRepo, scanProfileRepo)
+	cveHandler := handler.NewCVEHandler(cveRepo, cveSyncService)
 
 	r.Get("/healthz", healthHandler.HealthCheck)
 	r.Route("/api/v1", func(api chi.Router) {
@@ -136,6 +154,20 @@ func main() {
 				protected.Use(appmw.Authenticate(tokenManager))
 				protected.Use(appmw.RequireTenant())
 				protected.Get("/me", authHandler.Me)
+			})
+		})
+
+		api.Route("/tenants", func(tenantRouter chi.Router) {
+			tenantRouter.Use(appmw.Authenticate(tokenManager))
+			tenantRouter.Use(appmw.RequireTenant())
+
+			// Lettura impostazioni tenant consentita a tutti i ruoli autenticati
+			tenantRouter.Get("/current", tenantHandler.GetCurrent)
+
+			// Configurazione branding e ragione sociale riservata ad amministratori
+			tenantRouter.Group(func(adminRouter chi.Router) {
+				adminRouter.Use(appmw.RequireAdmin())
+				adminRouter.Put("/current/branding", tenantHandler.UpdateBranding)
 			})
 		})
 
@@ -169,11 +201,40 @@ func main() {
 			scanRouter.Get("/{id}", scanHandler.GetByID)
 			scanRouter.Get("/{id}/findings", scanHandler.GetFindings)
 
+			// Esportazione Report PDF White-Label e CSV Tabellare (RFC 4180)
+			scanRouter.Get("/{id}/reports/pdf", reportHandler.DownloadPDF)
+			scanRouter.Get("/{id}/reports/csv", reportHandler.DownloadCSV)
+
 			// Avvio e cancellazione riservati ad operatori SecOps o amministratori
 			scanRouter.Group(func(secOpsRouter chi.Router) {
 				secOpsRouter.Use(appmw.RequireSecOps())
 				secOpsRouter.Post("/", scanHandler.Start)
 				secOpsRouter.Post("/{id}/cancel", scanHandler.Cancel)
+			})
+		})
+
+		api.Route("/schedules", func(schedRouter chi.Router) {
+			schedRouter.Use(appmw.Authenticate(tokenManager))
+			schedRouter.Use(appmw.RequireTenant())
+
+			schedRouter.Get("/", scheduleHandler.List)
+			schedRouter.Get("/{id}", scheduleHandler.GetByID)
+
+			schedRouter.Group(func(secOpsRouter chi.Router) {
+				secOpsRouter.Use(appmw.RequireSecOps())
+				secOpsRouter.Post("/", scheduleHandler.Create)
+				secOpsRouter.Put("/{id}/toggle", scheduleHandler.Toggle)
+				secOpsRouter.Delete("/{id}", scheduleHandler.Delete)
+			})
+		})
+
+		api.Route("/cve", func(cveRouter chi.Router) {
+			cveRouter.Use(appmw.Authenticate(tokenManager))
+			cveRouter.Get("/stats", cveHandler.GetStats)
+
+			cveRouter.Group(func(adminRouter chi.Router) {
+				adminRouter.Use(appmw.RequireAdmin())
+				adminRouter.Post("/sync", cveHandler.Sync)
 			})
 		})
 	})

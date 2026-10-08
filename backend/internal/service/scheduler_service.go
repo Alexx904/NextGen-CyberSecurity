@@ -237,6 +237,16 @@ func (s *SchedulerService) ToggleSchedule(ctx context.Context, tenantID, id uuid
 	return schedule, nil
 }
 
+// GetByID recupera una singola pianificazione per ID e tenant
+func (s *SchedulerService) GetByID(ctx context.Context, tenantID, id uuid.UUID) (*domain.Schedule, error) {
+	return s.scheduleRepo.GetByID(ctx, tenantID, id)
+}
+
+// ListByTenant restituisce tutte le pianificazioni del tenant specificato
+func (s *SchedulerService) ListByTenant(ctx context.Context, tenantID uuid.UUID) ([]*domain.Schedule, error) {
+	return s.scheduleRepo.ListByTenant(ctx, tenantID)
+}
+
 // TriggerJob esegue la logica di invocazione di una scansione programmata
 func (s *SchedulerService) TriggerJob(schedule *domain.Schedule) {
 	ctx := context.Background()

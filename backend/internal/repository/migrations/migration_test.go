@@ -11,6 +11,10 @@ func TestMigrationFilesExistAndNotEmpty(t *testing.T) {
 	files := []string{
 		"000001_init_schema.up.sql",
 		"000001_init_schema.down.sql",
+		"000002_cve_indexes.up.sql",
+		"000002_cve_indexes.down.sql",
+		"000003_drop_report_templates.up.sql",
+		"000003_drop_report_templates.down.sql",
 	}
 
 	for _, file := range files {

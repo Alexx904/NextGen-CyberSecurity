@@ -147,6 +147,17 @@
   - **Dipendenze:** TASK-18
   - **DoD:** Utility per importare feed CVE JSON in PostgreSQL, con dataset ridotto per test rapido e meccanismo di inserimento a batch.
 
+### Story 7.2: Esposizione API REST Catalogo CVE & Bonifica Architetturale
+- [x] **TASK-33: Endpoint REST per Statistiche e Sincronizzazione CVE**
+  - **File coinvolti:** `backend/internal/delivery/http/handler/cve_handler.go`, `backend/internal/delivery/http/handler/cve_handler_test.go`, `backend/cmd/server/main.go`
+  - **Dipendenze:** TASK-18, TASK-20
+  - **DoD:** Implementazione di `GET /api/v1/cve/stats` e `POST /api/v1/cve/sync` (protetto da RBAC Admin). Suite di unit test con copertura ed esito positivo.
+
+- [x] **TASK-34: Bonifica Codice Orfano ReportTemplate e Allineamento Architettura**
+  - **File coinvolti:** `backend/internal/domain/tenant.go`, `backend/internal/repository/migrations/000003_drop_report_templates.up.sql`, `backend/internal/repository/migrations/000003_drop_report_templates.down.sql`, `docs/2_ARCHITECTURE.md`
+  - **Dipendenze:** TASK-23
+  - **DoD:** Rimozione della struct orfana `ReportTemplate`, migrazione DDL versionata di eliminazione tabella/indici inutilizzati `report_templates`, aggiornamento 2_ARCHITECTURE.md (ERD e stack PDF gofpdf).
+
 ---
 
 ## ⏰ EPIC 8: Scheduler Service (Pianificazione Scansioni)
@@ -157,7 +168,7 @@
   - **Dipendenze:** TASK-15
   - **DoD:** Scheduler in background che carica le schedulazioni attive da DB all'avvio, valuta le espressioni cron e accoda automaticamente nuove scansioni allo scoccare del timer.
 
-- [ ] **TASK-22: API REST per la Gestione Schedulazioni**
+- [x] **TASK-22: API REST per la Gestione Schedulazioni**
   - **File coinvolti:** `backend/internal/delivery/http/handler/schedule_handler.go`
   - **Dipendenze:** TASK-21
   - **DoD:** Endpoint `GET /api/v1/schedules`, `POST /api/v1/schedules`, `PUT /api/v1/schedules/{id}/toggle`, `DELETE /api/v1/schedules/{id}`.
@@ -167,17 +178,17 @@
 ## 📊 EPIC 9: White-Label Reporting Engine
 
 ### Story 9.1: Generazione Report Personalizzati (PDF & CSV)
-- [ ] **TASK-23: Gestione Branding Tenant (Logo & Palette Colori)**
+- [x] **TASK-23: Gestione Branding Tenant (Logo & Palette Colori)**
   - **File coinvolti:** `backend/internal/repository/postgres/tenant_repo.go`, `backend/internal/delivery/http/handler/tenant_handler.go`
   - **Dipendenze:** TASK-08
   - **DoD:** Endpoint `GET /api/v1/tenants/current` e `PUT /api/v1/tenants/current/branding` per configurare logo, colori primari e ragione sociale.
 
-- [ ] **TASK-24: Generatore Report PDF White-Label**
+- [x] **TASK-24: Generatore Report PDF White-Label**
   - **File coinvolti:** `backend/pkg/report/pdf_generator.go`, `backend/internal/service/report_service.go`
   - **Dipendenze:** TASK-23, TASK-17
   - **DoD:** Generazione di file PDF professionale contenente copertina con logo del tenant, Executive Summary con grafici delle severità, tabella dei target e schede tecniche dei findings.
 
-- [ ] **TASK-25: Esportazione Dati Tabellare CSV**
+- [x] **TASK-25: Esportazione Dati Tabellare CSV**
   - **File coinvolti:** `backend/pkg/report/csv_generator.go`
   - **Dipendenze:** TASK-17
   - **DoD:** Endpoint `GET /api/v1/scans/{id}/reports/csv` per il download istantaneo dei findings in formato CSV conforme RFC 4180.
@@ -187,32 +198,32 @@
 ## 💻 EPIC 10: Frontend Single Page Application (React + Vite + Tailwind)
 
 ### Story 10.1: Interfaccia Utente e Dashboard Interattiva
-- [ ] **TASK-26: Setup Architettura Frontend (Router, Auth Context, Axios Client)**
+- [x] **TASK-26: Setup Architettura Frontend (Router, Auth Context, Axios Client)**
   - **File coinvolti:** `frontend/src/App.tsx`, `frontend/src/context/AuthContext.tsx`, `frontend/src/api/client.ts`
   - **Dipendenze:** TASK-03, TASK-09
   - **DoD:** Routing applicativo con rotte protette, memorizzazione JWT, gestione automatica dei refresh token e layout responsive con sidebar di navigazione.
 
-- [ ] **TASK-27: Schermata Dashboard con Metriche e Grafici di Severità**
+- [x] **TASK-27: Schermata Dashboard con Metriche e Grafici di Severità**
   - **File coinvolti:** `frontend/src/pages/Dashboard.tsx`, `frontend/src/components/SeverityChart.tsx`
   - **Dipendenze:** TASK-26
   - **DoD:** Cruscotto con conteggio totale scansioni, host attivi, vulnerabilità divise per severità (Critical, High, Medium, Low) con grafici interattivi Recharts.
 
-- [ ] **TASK-28: Schermata Gestione Target & Modal di Creazione**
+- [x] **TASK-28: Schermata Gestione Target & Modal di Creazione**
   - **File coinvolti:** `frontend/src/pages/Targets.tsx`, `frontend/src/components/TargetModal.tsx`
   - **Dipendenze:** TASK-26, TASK-12
   - **DoD:** Tabella dei target con filtri, validazione client-side degli IP/CIDR e pulsante per eliminazione o scansione rapida.
 
-- [ ] **TASK-29: Schermata Scansioni (Lancio On-Demand, Monitoraggio Live, Schedulazioni)**
+- [x] **TASK-29: Schermata Scansioni (Lancio On-Demand, Monitoraggio Live, Schedulazioni)**
   - **File coinvolti:** `frontend/src/pages/Scans.tsx`, `frontend/src/components/NewScanModal.tsx`, `frontend/src/components/ScanProgressBadge.tsx`
   - **Dipendenze:** TASK-26, TASK-17
   - **DoD:** Modal per selezionare target e profilo di scansione, tabella scansioni con polling/badge di stato in tempo reale e pulsante di cancellazione manuale.
 
-- [ ] **TASK-30: Schermata Dettaglio Scansione & Tabella Findings**
+- [x] **TASK-30: Schermata Dettaglio Scansione & Tabella Findings**
   - **File coinvolti:** `frontend/src/pages/ScanDetail.tsx`, `frontend/src/components/FindingsTable.tsx`, `frontend/src/components/FindingDetailModal.tsx`
   - **Dipendenze:** TASK-29
   - **DoD:** Vista completa con breakdown vulnerabilità, filtri per CVSS/porta/IP, drawer/modal con dettagli CVE e remediation, e pulsanti di download PDF/CSV.
 
-- [ ] **TASK-31: Schermata Impostazioni Branding Tenant (White-Label)**
+- [x] **TASK-31: Schermata Impostazioni Branding Tenant (White-Label)**
   - **File coinvolti:** `frontend/src/pages/Settings.tsx`
   - **Dipendenze:** TASK-26, TASK-23
   - **DoD:** Interfaccia per caricare il logo aziendale, selezionare i colori del brand e visualizzare un'anteprima del report.
@@ -222,7 +233,7 @@
 ## 🧪 EPIC 11: End-to-End Verification & PoC Validation
 
 ### Story 11.1: Collaudo Funzionale Completo
-- [ ] **TASK-32: Collaudo Integrato Full Stack in Docker Compose**
+- [x] **TASK-32: Collaudo Integrato Full Stack in Docker Compose**
   - **File coinvolti:** `docker-compose.yml`, test scripts
   - **Dipendenze:** Tutti i task precedenti (TASK-01 fino a TASK-31)
   - **DoD:** Esecuzione di `docker-compose up`, login da interfaccia web, inserimento target locale di test (es. container o host locale autorizzato), esecuzione scansione Nmap, correlazione con CVE locali, visualizzazione findings nella dashboard ed esportazione del report PDF con logo personalizzato.

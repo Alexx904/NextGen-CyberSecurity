@@ -318,3 +318,41 @@ func TestTenantMiddleware_MissingTenantInContext(t *testing.T) {
 	}
 }
 
+func TestAuthMiddleware_QueryToken_Success(t *testing.T) {
+	tokenMgr, _ := auth.NewJWTManager("test-secret-key-12345", 15*time.Minute, 24*time.Hour)
+	r, tenantID, userID := setupTestRouter(tokenMgr)
+
+	user := &domain.User{
+		ID:       userID,
+		TenantID: tenantID,
+		Email:    "querytoken@test.com",
+		Role:     domain.RoleSecOps,
+	}
+
+	tokens, _ := tokenMgr.GenerateTokenPair(user)
+
+	req := httptest.NewRequest(http.MethodGet, "/test-protected?token="+tokens.AccessToken, nil)
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Atteso 200 OK con query token, ottenuto %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	var env response.Envelope
+	_ = json.Unmarshal(rec.Body.Bytes(), &env)
+	data := env.Data.(map[string]interface{})
+
+	if data["tenant_id"] != tenantID.String() {
+		t.Errorf("Tenant ID errato: %v", data["tenant_id"])
+	}
+	if data["user_id"] != userID.String() {
+		t.Errorf("User ID errato: %v", data["user_id"])
+	}
+	if data["role"] != string(domain.RoleSecOps) {
+		t.Errorf("Ruolo errato: %v", data["role"])
+	}
+}
+
+
