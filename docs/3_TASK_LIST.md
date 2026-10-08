@@ -1,9 +1,9 @@
 # 3. Interactive Task List & Implementation Backlog
 
-> **Stato:** APPROVATO (Fase 2: System Design)  
-> **Ultimo Aggiornamento:** 2026-10-07  
+> **Stato:** APPROVATO (Fase 2: System Design - Backlog Attivo Milestone 1.1)  
+> **Ultimo Aggiornamento:** 2026-10-08  
 > **Autore / Ruolo:** TechLead-Engineer-Agent (System Architect & Tech Lead)  
-> **Documenti Correlati:** [0_REQUIREMENTS_AND_USE_CASES.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/0_REQUIREMENTS_AND_USE_CASES.md) | [1_PROJECT_CONTEXT.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/1_PROJECT_CONTEXT.md) | [2_ARCHITECTURE.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/2_ARCHITECTURE.md)
+> **Documenti Correlati:** [0_REQUIREMENTS_AND_USE_CASES.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/0_REQUIREMENTS_AND_USE_CASES.md) | [1_PROJECT_CONTEXT.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/1_PROJECT_CONTEXT.md) | [2_ARCHITECTURE.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/2_ARCHITECTURE.md) | [4_CHANGELOG.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/4_CHANGELOG.md)
 
 ---
 
@@ -11,230 +11,119 @@
 1. **Micro-Planning obbligatorio (`/plan [task-id]`):** Prima di toccare qualsiasi riga di codice, deve essere formulato e approvato un piano di implementazione dettagliato con firme, file e strategie di test.
 2. **Esecuzione (`/execute`):** Solo dopo l'approvazione del piano si scrive il codice di produzione con i relativi unit test.
 3. **Aggiornamento di Stato:** Il task viene spuntato `- [x]` al completamento della Definition of Done (DoD).
+4. **Archiviazione:** I task TASK-01 fino a TASK-34 completati nella Milestone 1 sono archiviati in [4_CHANGELOG.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/4_CHANGELOG.md).
 
 ---
 
-## 🏗️ EPIC 1: Project Scaffolding & Container Infrastructure
+## 🧹 EPIC 12: Alive-Only Host Filtering & Range Data Sanitization (Feature 1)
 
-### Story 1.1: Ambiente di Sviluppo e Containerizzazione Base
-- [x] **TASK-01: Inizializzazione Struttura Repository e Modulo Go**
-  - **File coinvolti:** `go.mod`, `go.sum`, `cmd/server/main.go`, `.gitignore`
-  - **Dipendenze:** Nessuna
-  - **DoD:** Modulo Go `nextgen-cybersec` inizializzato con Go 1.22+, `main.go` minimo funzionante che risponde a un health check HTTP e `.gitignore` configurato.
+### Story 12.1: Filtraggio e Bonifica Host Inattivi nei Risultati di Scansione
+- [ ] **TASK-35: Filtraggio Host Inattivi nel Parser XML e Scan Orchestrator (Backend Go)**
+  - **File coinvolti:** `backend/internal/scanner/nmap_parser.go`, `backend/internal/service/scan_orchestrator.go`, `backend/internal/scanner/nmap_parser_test.go`
+  - **Dipendenze:** TASK-14, TASK-15
+  - **DoD:** Il parser XML e lo scan orchestrator escludono a monte dalla generazione dei findings tutti gli host aventi stato `down`. Solo gli host attivi (`up`) vengono elaborati e persistiti; le metriche di riepilogo mantengono il conteggio aggregato `up_hosts` e `down_hosts`. Unit test con fixture di range con host offline.
 
-- [x] **TASK-02: Setup Docker Compose Multi-Container (PostgreSQL + Backend + Nmap)**
-  - **File coinvolti:** `docker-compose.yml`, `backend/Dockerfile`, `.env.example`
-  - **Dipendenze:** TASK-01
-  - **DoD:** `docker-compose up` avvia container PostgreSQL 16 con healthcheck e container backend Go basato su immagine Linux con `nmap` preinstallato e permessi di rete configurati.
-
-- [x] **TASK-03: Inizializzazione Progetto Frontend React SPA**
-  - **File coinvolti:** `frontend/package.json`, `frontend/vite.config.ts`, `frontend/tailwind.config.js`, `frontend/Dockerfile`
-  - **Dipendenze:** TASK-01
-  - **DoD:** Progetto React 18 + TypeScript + Vite + Tailwind CSS inizializzato, compilabile con `npm run build` e containerizzato per servire asset via Nginx.
+- [ ] **TASK-36: Ottimizzazione UI e Reportistica per Visualizzazione Esclusiva Host Attivi**
+  - **File coinvolti:** `frontend/src/pages/ScanDetail.tsx`, `frontend/src/components/FindingsTable.tsx`, `backend/pkg/report/pdf_generator.go`, `backend/pkg/report/csv_generator.go`
+  - **Dipendenze:** TASK-35
+  - **DoD:** La schermata di dettaglio scansione e la tabella findings mostrano solo gli asset operativi; l'export PDF e CSV esclude categoricamente righe vuote per host non responsivi. Toggle client-side per escludere facoltativamente anche gli host privi di porte aperte.
 
 ---
 
-## 🗄️ EPIC 2: Database Schema & Multi-Tenant Core
+## 📑 EPIC 13: Centralized Reports Hub & Dual-Template White-Label (Feature 2)
 
-### Story 2.1: Migrazioni DDL e Connessione Database
-- [x] **TASK-04: Implementazione Migrazioni SQL e Script DDL**
-  - **File coinvolti:** `backend/internal/repository/migrations/000001_init_schema.up.sql`, `000001_init_schema.down.sql`
-  - **Dipendenze:** TASK-02
-  - **DoD:** Script SQL completo contenente tutte le tabelle (`tenants`, `users`, `targets`, `scan_profiles`, `scans`, `findings`, `cve_entries`, `schedules`), indici compositi e foreign key vincolate.
+### Story 13.1: Hub Centralizzato di Reportistica e Template Executive/Tecnico
+- [ ] **TASK-37: Backend Endpoint REST e Motore Multi-Template Reports Hub**
+  - **File coinvolti:** `backend/internal/delivery/http/handler/report_handler.go`, `backend/internal/service/report_service.go`, `backend/pkg/report/pdf_generator.go`, `backend/cmd/server/main.go`
+  - **Dipendenze:** TASK-24, TASK-25
+  - **DoD:** Endpoint `GET /api/v1/reports` per consultare lo storico globale delle scansioni/report con filtri per target, date, severità e cartelle. Supporto al parametro query `template=executive` (report manageriale sintetico con grafici e posture index) e `template=technical` (dettaglio tecnico esteso).
 
-- [x] **TASK-05: Configurazione Connection Pool PostgreSQL con pgx/v5 e Migrator**
-  - **File coinvolti:** `backend/internal/repository/postgres/db.go`, `backend/internal/config/config.go`
-  - **Dipendenze:** TASK-04
-  - **DoD:** Singleton / Pool manager per PostgreSQL con retry all'avvio, lettura variabili d'ambiente (`.env`) ed esecuzione automatica delle migrazioni pending.
-
-- [x] **TASK-06: Modelli di Dominio Core (Clean Architecture)**
-  - **File coinvolti:** `backend/internal/domain/tenant.go`, `backend/internal/domain/user.go`, `backend/internal/domain/target.go`, `backend/internal/domain/scan.go`, `backend/internal/domain/finding.go`
-  - **Dipendenze:** TASK-01
-  - **DoD:** Struct di dominio Go con tag JSON/DB, costanti di stato (`ScanStatus`, `SeverityLevel`), ed errori di business tipizzati.
+- [ ] **TASK-38: Frontend Reports Hub Dashboard (`frontend/src/pages/Reports.tsx`)**
+  - **File coinvolti:** `frontend/src/pages/Reports.tsx`, `frontend/src/api/client.ts`, `frontend/src/App.tsx`
+  - **Dipendenze:** TASK-37
+  - **DoD:** Schermata Reports completa che sostituisce il segnaposto con una dashboard interattiva: elenco globale dei report, filtri istantanei, selettore template (Executive o Tecnico), download immediato PDF/CSV e visualizzazione dello stato.
 
 ---
 
-## 🔐 EPIC 3: Authentication & Multi-Tenant RBAC
+## 🌳 EPIC 14: Hierarchical Tree Asset & Scan Folders (Feature 3)
 
-### Story 3.1: Sicurezza e Gestione Utenti
-- [x] **TASK-07: Servizio Autenticazione (Password Hashing & JWT Token)**
-  - **File coinvolti:** `backend/pkg/auth/jwt.go`, `backend/pkg/auth/hasher.go`, `backend/internal/service/auth_service.go`, `backend/internal/repository/postgres/user_repo.go`
-  - **Dipendenze:** TASK-05, TASK-06
-  - **DoD:** Hashing sicuro delle password (Bcrypt/Argon2id), generazione e validazione token JWT contenenti `user_id`, `tenant_id` e `role`. Unit test con copertura 100%.
+### Story 14.1: Gerarchia ad Albero per Target e Campagne di Scansione
+- [ ] **TASK-39: Database Migration e Backend Repository/Service Gruppi ad Albero (`parent_id`)**
+  - **File coinvolti:** `backend/internal/repository/migrations/000004_tree_target_groups.up.sql`, `backend/internal/repository/migrations/000004_tree_target_groups.down.sql`, `backend/internal/domain/target.go`, `backend/internal/repository/postgres/target_group_repo.go`, `backend/internal/service/target_group_service.go`
+  - **Dipendenze:** TASK-04, TASK-11
+  - **DoD:** Script di migrazione SQL che introduce `parent_id UUID REFERENCES target_groups(id)` e `color_tag`. Service con metodi per recuperare la gerarchia ad albero, calcolo ricorsivo del conteggio target e determinazione del livello di rischio aggregato. Unit test completi.
 
-- [x] **TASK-08: HTTP Middleware per Tenant Isolation e RBAC**
-  - **File coinvolti:** `backend/internal/delivery/http/middleware/auth_middleware.go`, `backend/internal/delivery/http/middleware/tenant_middleware.go`
-  - **Dipendenze:** TASK-07
-  - **DoD:** Middleware Chi che valida il Bearer token, inietta nel `context.Context` l'identificativo tenant e verifica i permessi di ruolo (es. solo `SecOps`/`Admin` possono avviare scansioni).
+- [ ] **TASK-40: Endpoint REST Gruppi ad Albero e Supporto Scansioni su Intera Cartella**
+  - **File coinvolti:** `backend/internal/delivery/http/handler/target_group_handler.go`, `backend/internal/service/scan_service.go`, `backend/cmd/server/main.go`
+  - **Dipendenze:** TASK-39, TASK-17
+  - **DoD:** Endpoint REST `GET /api/v1/target-groups` (albero nidificato), `POST /api/v1/target-groups`, `PUT /api/v1/target-groups/{id}`, `DELETE /api/v1/target-groups/{id}`. Supporto all'avvio di una scansione sull'intero `group_id` ricorsivo.
 
-- [x] **TASK-09: Handler HTTP Auth e Seed Admin/Tenant di Default**
-  - **File coinvolti:** `backend/internal/delivery/http/handler/auth_handler.go`, `backend/internal/repository/postgres/seed.go`
-  - **Dipendenze:** TASK-08
-  - **DoD:** Endpoint `/api/v1/auth/login` e `/api/v1/auth/me` attivi. Script di seeding all'avvio che crea il tenant primario e l'utente SuperAdmin iniziale in assenza di record.
-
----
-
-## 🎯 EPIC 4: Target & Asset Scope Management
-
-### Story 4.1: Gestione Bersagli e Validazione Sicura
-- [x] **TASK-10: Validatore e Parser Target (IP, CIDR, FQDN, Blacklist)**
-  - **File coinvolti:** `backend/pkg/validator/target_validator.go`, `backend/pkg/validator/target_validator_test.go`
-  - **Dipendenze:** TASK-01
-  - **DoD:** Funzioni pure in Go per verificare la validità sintattica di IPv4, IPv6, blocchi CIDR e domini, controllando che non rientrino nella lista nera di esclusione. Unit test completi.
-
-- [x] **TASK-11: Repository e Service Target (Multi-Tenant)**
-  - **File coinvolti:** `backend/internal/repository/postgres/target_repo.go`, `backend/internal/service/target_service.go`
-  - **Dipendenze:** TASK-05, TASK-10
-  - **DoD:** CRUD dei target isolato rigorosamente per `tenant_id`.
-
-- [x] **TASK-12: Handler HTTP Target**
-  - **File coinvolti:** `backend/internal/delivery/http/handler/target_handler.go`
-  - **Dipendenze:** TASK-08, TASK-11
-  - **DoD:** Endpoint REST `GET /api/v1/targets`, `POST /api/v1/targets`, `DELETE /api/v1/targets/{id}` protetti da autenticazione.
+- [ ] **TASK-41: Frontend Tree Explorer Component & Integrazione in Targets e Scans**
+  - **File coinvolti:** `frontend/src/components/TreeExplorer.tsx`, `frontend/src/pages/Targets.tsx`, `frontend/src/pages/Scans.tsx`, `frontend/src/components/TargetModal.tsx`
+  - **Dipendenze:** TASK-40
+  - **DoD:** Componente navigatore ad albero a sinistra con nodi espandibili, badge contatore e badge colore di rischio. Modal per creare/rinominare cartelle e possibilità di filtrare target e scansioni cliccando sui rami dell'albero.
 
 ---
 
-## 🔍 EPIC 5: Nmap Scanner Engine & XML Streaming Parser
+## ⚡ EPIC 15: High-Speed LAN Network Discovery (Feature 4 - Advanced IP Scanner)
 
-### Story 5.1: Esecuzione Sicura e Parsing Nmap
-- [x] **TASK-13: Nmap Command Runner Sicuro con Context Cancellation**
-  - **File coinvolti:** `backend/internal/scanner/nmap_runner.go`, `backend/internal/scanner/profiles.go`, `backend/internal/scanner/nmap_runner_test.go`
-  - **Dipendenze:** TASK-02
-  - **DoD:** Esecuzione di `nmap` via `exec.CommandContext` (NO shell interpretation), supporto profili (Fast, Standard, Full), propagazione immediata del `SIGTERM` in caso di annullamento.
+### Story 15.1: Ricognizione LAN Rapida con Vendor OUI e Importazione Target
+- [ ] **TASK-42: Motore di Discovery LAN Veloce con Database Locale OUI Vendor (Backend)**
+  - **File coinvolti:** `backend/internal/scanner/oui_database.go`, `backend/internal/service/discovery_service.go`, `backend/internal/scanner/profiles.go`, `backend/internal/domain/discovery.go`
+  - **Dipendenze:** TASK-13, TASK-14
+  - **DoD:** Profilo Nmap ultra-veloce (`-sn -PR -T4`). Modulo di lookup OUI integrato che traduce i primi 3 ottetti del MAC nel produttore hardware (es. Apple, Cisco, Dell, Raspberry Pi). Calcolo latenza RTT e risoluzione hostname.
 
-- [x] **TASK-14: Parser XML Nmap ad Alte Prestazioni**
-  - **File coinvolti:** `backend/internal/scanner/nmap_parser.go`, `backend/internal/scanner/nmap_parser_test.go`
-  - **Dipendenze:** TASK-13
-  - **DoD:** Parser basato su streaming `xml.Decoder` capace di convertire l'XML di Nmap in struct Go di host, porte, protocolli, service name, versioni e banner. Test con fixture XML reali.
+- [ ] **TASK-43: Endpoint REST Network Discovery e Importazione Massiva Target**
+  - **File coinvolti:** `backend/internal/delivery/http/handler/discovery_handler.go`, `backend/cmd/server/main.go`
+  - **Dipendenze:** TASK-42, TASK-40
+  - **DoD:** Endpoint `POST /api/v1/network-discovery/scan`, `GET /api/v1/network-discovery/results`, e `POST /api/v1/network-discovery/import-targets` (importa più dispositivi come target in una cartella specifica dell'albero).
 
----
-
-## ⚙️ EPIC 6: Scan Orchestration & Background Worker Pool
-
-### Story 6.1: Gestione Asincrona del Ciclo di Vita delle Scansioni
-- [x] **TASK-15: Worker Pool Asincrono e Gestore delle Code**
-  - **File coinvolti:** `backend/internal/service/scan_orchestrator.go`, `backend/internal/repository/postgres/scan_repo.go`
-  - **Dipendenze:** TASK-14
-  - **DoD:** Coda in-memory / concorrente con Goroutine worker pool, controllo del limite massimo di scansioni parallele e aggiornamento transazionale degli stati (`QUEUED` -> `RUNNING` -> `COMPLETED`/`FAILED`).
-
-- [x] **TASK-16: Cancellazione Graceful delle Scansioni**
-  - **File coinvolti:** `backend/internal/service/scan_service.go`, `backend/internal/delivery/http/handler/scan_handler.go`
-  - **Dipendenze:** TASK-15
-  - **DoD:** Endpoint `POST /api/v1/scans/{id}/cancel` che individua il context della scansione in corso, lo cancella, termina il processo Nmap e imposta lo stato a `CANCELLED`.
-
-- [x] **TASK-17: API REST Gestione Scansioni e Risultati**
-  - **File coinvolti:** `backend/internal/delivery/http/handler/scan_handler.go`, `backend/internal/repository/postgres/finding_repo.go`, `backend/internal/service/scan_service.go`
-  - **Dipendenze:** TASK-16
-  - **DoD:** Endpoint `POST /api/v1/scans`, `GET /api/v1/scans`, `GET /api/v1/scans/{id}`, `GET /api/v1/scans/{id}/findings`.
+- [ ] **TASK-44: Frontend Network Discovery Dashboard (`frontend/src/pages/NetworkDiscovery.tsx`)**
+  - **File coinvolti:** `frontend/src/pages/NetworkDiscovery.tsx`, `frontend/src/App.tsx`, `frontend/src/components/layout/AppLayout.tsx`
+  - **Dipendenze:** TASK-43
+  - **DoD:** Nuova vista dedicata nel menu laterale stile "Advanced IP Scanner": input subnet/range, barra di progresso, tabella in tempo reale con MAC, Produttore, IP, Hostname, Latenza, selezione multipla e pulsanti "Aggiungi a Cartella Target" e "Scansiona Subito".
 
 ---
 
-## 🛡️ EPIC 7: Offline CVE Database & Correlation Engine
+## 🛡️ EPIC 16: Remote SSH Host Management, iptables Firewall GUI & Web Terminal (Feature 5)
 
-### Story 7.1: Sincronizzazione Locale e Matching delle Vulnerabilità
-- [x] **TASK-18: Schema e Repository Catalogo CVE Locale**
-  - **File coinvolti:** `backend/internal/repository/postgres/cve_repo.go`, `backend/internal/domain/cve.go`
+### Story 16.1: Infrastruttura Dati, Crittografia AES-256-GCM e Client SSH Nativo
+- [ ] **TASK-45: Database Migration e Modulo Crittografico Credenziali SSH (AES-256-GCM)**
+  - **File coinvolti:** `backend/internal/repository/migrations/000005_ssh_servers_firewall.up.sql`, `backend/internal/repository/migrations/000005_ssh_servers_firewall.down.sql`, `backend/pkg/crypto/aes_gcm.go`, `backend/internal/domain/ssh_server.go`, `backend/internal/repository/postgres/ssh_server_repo.go`
   - **Dipendenze:** TASK-05
-  - **DoD:** Query ottimizzate e indici per la ricerca rapida per CPE, vendor, prodotto e versione.
+  - **DoD:** Tabella `ssh_servers` e `firewall_backups`. Modulo `pkg/crypto` con crittografia autenticata AES-256-GCM per proteggere password e chiavi private a riposo. Unit test crittografici al 100%.
 
-- [x] **TASK-19: Motore di Correlazione Banner/CPE -> CVE con CVSS Enricher**
-  - **File coinvolti:** `backend/internal/service/cve_correlator.go`, `backend/internal/service/cve_correlator_test.go`
-  - **Dipendenze:** TASK-18, TASK-14
-  - **DoD:** Logica di correlazione che associa i servizi estratti dal parser Nmap ai record CVE locali, calcolando severità e raccomandazioni di remediation. Unit test con casi noti (es. Apache 2.4.49 -> CVE-2021-41773).
+- [ ] **TASK-46: Client SSH Go Nativo e Servizio Gestione Firewall con Anti-Lockout Timer**
+  - **File coinvolti:** `backend/internal/service/ssh_service.go`, `backend/internal/service/firewall_service.go`, `backend/internal/domain/firewall.go`
+  - **Dipendenze:** TASK-45
+  - **DoD:** Client SSH basato su `golang.org/x/crypto/ssh` per password e chiavi private. Servizio firewall che esegue `iptables -L -n -v --line-numbers`, parsa le regole delle catene `INPUT`, `OUTPUT`, `FORWARD`, e applica modifiche attivando un goroutine timer di safety rollback (es. 60s) con restore automatico da snapshot se non confermato.
 
-- [x] **TASK-20: Tool di Sincronizzazione / Import Dati CVE**
-  - **File coinvolti:** `backend/cmd/cve-sync/main.go`, `backend/internal/service/cve_sync_service.go`
-  - **Dipendenze:** TASK-18
-  - **DoD:** Utility per importare feed CVE JSON in PostgreSQL, con dataset ridotto per test rapido e meccanismo di inserimento a batch.
+- [ ] **TASK-47: WebSocket Gateway per Web Terminal SSH PTY Interattivo**
+  - **File coinvolti:** `backend/internal/delivery/ws/ssh_terminal_ws.go`, `backend/cmd/server/main.go`
+  - **Dipendenze:** TASK-46
+  - **DoD:** Endpoint `/ws/v1/ssh/servers/{id}/terminal` con upgrade WebSocket e validazione JWT. Allocazione PTY remoto e bridging bidirezionale dello stream stdin/stdout/stderr con supporto al resize terminale.
 
-### Story 7.2: Esposizione API REST Catalogo CVE & Bonifica Architetturale
-- [x] **TASK-33: Endpoint REST per Statistiche e Sincronizzazione CVE**
-  - **File coinvolti:** `backend/internal/delivery/http/handler/cve_handler.go`, `backend/internal/delivery/http/handler/cve_handler_test.go`, `backend/cmd/server/main.go`
-  - **Dipendenze:** TASK-18, TASK-20
-  - **DoD:** Implementazione di `GET /api/v1/cve/stats` e `POST /api/v1/cve/sync` (protetto da RBAC Admin). Suite di unit test con copertura ed esito positivo.
+- [ ] **TASK-48: Endpoint REST Gestione Server SSH e Operazioni Firewall**
+  - **File coinvolti:** `backend/internal/delivery/http/handler/ssh_firewall_handler.go`, `backend/cmd/server/main.go`
+  - **Dipendenze:** TASK-46
+  - **DoD:** Endpoint REST `GET /api/v1/ssh/servers`, `POST /api/v1/ssh/servers`, `POST /api/v1/ssh/servers/{id}/test-connection`, `DELETE /api/v1/ssh/servers/{id}`, `GET /api/v1/ssh/servers/{id}/firewall`, `POST /api/v1/ssh/servers/{id}/firewall/rules`, `DELETE /api/v1/ssh/servers/{id}/firewall/rules/{line}`, `POST /api/v1/ssh/servers/{id}/firewall/apply`, `POST /api/v1/ssh/servers/{id}/firewall/confirm`, `POST /api/v1/ssh/servers/{id}/firewall/rollback`.
 
-- [x] **TASK-34: Bonifica Codice Orfano ReportTemplate e Allineamento Architettura**
-  - **File coinvolti:** `backend/internal/domain/tenant.go`, `backend/internal/repository/migrations/000003_drop_report_templates.up.sql`, `backend/internal/repository/migrations/000003_drop_report_templates.down.sql`, `docs/2_ARCHITECTURE.md`
-  - **Dipendenze:** TASK-23
-  - **DoD:** Rimozione della struct orfana `ReportTemplate`, migrazione DDL versionata di eliminazione tabella/indici inutilizzati `report_templates`, aggiornamento 2_ARCHITECTURE.md (ERD e stack PDF gofpdf).
-
----
-
-## ⏰ EPIC 8: Scheduler Service (Pianificazione Scansioni)
-
-### Story 8.1: Esecuzione Programmata Ricorrente
-- [x] **TASK-21: Scheduler Cron in Background con robfig/cron**
-  - **File coinvolti:** `backend/internal/service/scheduler_service.go`, `backend/internal/repository/postgres/schedule_repo.go`
-  - **Dipendenze:** TASK-15
-  - **DoD:** Scheduler in background che carica le schedulazioni attive da DB all'avvio, valuta le espressioni cron e accoda automaticamente nuove scansioni allo scoccare del timer.
-
-- [x] **TASK-22: API REST per la Gestione Schedulazioni**
-  - **File coinvolti:** `backend/internal/delivery/http/handler/schedule_handler.go`
-  - **Dipendenze:** TASK-21
-  - **DoD:** Endpoint `GET /api/v1/schedules`, `POST /api/v1/schedules`, `PUT /api/v1/schedules/{id}/toggle`, `DELETE /api/v1/schedules/{id}`.
+- [ ] **TASK-49: Frontend Interfaccia Grafica Firewall & Web Terminal SSH**
+  - **File coinvolti:** `frontend/src/pages/SSHServers.tsx`, `frontend/src/components/FirewallManager.tsx`, `frontend/src/components/WebTerminalModal.tsx`, `frontend/src/App.tsx`, `frontend/src/components/layout/AppLayout.tsx`, `frontend/package.json`
+  - **Dipendenze:** TASK-47, TASK-48
+  - **DoD:** Schermata per censimento server SSH; vista grafica a schede delle catene `INPUT`/`OUTPUT`/`FORWARD` con regole, azioni, protocolli e porte; modal guidato per nuova regola; banner countdown del Safety Rollback Timer con pulsante di conferma; modal terminale interattivo a schermo intero con `@xterm/xterm`.
 
 ---
 
-## 📊 EPIC 9: White-Label Reporting Engine
+## 🧪 EPIC 17: Full-Stack Verification & Integration Test (Milestone 1.1)
 
-### Story 9.1: Generazione Report Personalizzati (PDF & CSV)
-- [x] **TASK-23: Gestione Branding Tenant (Logo & Palette Colori)**
-  - **File coinvolti:** `backend/internal/repository/postgres/tenant_repo.go`, `backend/internal/delivery/http/handler/tenant_handler.go`
-  - **Dipendenze:** TASK-08
-  - **DoD:** Endpoint `GET /api/v1/tenants/current` e `PUT /api/v1/tenants/current/branding` per configurare logo, colori primari e ragione sociale.
-
-- [x] **TASK-24: Generatore Report PDF White-Label**
-  - **File coinvolti:** `backend/pkg/report/pdf_generator.go`, `backend/internal/service/report_service.go`
-  - **Dipendenze:** TASK-23, TASK-17
-  - **DoD:** Generazione di file PDF professionale contenente copertina con logo del tenant, Executive Summary con grafici delle severità, tabella dei target e schede tecniche dei findings.
-
-- [x] **TASK-25: Esportazione Dati Tabellare CSV**
-  - **File coinvolti:** `backend/pkg/report/csv_generator.go`
-  - **Dipendenze:** TASK-17
-  - **DoD:** Endpoint `GET /api/v1/scans/{id}/reports/csv` per il download istantaneo dei findings in formato CSV conforme RFC 4180.
-
----
-
-## 💻 EPIC 10: Frontend Single Page Application (React + Vite + Tailwind)
-
-### Story 10.1: Interfaccia Utente e Dashboard Interattiva
-- [x] **TASK-26: Setup Architettura Frontend (Router, Auth Context, Axios Client)**
-  - **File coinvolti:** `frontend/src/App.tsx`, `frontend/src/context/AuthContext.tsx`, `frontend/src/api/client.ts`
-  - **Dipendenze:** TASK-03, TASK-09
-  - **DoD:** Routing applicativo con rotte protette, memorizzazione JWT, gestione automatica dei refresh token e layout responsive con sidebar di navigazione.
-
-- [x] **TASK-27: Schermata Dashboard con Metriche e Grafici di Severità**
-  - **File coinvolti:** `frontend/src/pages/Dashboard.tsx`, `frontend/src/components/SeverityChart.tsx`
-  - **Dipendenze:** TASK-26
-  - **DoD:** Cruscotto con conteggio totale scansioni, host attivi, vulnerabilità divise per severità (Critical, High, Medium, Low) con grafici interattivi Recharts.
-
-- [x] **TASK-28: Schermata Gestione Target & Modal di Creazione**
-  - **File coinvolti:** `frontend/src/pages/Targets.tsx`, `frontend/src/components/TargetModal.tsx`
-  - **Dipendenze:** TASK-26, TASK-12
-  - **DoD:** Tabella dei target con filtri, validazione client-side degli IP/CIDR e pulsante per eliminazione o scansione rapida.
-
-- [x] **TASK-29: Schermata Scansioni (Lancio On-Demand, Monitoraggio Live, Schedulazioni)**
-  - **File coinvolti:** `frontend/src/pages/Scans.tsx`, `frontend/src/components/NewScanModal.tsx`, `frontend/src/components/ScanProgressBadge.tsx`
-  - **Dipendenze:** TASK-26, TASK-17
-  - **DoD:** Modal per selezionare target e profilo di scansione, tabella scansioni con polling/badge di stato in tempo reale e pulsante di cancellazione manuale.
-
-- [x] **TASK-30: Schermata Dettaglio Scansione & Tabella Findings**
-  - **File coinvolti:** `frontend/src/pages/ScanDetail.tsx`, `frontend/src/components/FindingsTable.tsx`, `frontend/src/components/FindingDetailModal.tsx`
-  - **Dipendenze:** TASK-29
-  - **DoD:** Vista completa con breakdown vulnerabilità, filtri per CVSS/porta/IP, drawer/modal con dettagli CVE e remediation, e pulsanti di download PDF/CSV.
-
-- [x] **TASK-31: Schermata Impostazioni Branding Tenant (White-Label)**
-  - **File coinvolti:** `frontend/src/pages/Settings.tsx`
-  - **Dipendenze:** TASK-26, TASK-23
-  - **DoD:** Interfaccia per caricare il logo aziendale, selezionare i colori del brand e visualizzare un'anteprima del report.
-
----
-
-## 🧪 EPIC 11: End-to-End Verification & PoC Validation
-
-### Story 11.1: Collaudo Funzionale Completo
-- [x] **TASK-32: Collaudo Integrato Full Stack in Docker Compose**
+### Story 17.1: Collaudo E2E delle Nuove Funzionalità
+- [ ] **TASK-50: Test di Integrazione e Validazione E2E Full Stack**
   - **File coinvolti:** `docker-compose.yml`, test scripts
-  - **Dipendenze:** Tutti i task precedenti (TASK-01 fino a TASK-31)
-  - **DoD:** Esecuzione di `docker-compose up`, login da interfaccia web, inserimento target locale di test (es. container o host locale autorizzato), esecuzione scansione Nmap, correlazione con CVE locali, visualizzazione findings nella dashboard ed esportazione del report PDF con logo personalizzato.
-
+  - **Dipendenze:** TASK-35 fino a TASK-49
+  - **DoD:** Collaudo end-to-end con:
+    1. Scansione subnet con verifica esclusione host inattivi.
+    2. Navigazione e download report dall'Hub `/reports` con entrambi i template.
+    3. Creazione cartelle ad albero e spostamento target.
+    4. Esecuzione scansione rapida LAN Discovery con rilevamento vendor e import in cartella.
+    5. Connessione a server SSH di test, apertura terminale Web e modifica sicura di una regola firewall iptables con conferma del safety timer.
