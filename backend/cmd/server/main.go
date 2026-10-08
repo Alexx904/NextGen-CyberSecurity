@@ -17,6 +17,7 @@ import (
 	"nextgen-cybersec/internal/delivery/http/handler"
 	appmw "nextgen-cybersec/internal/delivery/http/middleware"
 	"nextgen-cybersec/internal/repository/postgres"
+	"nextgen-cybersec/internal/scanner"
 	"nextgen-cybersec/internal/service"
 	"nextgen-cybersec/pkg/auth"
 )
@@ -86,6 +87,9 @@ func main() {
 	scanRepo := postgres.NewScanRepo(db.Pool)
 	scanProfileRepo := postgres.NewScanProfileRepo(db.Pool)
 	findingRepo := postgres.NewFindingRepo(db.Pool)
+	cveRepo := postgres.NewCVERepo(db.Pool)
+	cveCorrelator := service.NewCVECorrelator(cveRepo)
+
 	scannerRunner := scanner.NewNmapRunner("nmap", logger)
 	scanOrchestrator := service.NewScanOrchestrator(
 		service.DefaultOrchestratorConfig(),
@@ -96,7 +100,14 @@ func main() {
 		logger,
 	)
 	scanOrchestrator.SetFindingRepo(findingRepo)
+	scanOrchestrator.SetCorrelator(cveCorrelator)
 	scanOrchestrator.Start(context.Background())
+
+	scheduleRepo := postgres.NewScheduleRepo(db.Pool)
+	schedulerService := service.NewSchedulerService(scheduleRepo, scanRepo, scanOrchestrator, logger)
+	if err := schedulerService.Start(context.Background()); err != nil {
+		slog.Error("Avvio SchedulerService fallito", "error", err)
+	}
 
 	scanService := service.NewScanService(scanRepo, scanProfileRepo, targetRepo, findingRepo, scanOrchestrator)
 
@@ -205,7 +216,8 @@ func main() {
 			os.Exit(1)
 		}
 
-		// Arresto coordinato del worker pool scansioni
+		// Arresto coordinato del worker pool scansioni e scheduler
+		schedulerService.Stop()
 		scanOrchestrator.Stop()
 		slog.Info("Server arrestato con successo in modo controllato")
 	}

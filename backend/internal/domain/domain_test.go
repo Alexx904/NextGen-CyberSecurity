@@ -189,3 +189,25 @@ func TestDefaultBrandColors(t *testing.T) {
 	}
 }
 
+func TestSeverityLevelValidation(t *testing.T) {
+	validSeverities := []domain.SeverityLevel{
+		domain.SeverityCritical,
+		domain.SeverityHigh,
+		domain.SeverityMedium,
+		domain.SeverityLow,
+		domain.SeverityInfo,
+	}
+
+	for _, s := range validSeverities {
+		if !s.IsValid() {
+			t.Errorf("Attesa severità valida per %s", s)
+		}
+	}
+
+	invalid := domain.SeverityLevel("EXTREME")
+	if invalid.IsValid() {
+		t.Error("EXTREME non dovrebbe essere una severità valida")
+	}
+}
+
+

@@ -132,17 +132,17 @@
 ## 🛡️ EPIC 7: Offline CVE Database & Correlation Engine
 
 ### Story 7.1: Sincronizzazione Locale e Matching delle Vulnerabilità
-- [ ] **TASK-18: Schema e Repository Catalogo CVE Locale**
+- [x] **TASK-18: Schema e Repository Catalogo CVE Locale**
   - **File coinvolti:** `backend/internal/repository/postgres/cve_repo.go`, `backend/internal/domain/cve.go`
   - **Dipendenze:** TASK-05
   - **DoD:** Query ottimizzate e indici per la ricerca rapida per CPE, vendor, prodotto e versione.
 
-- [ ] **TASK-19: Motore di Correlazione Banner/CPE -> CVE con CVSS Enricher**
+- [x] **TASK-19: Motore di Correlazione Banner/CPE -> CVE con CVSS Enricher**
   - **File coinvolti:** `backend/internal/service/cve_correlator.go`, `backend/internal/service/cve_correlator_test.go`
   - **Dipendenze:** TASK-18, TASK-14
   - **DoD:** Logica di correlazione che associa i servizi estratti dal parser Nmap ai record CVE locali, calcolando severità e raccomandazioni di remediation. Unit test con casi noti (es. Apache 2.4.49 -> CVE-2021-41773).
 
-- [ ] **TASK-20: Tool di Sincronizzazione / Import Dati CVE**
+- [x] **TASK-20: Tool di Sincronizzazione / Import Dati CVE**
   - **File coinvolti:** `backend/cmd/cve-sync/main.go`, `backend/internal/service/cve_sync_service.go`
   - **Dipendenze:** TASK-18
   - **DoD:** Utility per importare feed CVE JSON in PostgreSQL, con dataset ridotto per test rapido e meccanismo di inserimento a batch.
@@ -152,7 +152,7 @@
 ## ⏰ EPIC 8: Scheduler Service (Pianificazione Scansioni)
 
 ### Story 8.1: Esecuzione Programmata Ricorrente
-- [ ] **TASK-21: Scheduler Cron in Background con robfig/cron**
+- [x] **TASK-21: Scheduler Cron in Background con robfig/cron**
   - **File coinvolti:** `backend/internal/service/scheduler_service.go`, `backend/internal/repository/postgres/schedule_repo.go`
   - **Dipendenze:** TASK-15
   - **DoD:** Scheduler in background che carica le schedulazioni attive da DB all'avvio, valuta le espressioni cron e accoda automaticamente nuove scansioni allo scoccare del timer.

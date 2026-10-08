@@ -60,6 +60,18 @@ func (m *mockScanRepo) Create(ctx context.Context, scan *domain.Scan) error {
 	return nil
 }
 
+func (m *mockScanRepo) GetActiveByTarget(ctx context.Context, tenantID, targetID uuid.UUID) (*domain.Scan, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, s := range m.scans {
+		if s.TenantID == tenantID && s.TargetID == targetID && (s.Status == domain.ScanStatusQueued || s.Status == domain.ScanStatusRunning) {
+			cp := *s
+			return &cp, nil
+		}
+	}
+	return nil, nil
+}
+
 func (m *mockScanRepo) Update(ctx context.Context, scan *domain.Scan) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

@@ -61,11 +61,30 @@ type CVEEntry struct {
 	UpdatedAt        time.Time            `json:"updated_at" db:"updated_at"`
 }
 
+// CVEFilter definisce i criteri di ricerca e paginazione per il catalogo CVE
+type CVEFilter struct {
+	Query    string         `json:"query,omitempty"`
+	Severity *SeverityLevel `json:"severity,omitempty"`
+	MinCVSS  *float64       `json:"min_cvss,omitempty"`
+	Limit    int            `json:"limit,omitempty"`
+	Offset   int            `json:"offset,omitempty"`
+}
+
+// CVEStats racchiude le statistiche di sintesi del catalogo CVE locale
+type CVEStats struct {
+	TotalCount     int64                   `json:"total_count"`
+	SeverityCounts map[SeverityLevel]int64 `json:"severity_counts"`
+	LastUpdatedAt  *time.Time              `json:"last_updated_at,omitempty"`
+}
+
 // CVERepository definisce i metodi di accesso al catalogo CVE locale (Offline-Ready)
 type CVERepository interface {
 	GetByID(ctx context.Context, cveID string) (*CVEEntry, error)
+	SearchByCPEURI(ctx context.Context, cpeURI string) ([]*CVEEntry, error)
 	SearchByCPE(ctx context.Context, cpePrefix string, version string) ([]*CVEEntry, error)
+	Search(ctx context.Context, filter CVEFilter) ([]*CVEEntry, int, error)
 	UpsertBatch(ctx context.Context, entries []*CVEEntry) error
 	Count(ctx context.Context) (int64, error)
+	GetStats(ctx context.Context) (*CVEStats, error)
 }
 

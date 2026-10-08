@@ -1,0 +1,122 @@
+[
+  {
+    "cve_id": "CVE-2021-41773",
+    "cvss_score": 7.5,
+    "severity": "HIGH",
+    "description": "A flaw was found in a change made to path normalization in Apache HTTP Server 2.4.49. An attacker could use a path traversal attack to map URLs to files outside the directories configured by Alias-like directives.",
+    "cpe_match_criteria": [
+      {
+        "cpe23Uri": "cpe:2.3:a:apache:http_server:2.4.49:*:*:*:*:*:*:*",
+        "vulnerable": true
+      }
+    ],
+    "published_date": "2021-10-05T00:00:00Z"
+  },
+  {
+    "cve_id": "CVE-2021-42013",
+    "cvss_score": 9.8,
+    "severity": "CRITICAL",
+    "description": "It was found that the fix for CVE-2021-41773 in Apache HTTP Server 2.4.50 was insufficient. An attacker could use a path traversal attack to map URLs to files outside the directories configured by Alias-like directives and execute code.",
+    "cpe_match_criteria": [
+      {
+        "cpe23Uri": "cpe:2.3:a:apache:http_server:2.4.49:*:*:*:*:*:*:*",
+        "vulnerable": true
+      },
+      {
+        "cpe23Uri": "cpe:2.3:a:apache:http_server:2.4.50:*:*:*:*:*:*:*",
+        "vulnerable": true
+      }
+    ],
+    "published_date": "2021-10-08T00:00:00Z"
+  },
+  {
+    "cve_id": "CVE-2024-6387",
+    "cvss_score": 8.1,
+    "severity": "HIGH",
+    "description": "A signal handler race condition was found in OpenSSH's server (sshd) in glibc-based Linux systems. Under specific conditions, this condition can lead to unauthenticated remote code execution as root (regreSSHion).",
+    "cpe_match_criteria": [
+      {
+        "cpe23Uri": "cpe:2.3:a:openssh:openssh:8.5:p1:*:*:*:*:*:*",
+        "vulnerable": true
+      },
+      {
+        "cpe23Uri": "cpe:2.3:a:openssh:openssh:9.7:p1:*:*:*:*:*:*",
+        "vulnerable": true
+      }
+    ],
+    "published_date": "2024-07-01T00:00:00Z"
+  },
+  {
+    "cve_id": "CVE-2023-38408",
+    "cvss_score": 9.8,
+    "severity": "CRITICAL",
+    "description": "The PKCS#11 provider in ssh-agent in OpenSSH before 9.3p2 has an untrusted search path that leads to remote code execution when an attacker can control forwarded ssh-agent sockets.",
+    "cpe_match_criteria": [
+      {
+        "cpe23Uri": "cpe:2.3:a:openssh:openssh:9.3:p1:*:*:*:*:*:*",
+        "vulnerable": true
+      }
+    ],
+    "published_date": "2023-07-20T00:00:00Z"
+  },
+  {
+    "cve_id": "CVE-2021-23017",
+    "cvss_score": 7.7,
+    "severity": "HIGH",
+    "description": "A 1-byte memory overwrite flaw in the resolver component of nginx allows remote attackers to cause a denial of service or potentially execute arbitrary code.",
+    "cpe_match_criteria": [
+      {
+        "cpe23Uri": "cpe:2.3:a:f5:nginx:1.20.0:*:*:*:*:*:*:*",
+        "vulnerable": true
+      },
+      {
+        "cpe23Uri": "cpe:2.3:a:f5:nginx:1.21.0:*:*:*:*:*:*:*",
+        "vulnerable": true
+      }
+    ],
+    "published_date": "2021-05-25T00:00:00Z"
+  },
+  {
+    "cve_id": "CVE-2022-0778",
+    "cvss_score": 7.5,
+    "severity": "HIGH",
+    "description": "The BN_mod_sqrt function in OpenSSL, which computes a modular square root, contains a flaw that can cause it to loop indefinitely for non-prime moduli.",
+    "cpe_match_criteria": [
+      {
+        "cpe23Uri": "cpe:2.3:a:openssl:openssl:1.1.1:*:*:*:*:*:*:*",
+        "vulnerable": true
+      },
+      {
+        "cpe23Uri": "cpe:2.3:a:openssl:openssl:3.0.0:*:*:*:*:*:*:*",
+        "vulnerable": true
+      }
+    ],
+    "published_date": "2022-03-15T00:00:00Z"
+  },
+  {
+    "cve_id": "CVE-2023-0286",
+    "cvss_score": 7.4,
+    "severity": "HIGH",
+    "description": "There is a type confusion vulnerability relating to X.400 address processing inside an X.509 GeneralName in OpenSSL.",
+    "cpe_match_criteria": [
+      {
+        "cpe23Uri": "cpe:2.3:a:openssl:openssl:3.0.7:*:*:*:*:*:*:*",
+        "vulnerable": true
+      }
+    ],
+    "published_date": "2023-02-07T00:00:00Z"
+  },
+  {
+    "cve_id": "CVE-2023-38606",
+    "cvss_score": 5.5,
+    "severity": "MEDIUM",
+    "description": "A state manipulation issue in WebKit was addressed with improved state management.",
+    "cpe_match_criteria": [
+      {
+        "cpe23Uri": "cpe:2.3:a:apple:webkit:16.5:*:*:*:*:*:*:*",
+        "vulnerable": true
+      }
+    ],
+    "published_date": "2023-07-24T00:00:00Z"
+  }
+]

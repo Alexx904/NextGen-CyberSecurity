@@ -47,6 +47,7 @@ type ScanOrchestrator struct {
 	logger      *slog.Logger
 
 	findingRepo domain.FindingRepository
+	correlator  Correlator
 	jobs        chan *ScanJob
 	activeScans map[uuid.UUID]context.CancelFunc
 	activeMu    sync.RWMutex
@@ -60,6 +61,11 @@ type ScanOrchestrator struct {
 // SetFindingRepo configura il repository per salvare i risultati dei servizi scoperti
 func (o *ScanOrchestrator) SetFindingRepo(repo domain.FindingRepository) {
 	o.findingRepo = repo
+}
+
+// SetCorrelator configura il motore di correlazione vulnerabilità CVE
+func (o *ScanOrchestrator) SetCorrelator(correlator Correlator) {
+	o.correlator = correlator
 }
 
 // NewScanOrchestrator istanzia un nuovo orchestratore con worker pool
@@ -345,12 +351,18 @@ func (o *ScanOrchestrator) processJob(job *ScanJob, workerID int) {
 	}
 
 	// 9. Persistenza dei finding rilevati su DB
-	if o.findingRepo != nil {
-		var findings []*domain.Finding
-		now := time.Now()
-		for _, h := range report.Hosts {
-			for _, p := range h.Ports {
-				if strings.EqualFold(p.State, "open") {
+	var findings []*domain.Finding
+	now := time.Now().UTC()
+	for _, h := range report.Hosts {
+		for _, p := range h.Ports {
+			if strings.EqualFold(p.State, "open") {
+				if o.correlator != nil {
+					portFindings, err := o.correlator.CorrelatePort(ctx, scan.ID, scan.TenantID, h, p)
+					if err != nil {
+						o.logger.Warn("Errore durante correlazione CVE porta", "port", p.PortID, "error", err)
+					}
+					findings = append(findings, portFindings...)
+				} else {
 					f := &domain.Finding{
 						ID:        uuid.New(),
 						ScanID:    scan.ID,
@@ -383,18 +395,32 @@ func (o *ScanOrchestrator) processJob(job *ScanJob, workerID int) {
 				}
 			}
 		}
+	}
 
-		if len(findings) > 0 {
-			if err := o.findingRepo.CreateBatch(context.Background(), findings); err != nil {
-				o.logger.Error("Salvataggio batch findings su DB fallito", "scan_id", scan.ID, "error", err)
-			} else {
-				o.logger.Info("Findings registrati con successo", "scan_id", scan.ID, "count", len(findings))
-			}
+	if o.findingRepo != nil && len(findings) > 0 {
+		if err := o.findingRepo.CreateBatch(context.Background(), findings); err != nil {
+			o.logger.Error("Salvataggio batch findings su DB fallito", "scan_id", scan.ID, "error", err)
+		} else {
+			o.logger.Info("Findings registrati con successo", "scan_id", scan.ID, "count", len(findings))
 		}
 	}
 
 	// 10. Calcolo delle statistiche riassuntive e transizione atomica: RUNNING -> COMPLETED
 	summaryStats := report.ToSummaryStats()
+	for _, f := range findings {
+		switch f.Severity {
+		case domain.SeverityCritical:
+			summaryStats.CriticalCount++
+		case domain.SeverityHigh:
+			summaryStats.HighCount++
+		case domain.SeverityMedium:
+			summaryStats.MediumCount++
+		case domain.SeverityLow:
+			summaryStats.LowCount++
+		case domain.SeverityInfo:
+			summaryStats.InfoCount++
+		}
+	}
 	if err := scan.MarkCompleted(summaryStats); err != nil {
 		o.logger.Error("Transizione a COMPLETED fallita", "scan_id", scan.ID, "error", err)
 		return

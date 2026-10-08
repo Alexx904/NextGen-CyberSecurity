@@ -155,6 +155,7 @@ type Schedule struct {
 type ScanRepository interface {
 	GetByID(ctx context.Context, tenantID, id uuid.UUID) (*Scan, error)
 	List(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*Scan, int, error)
+	GetActiveByTarget(ctx context.Context, tenantID, targetID uuid.UUID) (*Scan, error)
 	Create(ctx context.Context, scan *Scan) error
 	Update(ctx context.Context, scan *Scan) error
 }
