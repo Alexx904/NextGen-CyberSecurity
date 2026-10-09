@@ -37,18 +37,20 @@ type AuthConfig struct {
 
 // Config contiene le variabili di configurazione principali del server
 type Config struct {
-	Port        string
-	Environment string
-	AppName     string
-	AppVersion  string
-	DB          DBConfig
-	Auth        AuthConfig
+	Port         string
+	Environment  string
+	AppName      string
+	AppVersion   string
+	SSHMasterKey string
+	DB           DBConfig
+	Auth         AuthConfig
 }
 
 // Load carica la configurazione dalle variabili di ambiente con fallback predefiniti
 func Load() *Config {
 	port := getEnvOrDefault("PORT", "8080")
 	env := getEnvOrDefault("APP_ENV", "development")
+	sshMasterKey := getEnvOrDefault("SSH_MASTER_KEY", "nextgen-master-ssh-encryption-key-32b")
 
 	dbHost := getEnvOrDefault("DB_HOST", "localhost")
 	dbPort := getEnvOrDefault("DB_PORT", "5432")
@@ -66,10 +68,11 @@ func Load() *Config {
 	bcryptCost := getEnvAsIntOrDefault("BCRYPT_COST", 12)
 
 	return &Config{
-		Port:        port,
-		Environment: env,
-		AppName:     "NextGen-CyberSecurity",
-		AppVersion:  "1.0.0-mvp",
+		Port:         port,
+		Environment:  env,
+		AppName:      "NextGen-CyberSecurity",
+		AppVersion:   "1.0.0-mvp",
+		SSHMasterKey: sshMasterKey,
 		DB: DBConfig{
 			Host:            dbHost,
 			Port:            dbPort,

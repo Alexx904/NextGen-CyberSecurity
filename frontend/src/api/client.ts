@@ -1,5 +1,12 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { ApiResponse, TokenPair } from '../types/auth';
+import { debugLogger } from '../utils/debugLogger';
+
+interface DebuggableRequestConfig extends InternalAxiosRequestConfig {
+  _debugReqId?: string;
+  _debugStartTime?: number;
+  _retry?: boolean;
+}
 
 const ACCESS_TOKEN_KEY = 'nextgen_access_token';
 const REFRESH_TOKEN_KEY = 'nextgen_refresh_token';
@@ -43,21 +50,41 @@ const notifyAuthExpired = (): void => {
 // Creazione istanza Axios centralizzata
 export const apiClient = axios.create({
   baseURL: '/api/v1',
+  timeout: 120000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Interceptor per le richieste: inietta il Bearer token
+// Interceptor per le richieste: traccia la chiamata su debugLogger e inietta il Bearer token
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
+    const debugConfig = config as DebuggableRequestConfig;
+    debugConfig._debugStartTime = Date.now();
+
+    // Registra la richiesta su debugLogger
+    const reqId = debugLogger.logApiRequest({
+      method: config.method || 'GET',
+      url: config.url || '',
+      data: config.data,
+      headers: config.headers ? (config.headers as unknown as Record<string, unknown>) : undefined,
+    });
+    debugConfig._debugReqId = reqId;
+
     const token = getStoredAccessToken();
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => {
+    debugLogger.logApiError({
+      method: error?.config?.method || 'UNKNOWN',
+      url: error?.config?.url || 'UNKNOWN',
+      error,
+    });
+    return Promise.reject(error);
+  }
 );
 
 // Gestione della coda per richieste concorrenti durante il refresh token
@@ -80,11 +107,36 @@ const processQueue = (error: unknown, token: string | null = null): void => {
   failedQueue = [];
 };
 
-// Interceptor per le risposte: intercetta 401 e tenta il refresh automatico
+// Interceptor per le risposte: logga su debugLogger, intercetta 401 e tenta il refresh automatico
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const config = response.config as DebuggableRequestConfig;
+    const durationMs = config?._debugStartTime ? Date.now() - config._debugStartTime : undefined;
+    debugLogger.logApiResponse({
+      id: config?._debugReqId ? `${config._debugReqId}-res` : undefined,
+      method: config?.method || 'GET',
+      url: config?.url || '',
+      status: response.status,
+      durationMs,
+      data: response.data,
+    });
+    return response;
+  },
   async (error: AxiosError) => {
-    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+    const originalRequest = error.config as DebuggableRequestConfig;
+    const durationMs = originalRequest?._debugStartTime ? Date.now() - originalRequest._debugStartTime : undefined;
+
+    // Log dell'errore verso debugLogger
+    debugLogger.logApiError({
+      id: originalRequest?._debugReqId ? `${originalRequest._debugReqId}-err` : undefined,
+      method: originalRequest?.method || 'UNKNOWN',
+      url: originalRequest?.url || 'UNKNOWN',
+      status: error.response?.status,
+      durationMs,
+      error,
+      requestData: originalRequest?.data,
+      responseData: error.response?.data,
+    });
 
     // Se l'errore non è 401 o la richiesta non ha config, propaga l'errore
     if (!error.response || error.response.status !== 401 || !originalRequest) {
@@ -154,3 +206,7 @@ apiClient.interceptors.response.use(
     }
   }
 );
+
+export { reportsApi } from './reports';
+export { discoveryApi } from './discovery';
+export { sshApi } from './ssh';

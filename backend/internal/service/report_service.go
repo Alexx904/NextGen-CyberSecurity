@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -11,13 +12,15 @@ import (
 	"nextgen-cybersec/pkg/report"
 )
 
-// ReportService definisce i casi d'uso per la generazione di report di sicurezza
+// ReportService definisce i casi d'uso per l'hub dei report e la generazione di documenti di sicurezza
 type ReportService interface {
-	GenerateScanPDFReport(ctx context.Context, tenantID, scanID uuid.UUID) ([]byte, string, error)
+	ListReports(ctx context.Context, tenantID uuid.UUID, filter domain.ReportFilter) ([]*domain.ReportItem, int, error)
+	GenerateScanPDFReport(ctx context.Context, tenantID, scanID uuid.UUID, template domain.ReportTemplate) ([]byte, string, error)
 	GenerateScanCSVReport(ctx context.Context, tenantID, scanID uuid.UUID) ([]byte, string, error)
 }
 
 type reportService struct {
+	reportRepo      domain.ReportRepository
 	scanRepo        domain.ScanRepository
 	scanProfileRepo domain.ScanProfileRepository
 	targetRepo      domain.TargetRepository
@@ -28,6 +31,7 @@ type reportService struct {
 
 // NewReportService crea una nuova istanza di ReportService
 func NewReportService(
+	reportRepo domain.ReportRepository,
 	scanRepo domain.ScanRepository,
 	scanProfileRepo domain.ScanProfileRepository,
 	targetRepo domain.TargetRepository,
@@ -39,6 +43,7 @@ func NewReportService(
 		pdfGenerator = report.NewPDFGenerator()
 	}
 	return &reportService{
+		reportRepo:      reportRepo,
 		scanRepo:        scanRepo,
 		scanProfileRepo: scanProfileRepo,
 		targetRepo:      targetRepo,
@@ -48,10 +53,25 @@ func NewReportService(
 	}
 }
 
-// GenerateScanPDFReport aggrega tutti i dettagli di una scansione e compila il report PDF white-label
-func (s *reportService) GenerateScanPDFReport(ctx context.Context, tenantID, scanID uuid.UUID) ([]byte, string, error) {
+// ListReports recupera l'elenco paginato dei report aggregati per il Reports Hub
+func (s *reportService) ListReports(ctx context.Context, tenantID uuid.UUID, filter domain.ReportFilter) ([]*domain.ReportItem, int, error) {
+	if tenantID == uuid.Nil {
+		return nil, 0, domain.ErrValidation
+	}
+	if s.reportRepo == nil {
+		return nil, 0, errors.New("report repository non configurato")
+	}
+	return s.reportRepo.List(ctx, tenantID, filter)
+}
+
+// GenerateScanPDFReport aggrega tutti i dettagli di una scansione e compila il report PDF white-label nel template scelto
+func (s *reportService) GenerateScanPDFReport(ctx context.Context, tenantID, scanID uuid.UUID, template domain.ReportTemplate) ([]byte, string, error) {
 	if tenantID == uuid.Nil || scanID == uuid.Nil {
 		return nil, "", domain.ErrValidation
+	}
+
+	if !template.IsValid() {
+		template = domain.ReportTemplateExecutive
 	}
 
 	// 1. Recupero scansione con verifica rigorosa di appartenenza al tenant
@@ -89,7 +109,7 @@ func (s *reportService) GenerateScanPDFReport(ctx context.Context, tenantID, sca
 		return nil, "", err
 	}
 
-	// 6. Generazione del PDF tramite motore dedicato
+	// 6. Generazione del PDF tramite motore dedicato con il template specificato
 	now := time.Now().UTC()
 	reportData := report.PDFReportData{
 		Tenant:      tenant,
@@ -97,6 +117,7 @@ func (s *reportService) GenerateScanPDFReport(ctx context.Context, tenantID, sca
 		Target:      target,
 		Profile:     profile,
 		Findings:    findings,
+		Template:    template,
 		GeneratedAt: now,
 	}
 
@@ -105,7 +126,7 @@ func (s *reportService) GenerateScanPDFReport(ctx context.Context, tenantID, sca
 		return nil, "", fmt.Errorf("generazione del documento PDF fallita: %w", err)
 	}
 
-	filename := fmt.Sprintf("report_scan_%s_%s.pdf", scan.ID.String()[:8], now.Format("20060102_150405"))
+	filename := fmt.Sprintf("report_%s_scan_%s_%s.pdf", template, scan.ID.String()[:8], now.Format("20060102_150405"))
 	return pdfBytes, filename, nil
 }
 
@@ -142,5 +163,3 @@ func (s *reportService) GenerateScanCSVReport(ctx context.Context, tenantID, sca
 	filename := fmt.Sprintf("findings_scan_%s_%s.csv", scan.ID.String()[:8], now.Format("20060102_150405"))
 	return csvBytes, filename, nil
 }
-
-

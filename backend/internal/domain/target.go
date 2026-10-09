@@ -27,14 +27,34 @@ func (t TargetType) IsValid() bool {
 	}
 }
 
-// TargetGroup raggruppa logicamente un insieme di target (es. DMZ, Cloud, Uffici)
+// TargetGroup raggruppa logicamente un insieme di target in una gerarchia ad albero (es. DMZ, Cloud, Uffici)
 type TargetGroup struct {
-	ID          uuid.UUID `json:"id" db:"id"`
-	TenantID    uuid.UUID `json:"tenant_id" db:"tenant_id"`
-	Name        string    `json:"name" db:"name"`
-	Description *string   `json:"description,omitempty" db:"description"`
-	CreatedAt   time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
+	ID          uuid.UUID  `json:"id" db:"id"`
+	TenantID    uuid.UUID  `json:"tenant_id" db:"tenant_id"`
+	ParentID    *uuid.UUID `json:"parent_id,omitempty" db:"parent_id"`
+	Name        string     `json:"name" db:"name"`
+	Description *string    `json:"description,omitempty" db:"description"`
+	ColorTag    *string    `json:"color_tag,omitempty" db:"color_tag"`
+	CreatedAt   time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at" db:"updated_at"`
+}
+
+// TargetGroupNode rappresenta un nodo della gerarchia ad albero dei gruppi, arricchito con
+// conteggi ricorsivi dei target e calcolo del livello di rischio aggregato.
+type TargetGroupNode struct {
+	ID                uuid.UUID             `json:"id"`
+	TenantID          uuid.UUID             `json:"tenant_id"`
+	ParentID          *uuid.UUID            `json:"parent_id,omitempty"`
+	Name              string                `json:"name"`
+	Description       *string               `json:"description,omitempty"`
+	ColorTag          *string               `json:"color_tag,omitempty"`
+	CreatedAt         time.Time             `json:"created_at"`
+	UpdatedAt         time.Time             `json:"updated_at"`
+	Children          []*TargetGroupNode    `json:"children"`
+	DirectTargetCount int                   `json:"direct_target_count"`
+	TargetCount       int                   `json:"target_count"`
+	AggregateRisk     SeverityLevel         `json:"aggregate_risk"`
+	SeverityCounts    map[SeverityLevel]int `json:"severity_counts"`
 }
 
 // Target definisce un singolo bersaglio o scope di rete autorizzato alla scansione
@@ -70,11 +90,14 @@ type TargetRepository interface {
 	IsBlacklisted(ctx context.Context, tenantID uuid.UUID, value string) (bool, error)
 }
 
-// TargetGroupRepository definisce l'interfaccia di persistenza per i gruppi di target
+// TargetGroupRepository definisce l'interfaccia di persistenza per i gruppi di target e la gestione dell'albero
 type TargetGroupRepository interface {
 	GetByID(ctx context.Context, tenantID, id uuid.UUID) (*TargetGroup, error)
 	List(ctx context.Context, tenantID uuid.UUID) ([]*TargetGroup, error)
 	Create(ctx context.Context, group *TargetGroup) error
+	Update(ctx context.Context, group *TargetGroup) error
 	Delete(ctx context.Context, tenantID, id uuid.UUID) error
+	GetTargetCountsByGroup(ctx context.Context, tenantID uuid.UUID) (map[uuid.UUID]int, error)
+	GetSeverityCountsByGroup(ctx context.Context, tenantID uuid.UUID) (map[uuid.UUID]map[SeverityLevel]int, error)
 }
 

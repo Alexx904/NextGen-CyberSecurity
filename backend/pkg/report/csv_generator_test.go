@@ -187,3 +187,66 @@ func TestGenerateCSV_EmptyFindings(t *testing.T) {
 	}
 }
 
+func TestGenerateCSV_ExcludeEmptyAndOfflineHosts(t *testing.T) {
+	validFinding := &domain.Finding{
+		ID:        uuid.New(),
+		ScanID:    uuid.New(),
+		TenantID:  uuid.New(),
+		HostIP:    "10.0.0.1",
+		Port:      80,
+		Protocol:  "tcp",
+		Severity:  domain.SeverityMedium,
+		CreatedAt: time.Now().UTC(),
+	}
+
+	emptyHostFinding := &domain.Finding{
+		ID:        uuid.New(),
+		ScanID:    uuid.New(),
+		TenantID:  uuid.New(),
+		HostIP:    "",
+		Port:      80,
+		Protocol:  "tcp",
+		Severity:  domain.SeverityLow,
+		CreatedAt: time.Now().UTC(),
+	}
+
+	zeroHostFinding := &domain.Finding{
+		ID:        uuid.New(),
+		ScanID:    uuid.New(),
+		TenantID:  uuid.New(),
+		HostIP:    "0.0.0.0",
+		Port:      80,
+		Protocol:  "tcp",
+		Severity:  domain.SeverityLow,
+		CreatedAt: time.Now().UTC(),
+	}
+
+	findings := []*domain.Finding{
+		nil,
+		validFinding,
+		emptyHostFinding,
+		nil,
+		zeroHostFinding,
+	}
+
+	csvBytes, err := report.GenerateCSV(findings)
+	if err != nil {
+		t.Fatalf("generazione CSV fallita: %v", err)
+	}
+
+	r := csv.NewReader(bytes.NewReader(csvBytes))
+	records, err := r.ReadAll()
+	if err != nil {
+		t.Fatalf("lettura CSV fallita: %v", err)
+	}
+
+	// Header + solo 1 record valido
+	if len(records) != 2 {
+		t.Fatalf("attesi 2 record (header + 1 riga valida), ottenuti %d", len(records))
+	}
+
+	if records[1][2] != "10.0.0.1" {
+		t.Errorf("host atteso '10.0.0.1', ottenuto %s", records[1][2])
+	}
+}
+

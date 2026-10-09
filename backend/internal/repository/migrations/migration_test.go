@@ -15,6 +15,10 @@ func TestMigrationFilesExistAndNotEmpty(t *testing.T) {
 		"000002_cve_indexes.down.sql",
 		"000003_drop_report_templates.up.sql",
 		"000003_drop_report_templates.down.sql",
+		"000004_tree_target_groups.up.sql",
+		"000004_tree_target_groups.down.sql",
+		"000005_ssh_servers_firewall.up.sql",
+		"000005_ssh_servers_firewall.down.sql",
 	}
 
 	for _, file := range files {
@@ -31,6 +35,75 @@ func TestMigrationFilesExistAndNotEmpty(t *testing.T) {
 		if len(strings.TrimSpace(string(content))) == 0 {
 			t.Errorf("Il file di migrazione %s non può essere vuoto", file)
 		}
+	}
+}
+
+func TestSSHServersFirewallMigration(t *testing.T) {
+	contentUp, err := os.ReadFile("000005_ssh_servers_firewall.up.sql")
+	if err != nil {
+		altPath := filepath.Join("..", "..", "internal", "repository", "migrations", "000005_ssh_servers_firewall.up.sql")
+		contentUp, err = os.ReadFile(altPath)
+		if err != nil {
+			t.Fatalf("Impossibile leggere 000005_ssh_servers_firewall.up.sql: %v", err)
+		}
+	}
+	sqlText := string(contentUp)
+
+	expectedKeywords := []string{
+		"CREATE TABLE IF NOT EXISTS ssh_servers",
+		"CREATE TABLE IF NOT EXISTS firewall_backups",
+		"idx_ssh_servers_tenant_id",
+		"idx_ssh_servers_status",
+		"idx_firewall_backups_tenant_id",
+		"idx_firewall_backups_server_id",
+		"idx_firewall_backups_created_at",
+		"encrypted_secret",
+		"auth_type",
+		"raw_iptables_rules",
+	}
+
+	for _, kw := range expectedKeywords {
+		if !strings.Contains(sqlText, kw) {
+			t.Errorf("La migrazione 000005 UP non contiene la specifica attesa %q", kw)
+		}
+	}
+
+	contentDown, err := os.ReadFile("000005_ssh_servers_firewall.down.sql")
+	if err != nil {
+		altPath := filepath.Join("..", "..", "internal", "repository", "migrations", "000005_ssh_servers_firewall.down.sql")
+		contentDown, err = os.ReadFile(altPath)
+		if err != nil {
+			t.Fatalf("Impossibile leggere 000005_ssh_servers_firewall.down.sql: %v", err)
+		}
+	}
+	downSql := string(contentDown)
+	if !strings.Contains(downSql, "DROP TABLE IF EXISTS firewall_backups") {
+		t.Errorf("La migrazione 000005 DOWN non contiene il drop di firewall_backups")
+	}
+	if !strings.Contains(downSql, "DROP TABLE IF EXISTS ssh_servers") {
+		t.Errorf("La migrazione 000005 DOWN non contiene il drop di ssh_servers")
+	}
+}
+
+func TestTreeTargetGroupsMigration(t *testing.T) {
+	content, err := os.ReadFile("000004_tree_target_groups.up.sql")
+	if err != nil {
+		altPath := filepath.Join("..", "..", "internal", "repository", "migrations", "000004_tree_target_groups.up.sql")
+		content, err = os.ReadFile(altPath)
+		if err != nil {
+			t.Fatalf("Impossibile leggere 000004_tree_target_groups.up.sql: %v", err)
+		}
+	}
+	sqlText := string(content)
+
+	if !strings.Contains(sqlText, "parent_id") {
+		t.Errorf("La migrazione 000004 UP non contiene la colonna parent_id")
+	}
+	if !strings.Contains(sqlText, "color_tag") {
+		t.Errorf("La migrazione 000004 UP non contiene la colonna color_tag")
+	}
+	if !strings.Contains(sqlText, "idx_target_groups_parent_id") {
+		t.Errorf("La migrazione 000004 UP non contiene l'indice idx_target_groups_parent_id")
 	}
 }
 

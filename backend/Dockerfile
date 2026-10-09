@@ -16,9 +16,10 @@ FROM alpine:3.20
 
 WORKDIR /app
 
-# Install nmap, TLS certificates and tzdata
+# Install nmap, nmap-scripts, TLS certificates and tzdata
 RUN apk add --no-cache \
     nmap \
+    nmap-scripts \
     ca-certificates \
     tzdata
 

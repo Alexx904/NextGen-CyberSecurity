@@ -11,18 +11,26 @@ import {
   RefreshCw,
   AlertCircle,
   Copy,
-  Check
+  Check,
+  Folder,
+  X,
 } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { ApiResponse } from '../types/auth';
-import { TargetItem, TargetListResponseData } from '../types/target';
+import { TargetItem, TargetListResponseData, TargetGroupNode, TargetGroup } from '../types/target';
 import { TargetModal } from '../components/TargetModal';
 import { QuickScanModal } from '../components/QuickScanModal';
+import { TreeExplorer, getGroupAndDescendantIds } from '../components/TreeExplorer';
 
 export const Targets: React.FC = () => {
   const [targets, setTargets] = useState<TargetItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Selezione cartella Scope attiva
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [selectedGroupNode, setSelectedGroupNode] = useState<TargetGroupNode | null>(null);
+  const [flatGroups, setFlatGroups] = useState<Map<string, TargetGroup>>(new Map());
 
   // Filtri e ricerca
   const [search, setSearch] = useState<string>('');
@@ -42,7 +50,7 @@ export const Targets: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await apiClient.get<ApiResponse<TargetListResponseData>>('/targets?limit=100');
+      const response = await apiClient.get<ApiResponse<TargetListResponseData>>('/targets?limit=200');
       if (response.data && response.data.success && response.data.data) {
         setTargets(response.data.data.items || []);
       } else {
@@ -62,6 +70,21 @@ export const Targets: React.FC = () => {
   useEffect(() => {
     fetchTargets();
   }, [fetchTargets]);
+
+  // Callback quando i gruppi vengono caricati dal TreeExplorer
+  const handleGroupsLoaded = useCallback((nodes: TargetGroupNode[]) => {
+    const map = new Map<string, TargetGroup>();
+    function recurse(list: TargetGroupNode[]) {
+      for (const item of list) {
+        map.set(item.id, item);
+        if (item.children && item.children.length > 0) {
+          recurse(item.children);
+        }
+      }
+    }
+    recurse(nodes);
+    setFlatGroups(map);
+  }, []);
 
   const handleDelete = async () => {
     if (!targetToDelete) return;
@@ -87,25 +110,40 @@ export const Targets: React.FC = () => {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  // Calcola gli ID ammissibili per la cartella selezionata (include tutti i sotto-rami)
+  const activeSubtreeGroupIds = useMemo(() => {
+    if (!selectedGroupId || !selectedGroupNode) return null;
+    return new Set(getGroupAndDescendantIds(selectedGroupNode));
+  }, [selectedGroupId, selectedGroupNode]);
+
   // Filtraggio client-side
   const filteredTargets = useMemo(() => {
     return targets.filter((t) => {
+      // Filtro ricerca
       const matchesSearch =
         search.trim() === '' ||
         t.value.toLowerCase().includes(search.toLowerCase()) ||
         (t.description && t.description.toLowerCase().includes(search.toLowerCase()));
 
+      // Filtro tipologia
       const matchesType =
         selectedType === 'ALL' || t.type.toUpperCase() === selectedType;
 
+      // Filtro stato blacklist
       const matchesStatus =
         selectedStatus === 'ALL' ||
         (selectedStatus === 'AUTHORIZED' && !t.is_blacklisted) ||
         (selectedStatus === 'BLACKLIST' && t.is_blacklisted);
 
-      return matchesSearch && matchesType && matchesStatus;
+      // Filtro cartella scope (albero)
+      let matchesGroup = true;
+      if (activeSubtreeGroupIds) {
+        matchesGroup = t.group_id ? activeSubtreeGroupIds.has(t.group_id) : false;
+      }
+
+      return matchesSearch && matchesType && matchesStatus && matchesGroup;
     });
-  }, [targets, search, selectedType, selectedStatus]);
+  }, [targets, search, selectedType, selectedStatus, activeSubtreeGroupIds]);
 
   const getTypeBadge = (type: string) => {
     switch (type.toUpperCase()) {
@@ -153,13 +191,13 @@ export const Targets: React.FC = () => {
             </div>
             <div>
               <h2 className="text-2xl font-bold tracking-tight text-white flex items-center space-x-2">
-                <span>Target & Asset Management</span>
+                <span>Target & Scope Management</span>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-cyan-400 border border-cyber-border font-mono">
                   {targets.length} totali
                 </span>
               </h2>
               <p className="text-sm text-slate-400 mt-0.5">
-                Configurazione e perimetro autorizzato per le attività di ricognizione Nmap
+                Organizzazione ad albero, perimetro autorizzato e analisi delle vulnerabilità per cartella
               </p>
             </div>
           </div>
@@ -190,192 +228,281 @@ export const Targets: React.FC = () => {
         </div>
       )}
 
-      {/* Toolbar: Ricerca e Filtri */}
-      <div className="p-4 rounded-xl border border-cyber-border bg-cyber-card/60 flex flex-col md:flex-row md:items-center justify-between gap-3">
-        {/* Input Ricerca */}
-        <div className="relative flex-1 max-w-md">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
-            <Search className="w-4 h-4" />
-          </div>
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Cerca per IP, CIDR, dominio o descrizione..."
-            className="w-full pl-9 pr-3 py-2 bg-slate-900/80 border border-cyber-border rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+      {/* Layout a 2 Colonne: Albero a Sinistra, Tabella Bersagli a Destra */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Colonna Sinistra: Tree Explorer */}
+        <div className="lg:col-span-4 xl:col-span-3">
+          <TreeExplorer
+            selectedGroupId={selectedGroupId}
+            onSelectGroup={(id, node) => {
+              setSelectedGroupId(id);
+              setSelectedGroupNode(node || null);
+            }}
+            onGroupsLoaded={handleGroupsLoaded}
           />
         </div>
 
-        {/* Dropdown Filtri */}
-        <div className="flex items-center space-x-3">
-          {/* Filtro Tipo */}
-          <div className="flex items-center space-x-1.5 text-xs">
-            <Filter className="w-3.5 h-3.5 text-slate-400" />
-            <select
-              value={selectedType}
-              onChange={(e) => setSelectedType(e.target.value)}
-              className="bg-slate-900 border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-cyan-500"
-            >
-              <option value="ALL">Tutti i tipi</option>
-              <option value="IP">IP Singolo</option>
-              <option value="CIDR">Subnet CIDR</option>
-              <option value="RANGE">Range IP</option>
-              <option value="FQDN">Dominio FQDN</option>
-            </select>
-          </div>
-
-          {/* Filtro Blacklist */}
-          <select
-            value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value)}
-            className="bg-slate-900 border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-cyan-500"
-          >
-            <option value="ALL">Tutti gli stati</option>
-            <option value="AUTHORIZED">Solo Autorizzati</option>
-            <option value="BLACKLIST">Solo Blacklist</option>
-          </select>
-
-          {/* Refresh button */}
-          <button
-            onClick={fetchTargets}
-            disabled={loading}
-            className="p-1.5 rounded-lg border border-cyber-border bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
-            title="Aggiorna lista"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-cyan-400' : ''}`} />
-          </button>
-        </div>
-      </div>
-
-      {/* Tabella Target */}
-      <div className="rounded-xl border border-cyber-border bg-cyber-card/40 overflow-hidden shadow-xl">
-        {loading ? (
-          <div className="py-16 flex flex-col items-center justify-center text-slate-400 space-y-3">
-            <RefreshCw className="w-6 h-6 animate-spin text-cyan-400" />
-            <span className="text-xs">Caricamento asset in corso...</span>
-          </div>
-        ) : filteredTargets.length === 0 ? (
-          <div className="py-16 flex flex-col items-center justify-center text-center space-y-3 p-6">
-            <div className="w-12 h-12 rounded-xl bg-slate-900 border border-cyber-border flex items-center justify-center text-slate-500">
-              <Crosshair className="w-6 h-6" />
-            </div>
-            <div className="text-sm font-semibold text-slate-200">
-              {targets.length === 0 ? 'Nessun bersaglio censito' : 'Nessun target corrisponde ai filtri'}
-            </div>
-            <p className="text-xs text-slate-400 max-w-sm">
-              {targets.length === 0
-                ? 'Inizia aggiungendo il primo indirizzo IP, blocco subnet o dominio autorizzato per le attività di sicurezza.'
-                : 'Prova a modificare i criteri di ricerca o azzerare i filtri applicati.'}
-            </p>
-            {targets.length === 0 && (
+        {/* Colonna Destra: Contenuto Target */}
+        <div className="lg:col-span-8 xl:col-span-9 space-y-4">
+          {/* Active Folder Filter Banner */}
+          {selectedGroupNode && (
+            <div className="p-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 flex items-center justify-between text-xs animate-in fade-in">
+              <div className="flex items-center space-x-2.5">
+                <div
+                  className="p-1.5 rounded-lg border"
+                  style={{
+                    backgroundColor: `${selectedGroupNode.color_tag || '#06b6d4'}20`,
+                    borderColor: `${selectedGroupNode.color_tag || '#06b6d4'}50`,
+                    color: selectedGroupNode.color_tag || '#06b6d4',
+                  }}
+                >
+                  <Folder className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-slate-400 text-[11px]">Cartella Scope attiva: </span>
+                  <span className="font-bold text-white ml-1">{selectedGroupNode.name}</span>
+                  <span className="text-slate-400 text-[11px] ml-2">
+                    ({filteredTargets.length} target in questo ramo)
+                  </span>
+                </div>
+              </div>
               <button
-                onClick={() => setIsCreateModalOpen(true)}
-                className="mt-2 inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs transition-colors"
+                type="button"
+                onClick={() => {
+                  setSelectedGroupId(null);
+                  setSelectedGroupNode(null);
+                }}
+                className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 flex items-center space-x-1 text-[11px] transition-colors"
+                title="Rimuovi filtro cartella"
               >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Aggiungi il primo target</span>
+                <span>Mostra tutti</span>
+                <X className="w-3.5 h-3.5" />
               </button>
+            </div>
+          )}
+
+          {/* Toolbar: Ricerca e Filtri */}
+          <div className="p-4 rounded-xl border border-cyber-border bg-cyber-card/60 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            {/* Input Ricerca */}
+            <div className="relative flex-1 max-w-md">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                <Search className="w-4 h-4" />
+              </div>
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Cerca per IP, CIDR, dominio o descrizione..."
+                className="w-full pl-9 pr-3 py-2 bg-slate-900/80 border border-cyber-border rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+              />
+            </div>
+
+            {/* Dropdown Filtri */}
+            <div className="flex items-center space-x-3">
+              {/* Filtro Tipo */}
+              <div className="flex items-center space-x-1.5 text-xs">
+                <Filter className="w-3.5 h-3.5 text-slate-400" />
+                <select
+                  value={selectedType}
+                  onChange={(e) => setSelectedType(e.target.value)}
+                  className="bg-slate-900 border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-cyan-500"
+                >
+                  <option value="ALL">Tutti i tipi</option>
+                  <option value="IP">IP Singolo</option>
+                  <option value="CIDR">Subnet CIDR</option>
+                  <option value="RANGE">Range IP</option>
+                  <option value="FQDN">Dominio FQDN</option>
+                </select>
+              </div>
+
+              {/* Filtro Blacklist */}
+              <select
+                value={selectedStatus}
+                onChange={(e) => setSelectedStatus(e.target.value)}
+                className="bg-slate-900 border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-cyan-500"
+              >
+                <option value="ALL">Tutti gli stati</option>
+                <option value="AUTHORIZED">Solo Autorizzati</option>
+                <option value="BLACKLIST">Solo Blacklist</option>
+              </select>
+
+              {/* Refresh button */}
+              <button
+                onClick={fetchTargets}
+                disabled={loading}
+                className="p-1.5 rounded-lg border border-cyber-border bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                title="Aggiorna lista"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-cyan-400' : ''}`} />
+              </button>
+            </div>
+          </div>
+
+          {/* Tabella Target */}
+          <div className="rounded-xl border border-cyber-border bg-cyber-card/40 overflow-hidden shadow-xl">
+            {loading ? (
+              <div className="py-16 flex flex-col items-center justify-center text-slate-400 space-y-3">
+                <RefreshCw className="w-6 h-6 animate-spin text-cyan-400" />
+                <span className="text-xs">Caricamento asset in corso...</span>
+              </div>
+            ) : filteredTargets.length === 0 ? (
+              <div className="py-16 flex flex-col items-center justify-center text-center space-y-3 p-6">
+                <div className="w-12 h-12 rounded-xl bg-slate-900 border border-cyber-border flex items-center justify-center text-slate-500">
+                  <Crosshair className="w-6 h-6" />
+                </div>
+                <div className="text-sm font-semibold text-slate-200">
+                  {targets.length === 0
+                    ? 'Nessun bersaglio censito'
+                    : selectedGroupNode
+                    ? `Nessun bersaglio trovato nella cartella "${selectedGroupNode.name}"`
+                    : 'Nessun target corrisponde ai filtri'}
+                </div>
+                <p className="text-xs text-slate-400 max-w-sm">
+                  {targets.length === 0
+                    ? 'Inizia aggiungendo il primo indirizzo IP, blocco subnet o dominio autorizzato per le attività di sicurezza.'
+                    : selectedGroupNode
+                    ? 'Aggiungi un nuovo bersaglio direttamente in questa cartella per iniziare.'
+                    : 'Prova a modificare i criteri di ricerca o azzerare i filtri applicati.'}
+                </p>
+                <button
+                  onClick={() => setIsCreateModalOpen(true)}
+                  className="mt-2 inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>
+                    {selectedGroupNode
+                      ? `Aggiungi Target a "${selectedGroupNode.name}"`
+                      : 'Aggiungi il primo target'}
+                  </span>
+                </button>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-cyber-border/80 text-[11px] font-semibold text-slate-400 uppercase tracking-wider bg-slate-900/40">
+                      <th className="py-3 px-4">Bersaglio / Valore</th>
+                      <th className="py-3 px-4">Cartella Scope</th>
+                      <th className="py-3 px-4">Tipo</th>
+                      <th className="py-3 px-4">Descrizione</th>
+                      <th className="py-3 px-4">Stato Autorizzativo</th>
+                      <th className="py-3 px-4">Data Creazione</th>
+                      <th className="py-3 px-4 text-right">Azioni</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-cyber-border/40 text-xs">
+                    {filteredTargets.map((target) => {
+                      const group = target.group_id ? flatGroups.get(target.group_id) : null;
+
+                      return (
+                        <tr key={target.id} className="hover:bg-slate-800/25 transition-colors">
+                          {/* Valore Target */}
+                          <td className="py-3.5 px-4 font-mono font-medium text-slate-100">
+                            <div className="flex items-center space-x-2">
+                              <span className="text-cyan-400 font-semibold">{target.value}</span>
+                              <button
+                                onClick={() => handleCopy(target.value, target.id)}
+                                className="text-slate-500 hover:text-slate-300 transition-colors p-1 rounded"
+                                title="Copia valore"
+                              >
+                                {copiedId === target.id ? (
+                                  <Check className="w-3 h-3 text-emerald-400" />
+                                ) : (
+                                  <Copy className="w-3 h-3" />
+                                )}
+                              </button>
+                            </div>
+                          </td>
+
+                          {/* Cartella Scope */}
+                          <td className="py-3.5 px-4 text-slate-300">
+                            {group ? (
+                              <span
+                                className="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded text-[11px] font-medium border"
+                                style={{
+                                  backgroundColor: `${group.color_tag || '#06b6d4'}15`,
+                                  borderColor: `${group.color_tag || '#06b6d4'}35`,
+                                  color: group.color_tag || '#06b6d4',
+                                }}
+                              >
+                                <Folder className="w-3 h-3" />
+                                <span className="truncate max-w-[120px]">{group.name}</span>
+                              </span>
+                            ) : (
+                              <span className="text-slate-500 text-[11px] italic">
+                                Non assegnato
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Tipo */}
+                          <td className="py-3.5 px-4">{getTypeBadge(target.type)}</td>
+
+                          {/* Descrizione */}
+                          <td className="py-3.5 px-4 text-slate-300 max-w-xs truncate">
+                            {target.description || <span className="text-slate-500 italic">-</span>}
+                          </td>
+
+                          {/* Stato Blacklist */}
+                          <td className="py-3.5 px-4">
+                            {target.is_blacklisted ? (
+                              <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/30">
+                                <ShieldAlert className="w-3 h-3" />
+                                <span>Blacklist (Escluso)</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>Autorizzato</span>
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Data Creazione */}
+                          <td className="py-3.5 px-4 text-slate-400">
+                            {new Date(target.created_at).toLocaleDateString('it-IT', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric',
+                            })}
+                          </td>
+
+                          {/* Azioni */}
+                          <td className="py-3.5 px-4 text-right">
+                            <div className="flex items-center justify-end space-x-2">
+                              {/* Quick Scan */}
+                              <button
+                                onClick={() => setQuickScanTarget(target)}
+                                disabled={target.is_blacklisted}
+                                className="p-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 hover:border-cyan-500/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                title={
+                                  target.is_blacklisted
+                                    ? 'Scansione vietata: target in blacklist'
+                                    : 'Avvia Scansione Rapida'
+                                }
+                              >
+                                <Play className="w-3.5 h-3.5" />
+                              </button>
+
+                              {/* Delete */}
+                              <button
+                                onClick={() => setTargetToDelete(target)}
+                                className="p-1.5 rounded-lg border border-rose-900/40 bg-rose-950/20 text-rose-400 hover:bg-rose-900/30 hover:border-rose-800 transition-colors"
+                                title="Elimina Bersaglio"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-cyber-border/80 text-[11px] font-semibold text-slate-400 uppercase tracking-wider bg-slate-900/40">
-                  <th className="py-3 px-4">Bersaglio / Valore</th>
-                  <th className="py-3 px-4">Tipo</th>
-                  <th className="py-3 px-4">Descrizione</th>
-                  <th className="py-3 px-4">Stato Autorizzativo</th>
-                  <th className="py-3 px-4">Data Creazione</th>
-                  <th className="py-3 px-4 text-right">Azioni</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-cyber-border/40 text-xs">
-                {filteredTargets.map((target) => (
-                  <tr key={target.id} className="hover:bg-slate-800/25 transition-colors">
-                    {/* Valore Target */}
-                    <td className="py-3.5 px-4 font-mono font-medium text-slate-100">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-cyan-400 font-semibold">{target.value}</span>
-                        <button
-                          onClick={() => handleCopy(target.value, target.id)}
-                          className="text-slate-500 hover:text-slate-300 transition-colors p-1 rounded"
-                          title="Copia valore"
-                        >
-                          {copiedId === target.id ? (
-                            <Check className="w-3 h-3 text-emerald-400" />
-                          ) : (
-                            <Copy className="w-3 h-3" />
-                          )}
-                        </button>
-                      </div>
-                    </td>
-
-                    {/* Tipo */}
-                    <td className="py-3.5 px-4">{getTypeBadge(target.type)}</td>
-
-                    {/* Descrizione */}
-                    <td className="py-3.5 px-4 text-slate-300 max-w-xs truncate">
-                      {target.description || <span className="text-slate-500 italic">-</span>}
-                    </td>
-
-                    {/* Stato Blacklist */}
-                    <td className="py-3.5 px-4">
-                      {target.is_blacklisted ? (
-                        <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/30">
-                          <ShieldAlert className="w-3 h-3" />
-                          <span>Blacklist (Escluso)</span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                          <CheckCircle2 className="w-3 h-3" />
-                          <span>Autorizzato</span>
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Data Creazione */}
-                    <td className="py-3.5 px-4 text-slate-400">
-                      {new Date(target.created_at).toLocaleDateString('it-IT', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric',
-                      })}
-                    </td>
-
-                    {/* Azioni */}
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="flex items-center justify-end space-x-2">
-                        {/* Quick Scan */}
-                        <button
-                          onClick={() => setQuickScanTarget(target)}
-                          disabled={target.is_blacklisted}
-                          className="p-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 hover:border-cyan-500/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                          title={
-                            target.is_blacklisted
-                              ? 'Scansione vietata: target in blacklist'
-                              : 'Avvia Scansione Rapida'
-                          }
-                        >
-                          <Play className="w-3.5 h-3.5" />
-                        </button>
-
-                        {/* Delete */}
-                        <button
-                          onClick={() => setTargetToDelete(target)}
-                          className="p-1.5 rounded-lg border border-rose-900/40 bg-rose-950/20 text-rose-400 hover:bg-rose-900/30 hover:border-rose-800 transition-colors"
-                          title="Elimina Bersaglio"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        </div>
       </div>
 
       {/* Modale Creazione Target */}
@@ -383,6 +510,7 @@ export const Targets: React.FC = () => {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onTargetCreated={fetchTargets}
+        defaultGroupId={selectedGroupId}
       />
 
       {/* Modale Scansione Rapida */}

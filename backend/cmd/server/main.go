@@ -16,6 +16,7 @@ import (
 	"nextgen-cybersec/internal/config"
 	"nextgen-cybersec/internal/delivery/http/handler"
 	appmw "nextgen-cybersec/internal/delivery/http/middleware"
+	"nextgen-cybersec/internal/delivery/ws"
 	"nextgen-cybersec/internal/repository/postgres"
 	"nextgen-cybersec/internal/scanner"
 	"nextgen-cybersec/internal/service"
@@ -86,6 +87,7 @@ func main() {
 	targetRepo := postgres.NewTargetRepo(db.Pool)
 	targetGroupRepo := postgres.NewTargetGroupRepo(db.Pool)
 	targetService := service.NewTargetService(targetRepo, targetGroupRepo)
+	targetGroupService := service.NewTargetGroupService(targetGroupRepo)
 
 	scanRepo := postgres.NewScanRepo(db.Pool)
 	scanProfileRepo := postgres.NewScanProfileRepo(db.Pool)
@@ -104,6 +106,9 @@ func main() {
 	cveCorrelator := service.NewCVECorrelator(cveRepo)
 
 	scannerRunner := scanner.NewNmapRunner("nmap", logger)
+	eventBroadcaster := service.NewEventBroadcaster(64, logger)
+	defer eventBroadcaster.Close()
+
 	scanOrchestrator := service.NewScanOrchestrator(
 		service.DefaultOrchestratorConfig(),
 		scanRepo,
@@ -114,6 +119,7 @@ func main() {
 	)
 	scanOrchestrator.SetFindingRepo(findingRepo)
 	scanOrchestrator.SetCorrelator(cveCorrelator)
+	scanOrchestrator.SetEventBroadcaster(eventBroadcaster)
 	scanOrchestrator.Start(context.Background())
 
 	scheduleRepo := postgres.NewScheduleRepo(db.Pool)
@@ -122,8 +128,17 @@ func main() {
 		slog.Error("Avvio SchedulerService fallito", "error", err)
 	}
 
-	scanService := service.NewScanService(scanRepo, scanProfileRepo, targetRepo, findingRepo, scanOrchestrator)
-	reportService := service.NewReportService(scanRepo, scanProfileRepo, targetRepo, findingRepo, tenantRepo, nil)
+	scanService := service.NewScanService(scanRepo, scanProfileRepo, targetRepo, findingRepo, targetGroupRepo, scanOrchestrator)
+	reportRepo := postgres.NewReportRepo(db.Pool)
+	reportService := service.NewReportService(reportRepo, scanRepo, scanProfileRepo, targetRepo, findingRepo, tenantRepo, nil)
+
+	ouiDB := scanner.NewOUIDatabase()
+	discoveryService := service.NewDiscoveryService(scannerRunner, ouiDB, logger, eventBroadcaster)
+
+	sshServerRepo := postgres.NewSSHServerRepo(db.Pool)
+	sshService := service.NewSSHService(sshServerRepo, cfg.SSHMasterKey)
+	terminalWSHandler := ws.NewSSHTerminalHandler(sshService)
+	firewallService := service.NewFirewallService(sshService, sshServerRepo)
 
 	// 8. Configurazione Router Chi & Middleware Standard
 	r := chi.NewRouter()
@@ -137,7 +152,10 @@ func main() {
 	authHandler := handler.NewAuthHandler(authService)
 	tenantHandler := handler.NewTenantHandler(tenantService)
 	targetHandler := handler.NewTargetHandler(targetService)
-	scanHandler := handler.NewScanHandler(scanService)
+	targetGroupHandler := handler.NewTargetGroupHandler(targetGroupService, scanService)
+	discoveryHandler := handler.NewDiscoveryHandler(discoveryService, targetService, targetGroupService, eventBroadcaster)
+	sshFirewallHandler := handler.NewSSHFirewallHandler(sshService, firewallService)
+	scanHandler := handler.NewScanHandler(scanService, eventBroadcaster)
 	reportHandler := handler.NewReportHandler(reportService)
 	scheduleHandler := handler.NewScheduleHandler(schedulerService, targetRepo, scanProfileRepo)
 	cveHandler := handler.NewCVEHandler(cveRepo, cveSyncService)
@@ -187,6 +205,24 @@ func main() {
 			})
 		})
 
+		api.Route("/target-groups", func(groupRouter chi.Router) {
+			groupRouter.Use(appmw.Authenticate(tokenManager))
+			groupRouter.Use(appmw.RequireTenant())
+
+			// Lettura albero e dettagli per tutti i ruoli autenticati del tenant
+			groupRouter.Get("/", targetGroupHandler.GetTree)
+			groupRouter.Get("/{id}", targetGroupHandler.GetByID)
+
+			// Creazione, modifica, eliminazione e avvio scansione cartella per SecOps e admin
+			groupRouter.Group(func(secOpsRouter chi.Router) {
+				secOpsRouter.Use(appmw.RequireSecOps())
+				secOpsRouter.Post("/", targetGroupHandler.Create)
+				secOpsRouter.Put("/{id}", targetGroupHandler.Update)
+				secOpsRouter.Delete("/{id}", targetGroupHandler.Delete)
+				secOpsRouter.Post("/{id}/scan", targetGroupHandler.StartScan)
+			})
+		})
+
 		api.Route("/scan-profiles", func(profileRouter chi.Router) {
 			profileRouter.Use(appmw.Authenticate(tokenManager))
 			profileRouter.Get("/", scanHandler.ListProfiles)
@@ -199,6 +235,7 @@ func main() {
 			// Consultazione storico, dettagli scansioni e findings
 			scanRouter.Get("/", scanHandler.List)
 			scanRouter.Get("/{id}", scanHandler.GetByID)
+			scanRouter.Get("/{id}/stream", scanHandler.Stream)
 			scanRouter.Get("/{id}/findings", scanHandler.GetFindings)
 
 			// Esportazione Report PDF White-Label e CSV Tabellare (RFC 4180)
@@ -211,6 +248,33 @@ func main() {
 				secOpsRouter.Post("/", scanHandler.Start)
 				secOpsRouter.Post("/{id}/cancel", scanHandler.Cancel)
 			})
+		})
+
+		api.Route("/network-discovery", func(discRouter chi.Router) {
+			discRouter.Use(appmw.Authenticate(tokenManager))
+			discRouter.Use(appmw.RequireTenant())
+
+			// Lettura ultimi risultati e live stream SSE consentiti a tutti i ruoli autenticati del tenant
+			discRouter.Get("/results", discoveryHandler.GetResults)
+			discRouter.Get("/stream", discoveryHandler.Stream)
+
+			// Scansione rapida subnet e importazione massiva target riservate ad operatori SecOps o admin
+			discRouter.Group(func(secOpsRouter chi.Router) {
+				secOpsRouter.Use(appmw.RequireSecOps())
+				secOpsRouter.Post("/scan", discoveryHandler.Scan)
+				secOpsRouter.Post("/import-targets", discoveryHandler.ImportTargets)
+			})
+		})
+
+		api.Route("/reports", func(reportRouter chi.Router) {
+			reportRouter.Use(appmw.Authenticate(tokenManager))
+			reportRouter.Use(appmw.RequireTenant())
+
+			// Consultazione storico globale report con filtri e paginazione
+			reportRouter.Get("/", reportHandler.List)
+
+			// Download report unificato con selettore formato (type=pdf|csv) e template (executive|technical)
+			reportRouter.Get("/{id}/download", reportHandler.DownloadReport)
 		})
 
 		api.Route("/schedules", func(schedRouter chi.Router) {
@@ -237,15 +301,51 @@ func main() {
 				adminRouter.Post("/sync", cveHandler.Sync)
 			})
 		})
+
+		api.Route("/ssh/servers", func(sshRouter chi.Router) {
+			sshRouter.Use(appmw.Authenticate(tokenManager))
+			sshRouter.Use(appmw.RequireTenant())
+
+			// Lettura inventario server consentita a tutti i ruoli autenticati del tenant
+			sshRouter.Get("/", sshFirewallHandler.ListServers)
+			sshRouter.Get("/{id}", sshFirewallHandler.GetServer)
+
+			// Gestione credenziali, test connessione e firewall riservate ad operatori SecOps o admin
+			sshRouter.Group(func(secOpsRouter chi.Router) {
+				secOpsRouter.Use(appmw.RequireSecOps())
+				secOpsRouter.Post("/", sshFirewallHandler.CreateServer)
+				secOpsRouter.Put("/{id}", sshFirewallHandler.UpdateServer)
+				secOpsRouter.Delete("/{id}", sshFirewallHandler.DeleteServer)
+				secOpsRouter.Post("/{id}/test-connection", sshFirewallHandler.TestConnection)
+
+				// Gestione Firewall iptables con Anti-Lockout Safety Timer
+				secOpsRouter.Get("/{id}/firewall", sshFirewallHandler.GetFirewallStatus)
+				secOpsRouter.Post("/{id}/firewall/rules", sshFirewallHandler.AddFirewallRule)
+				secOpsRouter.Delete("/{id}/firewall/rules/{line}", sshFirewallHandler.DeleteFirewallRule)
+				secOpsRouter.Post("/{id}/firewall/apply", sshFirewallHandler.ApplyWithSafetyTimer)
+				secOpsRouter.Post("/{id}/firewall/confirm", sshFirewallHandler.ConfirmFirewall)
+				secOpsRouter.Post("/{id}/firewall/rollback", sshFirewallHandler.RollbackFirewall)
+			})
+		})
 	})
 
-	// 7. Configurazione Server HTTP con Timeout di Sicurezza
+	// 10. Rotte WebSocket /ws/v1
+	r.Route("/ws/v1", func(wsRouter chi.Router) {
+		wsRouter.Route("/ssh/servers/{id}/terminal", func(termRouter chi.Router) {
+			termRouter.Use(appmw.Authenticate(tokenManager))
+			termRouter.Use(appmw.RequireTenant())
+			termRouter.Use(appmw.RequireSecOps())
+			termRouter.Get("/", terminalWSHandler.HandleTerminal)
+		})
+	})
+
+	// 11. Configurazione Server HTTP con Timeout di Sicurezza
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,
 		Handler:      r,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  60 * time.Second,
+		WriteTimeout: 300 * time.Second, // 5 minuti di tolleranza per scansioni e PDF
+		IdleTimeout:  120 * time.Second,
 	}
 
 	// 8. Avvio Server in Goroutine

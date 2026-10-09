@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -50,6 +51,7 @@ type ParsedHost struct {
 	PrimaryHostname string       `json:"primary_hostname,omitempty"`
 	Status          string       `json:"status"` // up, down
 	StatusReason    string       `json:"status_reason,omitempty"`
+	LatencyMs       float64      `json:"latency_ms,omitempty"`
 	OS              *ParsedOS    `json:"os,omitempty"`
 	Ports           []ParsedPort `json:"ports,omitempty"`
 }
@@ -78,15 +80,29 @@ type ParsedScanReport struct {
 	Hosts      []ParsedHost `json:"hosts"`
 }
 
+// GetUpHosts estrae e restituisce esclusivamente gli host aventi stato 'up' (esclude host down/offline)
+func (r *ParsedScanReport) GetUpHosts() []ParsedHost {
+	var alive []ParsedHost
+	for _, h := range r.Hosts {
+		if strings.EqualFold(h.Status, "up") {
+			alive = append(alive, h)
+		}
+	}
+	return alive
+}
+
 // ToSummaryStats converte le metriche del report nella struct di dominio ScanSummaryStats
 func (r *ParsedScanReport) ToSummaryStats() domain.ScanSummaryStats {
 	openPorts := r.ExtractOpenPorts()
 
 	upHosts := r.UpHosts
-	if upHosts == 0 {
+	downHosts := r.DownHosts
+	if upHosts == 0 && downHosts == 0 {
 		for _, h := range r.Hosts {
-			if h.Status == "up" {
+			if strings.EqualFold(h.Status, "up") {
 				upHosts++
+			} else if strings.EqualFold(h.Status, "down") {
+				downHosts++
 			}
 		}
 	}
@@ -99,15 +115,16 @@ func (r *ParsedScanReport) ToSummaryStats() domain.ScanSummaryStats {
 	return domain.ScanSummaryStats{
 		TotalHosts:      totalHosts,
 		UpHosts:         upHosts,
+		DownHosts:       downHosts,
 		TotalOpenPorts:  openPorts,
 		DurationSeconds: r.Duration,
 	}
 }
 
-// ExtractOpenPorts calcola il numero complessivo di porte in stato 'open' su tutti gli host
+// ExtractOpenPorts calcola il numero complessivo di porte in stato 'open' su tutti gli host attivi (up)
 func (r *ParsedScanReport) ExtractOpenPorts() int {
 	count := 0
-	for _, h := range r.Hosts {
+	for _, h := range r.GetUpHosts() {
 		for _, p := range h.Ports {
 			if strings.EqualFold(p.State, "open") {
 				count++
@@ -117,12 +134,12 @@ func (r *ParsedScanReport) ExtractOpenPorts() int {
 	return count
 }
 
-// ExtractCPEs estrae una lista deduplicata di tutti i CPE identificati nei servizi
+// ExtractCPEs estrae una lista deduplicata di tutti i CPE identificati nei servizi degli host attivi (up)
 func (r *ParsedScanReport) ExtractCPEs() []string {
 	seen := make(map[string]bool)
 	var cpes []string
 
-	for _, h := range r.Hosts {
+	for _, h := range r.GetUpHosts() {
 		for _, p := range h.Ports {
 			if p.Service != nil {
 				for _, cpe := range p.Service.CPEs {
@@ -187,12 +204,19 @@ type xmlOSMatch struct {
 	Accuracy int    `xml:"accuracy,attr"`
 }
 
+type xmlTimes struct {
+	SRTT   string `xml:"srtt,attr"`
+	RTTVAR string `xml:"rttvar,attr"`
+	TO     string `xml:"to,attr"`
+}
+
 type xmlHost struct {
 	Status    xmlStatus     `xml:"status"`
 	Addresses []xmlAddress  `xml:"address"`
 	Hostnames []xmlHostname `xml:"hostnames>hostname"`
 	Ports     []xmlPort     `xml:"ports>port"`
 	OSMatches []xmlOSMatch  `xml:"os>osmatch"`
+	Times     xmlTimes      `xml:"times"`
 }
 
 type xmlFinished struct {
@@ -258,6 +282,13 @@ func convertXMLHost(xh *xmlHost) ParsedHost {
 			if addr.Vendor != "" {
 				host.Vendor = addr.Vendor
 			}
+		}
+	}
+
+	// Elaborazione smoothed round-trip time (latenza RTT in millisecondi)
+	if xh.Times.SRTT != "" {
+		if srttUsec, err := strconv.ParseFloat(xh.Times.SRTT, 64); err == nil && srttUsec > 0 {
+			host.LatencyMs = math.Round((srttUsec/1000.0)*100) / 100
 		}
 	}
 

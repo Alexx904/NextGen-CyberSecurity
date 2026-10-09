@@ -4,12 +4,16 @@ import { ScanStatus } from '../types/scan';
 
 interface ScanProgressBadgeProps {
   status: ScanStatus | string;
+  phase?: string;
+  percentage?: number;
   showIcon?: boolean;
   className?: string;
 }
 
 export const ScanProgressBadge: React.FC<ScanProgressBadgeProps> = ({
   status,
+  phase,
+  percentage,
   showIcon = true,
   className = '',
 }) => {
@@ -24,15 +28,25 @@ export const ScanProgressBadge: React.FC<ScanProgressBadgeProps> = ({
         </span>
       );
 
-    case 'RUNNING':
+    case 'RUNNING': {
+      let label = 'In Esecuzione';
+      if (phase && percentage !== undefined) {
+        label = `${phase} (${percentage.toFixed(0)}%)`;
+      } else if (phase) {
+        label = phase;
+      } else if (percentage !== undefined) {
+        label = `In Esecuzione (${percentage.toFixed(0)}%)`;
+      }
+
       return (
         <span
           className={`inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 shadow-[0_0_10px_rgba(6,182,212,0.2)] animate-pulse ${className}`}
         >
           {showIcon && <Radio className="w-3 h-3 text-cyan-400 animate-spin" />}
-          <span>In Esecuzione</span>
+          <span>{label}</span>
         </span>
       );
+    }
 
     case 'QUEUED':
       return (

@@ -1,36 +1,74 @@
 import React, { useState, useEffect } from 'react';
-import { X, Crosshair, AlertCircle, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { X, Crosshair, AlertCircle, CheckCircle2, ShieldAlert, Folder } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { ApiResponse } from '../types/auth';
-import { TargetItem } from '../types/target';
+import { TargetItem, TargetGroup, TargetGroupNode } from '../types/target';
 import { validateTargetInput } from '../utils/targetValidator';
 
 interface TargetModalProps {
   isOpen: boolean;
   onClose: () => void;
   onTargetCreated: () => void;
+  defaultGroupId?: string | null;
+  groups?: (TargetGroup | TargetGroupNode)[];
+}
+
+// Helper per appiattire la struttura se vengono passati nodi con children
+function flattenGroupList(groups: (TargetGroup | TargetGroupNode)[]): TargetGroup[] {
+  const result: TargetGroup[] = [];
+  function recurse(list: (TargetGroup | TargetGroupNode)[]) {
+    for (const g of list) {
+      result.push(g);
+      if ('children' in g && Array.isArray(g.children) && g.children.length > 0) {
+        recurse(g.children);
+      }
+    }
+  }
+  recurse(groups);
+  return result;
 }
 
 export const TargetModal: React.FC<TargetModalProps> = ({
   isOpen,
   onClose,
   onTargetCreated,
+  defaultGroupId,
+  groups,
 }) => {
   const [value, setValue] = useState('');
   const [description, setDescription] = useState('');
+  const [groupId, setGroupId] = useState<string>('');
+  const [availableGroups, setAvailableGroups] = useState<TargetGroup[]>([]);
   const [isBlacklisted, setIsBlacklisted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
-  // Reset form quando la modale viene aperta/chiusa
+  // Reset form e caricamento gruppi quando la modale viene aperta
   useEffect(() => {
     if (isOpen) {
       setValue('');
       setDescription('');
       setIsBlacklisted(false);
       setServerError(null);
+      setGroupId(defaultGroupId || '');
+
+      if (groups && groups.length > 0) {
+        setAvailableGroups(flattenGroupList(groups));
+      } else {
+        // Carica gruppi dall'API se non forniti esplicitamente
+        apiClient
+          .get<ApiResponse<TargetGroupNode[]>>('/target-groups')
+          .then((res) => {
+            if (res.data?.data) {
+              setAvailableGroups(flattenGroupList(res.data.data));
+            }
+          })
+          .catch(() => {
+            // Se fallisce, consentiamo comunque la creazione senza cartella
+          });
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, defaultGroupId, groups]);
 
   if (!isOpen) return null;
 
@@ -49,11 +87,22 @@ export const TargetModal: React.FC<TargetModalProps> = ({
 
     setSubmitting(true);
     try {
-      const response = await apiClient.post<ApiResponse<TargetItem>>('/targets', {
+      const payload: {
+        value: string;
+        description?: string;
+        is_blacklisted: boolean;
+        group_id?: string;
+      } = {
         value: value.trim(),
         description: description.trim() || undefined,
         is_blacklisted: isBlacklisted,
-      });
+      };
+
+      if (groupId) {
+        payload.group_id = groupId;
+      }
+
+      const response = await apiClient.post<ApiResponse<TargetItem>>('/targets', payload);
 
       if (response.data && response.data.success) {
         onTargetCreated();
@@ -95,7 +144,7 @@ export const TargetModal: React.FC<TargetModalProps> = ({
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {/* Server Error Alert */}
           {serverError && (
             <div className="p-3.5 rounded-lg border border-rose-800/50 bg-rose-950/30 text-rose-300 text-xs flex items-start space-x-2">
@@ -141,6 +190,26 @@ export const TargetModal: React.FC<TargetModalProps> = ({
             <p className="text-[11px] text-slate-500 mt-1">
               Supporta IPv4, IPv6, notazione CIDR (es. /24), Range IP (es. 10.0.0.1-50) o FQDN.
             </p>
+          </div>
+
+          {/* Cartella / Scope Group */}
+          <div>
+            <label className="block text-xs font-medium text-slate-300 mb-1.5 flex items-center space-x-1.5">
+              <Folder className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Cartella Scope di Appartenenza</span>
+            </label>
+            <select
+              value={groupId}
+              onChange={(e) => setGroupId(e.target.value)}
+              className="w-full px-3.5 py-2.5 bg-slate-900 border border-cyber-border rounded-lg text-sm text-slate-100 focus:outline-none focus:border-cyan-500"
+            >
+              <option value="">📁 Nessuna Cartella (Non Assegnato / Root)</option>
+              {availableGroups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  📂 {g.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Descrizione / Note */}
@@ -200,4 +269,3 @@ export const TargetModal: React.FC<TargetModalProps> = ({
     </div>
   );
 };
-

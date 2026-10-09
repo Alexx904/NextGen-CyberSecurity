@@ -126,7 +126,13 @@ func (m *mockTargetRepo) GetByID(ctx context.Context, tenantID, id uuid.UUID) (*
 }
 
 func (m *mockTargetRepo) List(ctx context.Context, tenantID uuid.UUID, filter domain.TargetFilter) ([]*domain.Target, int, error) {
-	return nil, 0, nil
+	var list []*domain.Target
+	for _, t := range m.targets {
+		if t.TenantID == tenantID {
+			list = append(list, t)
+		}
+	}
+	return list, len(list), nil
 }
 
 func (m *mockTargetRepo) Create(ctx context.Context, target *domain.Target) error {
@@ -561,3 +567,322 @@ func TestScanOrchestrator_GracefulStop(t *testing.T) {
 		t.Fatal("timeout durante Graceful Stop dell'orchestratore")
 	}
 }
+
+func TestScanOrchestrator_AliveOnlyFiltering(t *testing.T) {
+	tenantID := uuid.New()
+	targetID := uuid.New()
+	profileID := uuid.New()
+	scanID := uuid.New()
+
+	scanRepo := newMockScanRepo()
+	targetRepo := &mockTargetRepo{
+		targets: map[uuid.UUID]*domain.Target{
+			targetID: {
+				ID:            targetID,
+				TenantID:      tenantID,
+				Type:          domain.TargetTypeRange,
+				Value:         "10.0.0.0/28",
+				IsBlacklisted: false,
+			},
+		},
+		blacklistedMap: make(map[string]bool),
+	}
+
+	profileRepo := &mockProfileRepo{
+		profiles: map[uuid.UUID]*domain.ScanProfile{
+			profileID: {
+				ID:             profileID,
+				Name:           "Standard Range",
+				NmapArgs:       "-sV",
+				TimeoutSeconds: 10,
+			},
+		},
+	}
+
+	xmlOutput := `<?xml version="1.0"?>
+<nmaprun scanner="nmap" version="7.94">
+<host>
+  <status state="up" reason="syn-ack"/>
+  <address addr="10.0.0.1" addrtype="ipv4"/>
+  <ports>
+    <port protocol="tcp" portid="80">
+      <state state="open"/>
+      <service name="http" product="nginx" version="1.24.0"/>
+    </port>
+  </ports>
+</host>
+<host>
+  <status state="down" reason="no-response"/>
+  <address addr="10.0.0.2" addrtype="ipv4"/>
+  <ports>
+    <port protocol="tcp" portid="80">
+      <state state="open"/>
+      <service name="http"/>
+    </port>
+  </ports>
+</host>
+<host>
+  <status state="down" reason="no-response"/>
+  <address addr="10.0.0.3" addrtype="ipv4"/>
+</host>
+<runstats>
+  <finished elapsed="4.2"/>
+  <hosts up="1" down="2" total="3"/>
+</runstats>
+</nmaprun>`
+
+	runner := &mockRunner{
+		runFunc: func(ctx context.Context, target string, profile scanner.ProfileConfig) (*scanner.ScanExecutionResult, error) {
+			return &scanner.ScanExecutionResult{
+				RawXML:   []byte(xmlOutput),
+				ExitCode: 0,
+				Duration: 4 * time.Second,
+			}, nil
+		},
+	}
+
+	findingRepo := newMockFindingRepo()
+
+	initialScan := &domain.Scan{
+		ID:          scanID,
+		TenantID:    tenantID,
+		TargetID:    targetID,
+		ProfileID:   profileID,
+		TriggerType: domain.TriggerManual,
+		Status:      domain.ScanStatusQueued,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+	_ = scanRepo.Create(context.Background(), initialScan)
+
+	orchestrator := NewScanOrchestrator(
+		OrchestratorConfig{MaxWorkers: 1, QueueSize: 5},
+		scanRepo,
+		profileRepo,
+		targetRepo,
+		runner,
+		silentLogger(),
+	)
+	orchestrator.SetFindingRepo(findingRepo)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	orchestrator.Start(ctx)
+	defer orchestrator.Stop()
+
+	if err := orchestrator.Enqueue(tenantID, scanID); err != nil {
+		t.Fatalf("Enqueue fallito: %v", err)
+	}
+
+	var finalScan *domain.Scan
+	for i := 0; i < 30; i++ {
+		s, err := scanRepo.GetByID(context.Background(), tenantID, scanID)
+		if err == nil && s.Status.IsTerminal() {
+			finalScan = s
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	if finalScan == nil || finalScan.Status != domain.ScanStatusCompleted {
+		t.Fatalf("Scansione non completata: %+v", finalScan)
+	}
+
+	// 1. Verifica summary stats: Total=3, Up=1, Down=2
+	if finalScan.SummaryStats.TotalHosts != 3 {
+		t.Errorf("TotalHosts errato: atteso 3, ottenuto %d", finalScan.SummaryStats.TotalHosts)
+	}
+	if finalScan.SummaryStats.UpHosts != 1 {
+		t.Errorf("UpHosts errato: atteso 1, ottenuto %d", finalScan.SummaryStats.UpHosts)
+	}
+	if finalScan.SummaryStats.DownHosts != 2 {
+		t.Errorf("DownHosts errato: atteso 2, ottenuto %d", finalScan.SummaryStats.DownHosts)
+	}
+
+	// 2. Verifica che i finding siano stati creati SOLO per l'host UP (10.0.0.1)
+	if len(findingRepo.findings) != 1 {
+		t.Fatalf("atteso esattamente 1 finding per l'host up, ottenuti %d", len(findingRepo.findings))
+	}
+	for _, f := range findingRepo.findings {
+		if f.HostIP != "10.0.0.1" {
+			t.Errorf("l'host associato al finding doveva essere 10.0.0.1, ottenuto: %s", f.HostIP)
+		}
+		if f.HostIP == "10.0.0.2" || f.HostIP == "10.0.0.3" {
+			t.Errorf("nessun finding doveva essere registrato per host offline, trovato: %s", f.HostIP)
+		}
+	}
+}
+
+func TestScanOrchestrator_EventBroadcasting(t *testing.T) {
+	tenantID := uuid.New()
+	targetID := uuid.New()
+	profileID := uuid.New()
+	scanID := uuid.New()
+
+	scanRepo := newMockScanRepo()
+	targetRepo := &mockTargetRepo{
+		targets: map[uuid.UUID]*domain.Target{
+			targetID: {
+				ID:            targetID,
+				TenantID:      tenantID,
+				Type:          domain.TargetTypeIP,
+				Value:         "192.168.1.100",
+				IsBlacklisted: false,
+			},
+		},
+		blacklistedMap: make(map[string]bool),
+	}
+	profileRepo := &mockProfileRepo{
+		profiles: map[uuid.UUID]*domain.ScanProfile{
+			profileID: {
+				ID:             profileID,
+				Name:           "Standard Scan",
+				NmapArgs:       "-sV",
+				TimeoutSeconds: 10,
+			},
+		},
+	}
+	findingRepo := newMockFindingRepo()
+	runner := &mockRunner{}
+
+	initialScan := &domain.Scan{
+		ID:          scanID,
+		TenantID:    tenantID,
+		TargetID:    targetID,
+		ProfileID:   profileID,
+		TriggerType: domain.TriggerManual,
+		Status:      domain.ScanStatusQueued,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+	_ = scanRepo.Create(context.Background(), initialScan)
+
+	broadcaster := NewEventBroadcaster(50, silentLogger())
+	defer broadcaster.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Subscribe prima di avviare il job
+	eventCh, unsubscribe := broadcaster.Subscribe(ctx, domain.ScanTopic(scanID))
+	defer unsubscribe()
+
+	orchestrator := NewScanOrchestrator(
+		OrchestratorConfig{MaxWorkers: 1, QueueSize: 5},
+		scanRepo,
+		profileRepo,
+		targetRepo,
+		runner,
+		silentLogger(),
+	)
+	orchestrator.SetFindingRepo(findingRepo)
+	orchestrator.SetEventBroadcaster(broadcaster)
+
+	orchestrator.Start(ctx)
+	defer orchestrator.Stop()
+
+	if err := orchestrator.Enqueue(tenantID, scanID); err != nil {
+		t.Fatalf("Enqueue fallito: %v", err)
+	}
+
+	// Raccogliamo gli eventi emessi durante l'esecuzione del job
+	var receivedEvents []domain.SSEEvent
+	timeout := time.After(2 * time.Second)
+	done := false
+
+	for !done {
+		select {
+		case evt, ok := <-eventCh:
+			if !ok {
+				done = true
+				break
+			}
+			receivedEvents = append(receivedEvents, evt)
+			// Se abbiamo ricevuto status_change con COMPLETED, la scansione è terminata
+			if evt.Event == domain.EventScanStatusChange {
+				if payload, ok := evt.Data.(domain.ScanStatusPayload); ok && payload.Status == domain.ScanStatusCompleted {
+					done = true
+				}
+			}
+		case <-timeout:
+			t.Fatalf("Timeout nell'attesa degli eventi SSE per la scansione. Ricevuti finora: %d", len(receivedEvents))
+		}
+	}
+
+	// Verifiche sugli eventi ricevuti
+	eventNames := make([]string, 0, len(receivedEvents))
+	for _, e := range receivedEvents {
+		eventNames = append(eventNames, string(e.Event))
+	}
+
+	// 1. Deve essere presente status_change (RUNNING)
+	hasRunningStatus := false
+	for _, e := range receivedEvents {
+		if e.Event == domain.EventScanStatusChange {
+			if p, ok := e.Data.(domain.ScanStatusPayload); ok && p.Status == domain.ScanStatusRunning {
+				hasRunningStatus = true
+				break
+			}
+		}
+	}
+	if !hasRunningStatus {
+		t.Errorf("atteso evento status_change RUNNING, eventi ricevuti: %v", eventNames)
+	}
+
+	// 2. Devono essere presenti le fasi di scansione
+	hasHostDiscovery := false
+	hasPortScan := false
+	for _, e := range receivedEvents {
+		if e.Event == domain.EventScanPhase {
+			if p, ok := e.Data.(domain.ScanPhasePayload); ok {
+				if p.Phase == "HOST_DISCOVERY" {
+					hasHostDiscovery = true
+				}
+				if p.Phase == "PORT_SCAN" {
+					hasPortScan = true
+				}
+			}
+		}
+	}
+	if !hasHostDiscovery || !hasPortScan {
+		t.Errorf("attese fasi HOST_DISCOVERY e PORT_SCAN, eventi ricevuti: %v", eventNames)
+	}
+
+	// 3. Deve essere presente il finding emesso live
+	hasFinding := false
+	for _, e := range receivedEvents {
+		if e.Event == domain.EventScanFinding {
+			if p, ok := e.Data.(domain.ScanFindingPayload); ok {
+				if p.Finding.Port == 80 {
+					hasFinding = true
+					break
+				}
+			}
+		}
+	}
+	if !hasFinding {
+		t.Errorf("atteso evento finding_discovered con porta 80, eventi ricevuti: %v", eventNames)
+	}
+
+	// 4. Deve essere presente status_change (COMPLETED)
+	hasCompletedStatus := false
+	for _, e := range receivedEvents {
+		if e.Event == domain.EventScanStatusChange {
+			if p, ok := e.Data.(domain.ScanStatusPayload); ok && p.Status == domain.ScanStatusCompleted {
+				hasCompletedStatus = true
+				break
+			}
+		}
+	}
+	if !hasCompletedStatus {
+		t.Errorf("atteso evento status_change COMPLETED, eventi ricevuti: %v", eventNames)
+	}
+
+	// 5. Verifica che il finding sia stato persistito su repository (NFR-REL-02)
+	if len(findingRepo.findings) != 1 {
+		t.Errorf("atteso 1 finding persistito, trovati: %d", len(findingRepo.findings))
+	}
+}
+
+

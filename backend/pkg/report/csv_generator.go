@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/csv"
 	"fmt"
+	"strings"
 	"time"
 
 	"nextgen-cybersec/internal/domain"
@@ -37,6 +38,11 @@ func GenerateCSV(findings []*domain.Finding) ([]byte, error) {
 	}
 
 	for _, f := range findings {
+		// Esclusione categorica di record nulli o host non responsivi/vuoti (DoD TASK-36)
+		if f == nil || strings.TrimSpace(f.HostIP) == "" || strings.EqualFold(f.HostIP, "0.0.0.0") {
+			continue
+		}
+
 		hostname := ""
 		if f.Hostname != nil {
 			hostname = *f.Hostname

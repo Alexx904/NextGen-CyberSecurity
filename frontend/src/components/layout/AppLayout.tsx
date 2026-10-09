@@ -16,8 +16,12 @@ import {
   XCircle,
   RefreshCw,
   Menu,
-  X
+  X,
+  Radar,
+  Server,
 } from 'lucide-react';
+import { DebugFloatingToggle } from '../debug/DebugFloatingToggle';
+import { DebugConsoleDrawer } from '../debug/DebugConsoleDrawer';
 
 interface HealthData {
   status: string;
@@ -59,7 +63,9 @@ export const AppLayout: React.FC = () => {
   const navItems = [
     { name: 'Overview', path: '/', icon: Activity },
     { name: 'Target & Asset', path: '/targets', icon: Crosshair },
+    { name: 'Network Discovery', path: '/network-discovery', icon: Radar },
     { name: 'Scansioni Nmap', path: '/scans', icon: Terminal },
+    { name: 'Server SSH & Firewall', path: '/ssh-servers', icon: Server },
     { name: 'Vulnerabilità (CVE)', path: '/findings', icon: BarChart3 },
     { name: 'Report White-Label', path: '/reports', icon: FileText },
     { name: 'Impostazioni Tenant', path: '/settings', icon: Settings },
@@ -207,6 +213,10 @@ export const AppLayout: React.FC = () => {
           <Outlet />
         </main>
       </div>
+
+      {/* Live Debug & Diagnostics Console Drawer & Floating Button */}
+      <DebugFloatingToggle />
+      <DebugConsoleDrawer />
     </div>
   );
 };

@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -16,10 +17,11 @@ import (
 	"nextgen-cybersec/internal/service"
 )
 
-// StartScanRequest definisce il payload per l'avvio on-demand di una scansione
+// StartScanRequest definisce il payload per l'avvio on-demand di una scansione (su target singolo o intera cartella)
 type StartScanRequest struct {
-	TargetID  uuid.UUID `json:"target_id"`
-	ProfileID uuid.UUID `json:"profile_id"`
+	TargetID  *uuid.UUID `json:"target_id,omitempty"`
+	GroupID   *uuid.UUID `json:"group_id,omitempty"`
+	ProfileID uuid.UUID  `json:"profile_id"`
 }
 
 // ScanResponse rappresenta il modello pubblico di una scansione
@@ -58,12 +60,14 @@ func toScanResponse(s *domain.Scan) ScanResponse {
 // ScanHandler gestisce le richieste HTTP per il ciclo di vita delle scansioni
 type ScanHandler struct {
 	scanService service.ScanService
+	broadcaster service.EventBroadcaster
 }
 
 // NewScanHandler crea una nuova istanza di ScanHandler
-func NewScanHandler(scanService service.ScanService) *ScanHandler {
+func NewScanHandler(scanService service.ScanService, broadcaster service.EventBroadcaster) *ScanHandler {
 	return &ScanHandler{
 		scanService: scanService,
+		broadcaster: broadcaster,
 	}
 }
 
@@ -101,6 +105,120 @@ func (h *ScanHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Stream gestisce GET /api/v1/scans/{id}/stream per lo streaming live SSE di fasi, progresso e findings
+func (h *ScanHandler) Stream(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID, ok := middleware.GetTenantID(ctx)
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "UNAUTHORIZED", "Identificativo tenant mancante o non valido")
+		return
+	}
+
+	idParam := chi.URLParam(r, "id")
+	scanID, err := uuid.Parse(idParam)
+	if err != nil || scanID == uuid.Nil {
+		response.Error(w, http.StatusBadRequest, "INVALID_ID", "ID scansione non valido")
+		return
+	}
+
+	// Verifica esistenza scansione per il tenant
+	scan, err := h.scanService.GetScan(ctx, tenantID, scanID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			response.Error(w, http.StatusNotFound, "NOT_FOUND", "Scansione non trovata")
+			return
+		}
+		response.Error(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Impossibile recuperare i dettagli della scansione")
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		response.Error(w, http.StatusInternalServerError, "STREAMING_UNSUPPORTED", "HTTP streaming non supportato dal server")
+		return
+	}
+
+	// Impostazione header conformi a text/event-stream e disattivazione buffering Nginx
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	// Handshake iniziale
+	if _, err := fmt.Fprintf(w, ": connected\n\n"); err != nil {
+		return
+	}
+	flusher.Flush()
+
+	// 1. Replay resiliente dello stato iniziale/parziale (NFR-REL-05)
+	statusEvt := domain.SSEEvent{
+		Event: domain.EventScanStatusChange,
+		Data: domain.ScanStatusPayload{
+			ScanID:       scan.ID,
+			Status:       scan.Status,
+			SummaryStats: scan.SummaryStats,
+		},
+	}
+	if b, err := statusEvt.FormatBytes(); err == nil {
+		_, _ = w.Write(b)
+		flusher.Flush()
+	}
+
+	// Recupero findings già presenti su DB per replay incrementale
+	existingFindings, _, _ := h.scanService.GetScanFindings(ctx, tenantID, scan.ID, domain.FindingFilter{
+		Limit: 1000,
+	})
+	for _, f := range existingFindings {
+		fEvt := domain.SSEEvent{
+			Event: domain.EventScanFinding,
+			Data: domain.ScanFindingPayload{
+				ScanID:  scan.ID,
+				Finding: *f,
+			},
+		}
+		if b, err := fEvt.FormatBytes(); err == nil {
+			_, _ = w.Write(b)
+		}
+	}
+	flusher.Flush()
+
+	// Se la scansione è già in uno stato terminale, chiudiamo ordinatamente lo stream
+	if scan.Status.IsTerminal() || h.broadcaster == nil {
+		return
+	}
+
+	// 2. Iscrizione al topic live per ricevere i nuovi eventi dal worker pool
+	topic := domain.ScanTopic(scan.ID)
+	ch, unsubscribe := h.broadcaster.Subscribe(ctx, topic)
+	defer unsubscribe()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case evt, ok := <-ch:
+			if !ok {
+				return
+			}
+			bytes, err := evt.FormatBytes()
+			if err != nil {
+				continue
+			}
+			if _, err := w.Write(bytes); err != nil {
+				return
+			}
+			flusher.Flush()
+
+			// Chiusura automatica dello stream su stato finale
+			if evt.Event == domain.EventScanStatusChange {
+				if payload, ok := evt.Data.(domain.ScanStatusPayload); ok && payload.Status.IsTerminal() {
+					return
+				}
+			}
+		}
+	}
+}
+
 // Start gestisce POST /api/v1/scans per l'avvio di una nuova scansione
 func (h *ScanHandler) Start(w http.ResponseWriter, r *http.Request) {
 	tenantID, ok := middleware.GetTenantID(r.Context())
@@ -115,12 +233,42 @@ func (h *ScanHandler) Start(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.TargetID == uuid.Nil || req.ProfileID == uuid.Nil {
-		response.Error(w, http.StatusBadRequest, "VALIDATION_FAILED", "target_id e profile_id sono obbligatori")
+	if req.ProfileID == uuid.Nil {
+		response.Error(w, http.StatusBadRequest, "VALIDATION_FAILED", "profile_id è obbligatorio")
 		return
 	}
 
-	scan, err := h.scanService.StartScan(r.Context(), tenantID, req.TargetID, req.ProfileID)
+	// 1. Avvio scansione su cartella ricorsiva se specificato group_id
+	if req.GroupID != nil && *req.GroupID != uuid.Nil {
+		scans, err := h.scanService.StartGroupScan(r.Context(), tenantID, *req.GroupID, req.ProfileID)
+		if err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				response.Error(w, http.StatusNotFound, "NOT_FOUND", "Cartella o profilo di scansione non trovato")
+				return
+			}
+			if errors.Is(err, domain.ErrValidation) {
+				response.Error(w, http.StatusBadRequest, "VALIDATION_FAILED", "Parametri di avvio scansione non validi")
+				return
+			}
+			response.Error(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+			return
+		}
+
+		var scanResponses []ScanResponse
+		for _, s := range scans {
+			scanResponses = append(scanResponses, toScanResponse(s))
+		}
+		response.JSON(w, http.StatusAccepted, scanResponses)
+		return
+	}
+
+	// 2. Avvio scansione su singolo target
+	if req.TargetID == nil || *req.TargetID == uuid.Nil {
+		response.Error(w, http.StatusBadRequest, "VALIDATION_FAILED", "Specificare target_id oppure group_id")
+		return
+	}
+
+	scan, err := h.scanService.StartScan(r.Context(), tenantID, *req.TargetID, req.ProfileID)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			response.Error(w, http.StatusNotFound, "NOT_FOUND", "Target o profilo di scansione non trovato")

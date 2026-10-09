@@ -17,6 +17,7 @@ const (
 	ProfileFastDiscovery ProfileType = "Fast Discovery"
 	ProfileStandardScan  ProfileType = "Standard Service Scan"
 	ProfileFullScan      ProfileType = "Full Deep Scan"
+	ProfileLANDiscovery  ProfileType = "LAN Discovery"
 )
 
 // ProfileConfig racchiude le specifiche operative di un profilo di scansione Nmap
@@ -48,6 +49,12 @@ func GetDefaultProfiles() map[ProfileType]ProfileConfig {
 			Timeout:     240 * time.Minute, // 14400 secondi
 			Description: "Scansione completa su 65535 porte TCP, OS detection e rilevamento servizi approfondito",
 		},
+		ProfileLANDiscovery: {
+			Name:        string(ProfileLANDiscovery),
+			Args:        []string{"-sn", "-PE", "-PS22,80,443,445", "-T4", "-n"},
+			Timeout:     2 * time.Minute, // 120 secondi
+			Description: "Ricognizione LAN ultra-veloce con ping sweep affidabile e probe ICMP/SYN senza TCP ACK",
+		},
 	}
 }
 
@@ -58,6 +65,8 @@ var (
 	validTopPortsRegex      = regexp.MustCompile(`^[0-9]{1,5}$`)
 	validRateRegex          = regexp.MustCompile(`^[0-9]+$`)
 	validVersionIntRegex    = regexp.MustCompile(`^[0-9]$`)
+	validSYNArgRegex        = regexp.MustCompile(`^-PS([0-9]{1,5},?)+$`)
+	validUDPArgRegex        = regexp.MustCompile(`^-PU([0-9]{1,5},?)+$`)
 )
 
 // DisallowedFlags elenca i flag Nmap severamente vietati per ragioni di sicurezza e conformità architetturale (NFR-SEC-01)
@@ -116,7 +125,7 @@ func IsSafeArgument(arg string) bool {
 
 	// Flag esatti consentiti
 	switch argClean {
-	case "-F", "-sV", "-O", "-Pn", "-sn", "-sS", "-sT", "-sU", "-sA", "-sN", "-sF", "-sX",
+	case "-F", "-sV", "-O", "-Pn", "-sn", "-PR", "-PE", "-PP", "-sS", "-sT", "-sU", "-sA", "-sN", "-sF", "-sX",
 		"-n", "-R", "-v", "-vv", "-q", "-d", "-6", "--version-light", "--version-all",
 		"--osscan-limit", "--osscan-guess", "--open", "--packet-trace":
 		return true
@@ -129,6 +138,16 @@ func IsSafeArgument(arg string) bool {
 
 	// Validazione specifica porte (es: -p-, -p80, -p80,443, -p1-1000)
 	if validPortArgRegex.MatchString(argClean) {
+		return true
+	}
+
+	// Validazione probe SYN ping (es: -PS22,80,443)
+	if validSYNArgRegex.MatchString(argClean) {
+		return true
+	}
+
+	// Validazione probe UDP ping (es: -PU53,137)
+	if validUDPArgRegex.MatchString(argClean) {
 		return true
 	}
 

@@ -1,7 +1,7 @@
 # 0. Requisiti e Casi d'Uso (Requirements & Use Cases)
 
-> **Stato:** APPROVATO (Fase 1 Conclusa - Aggiornamento Feature Set Espanso)  
-> **Ultimo Aggiornamento:** 2026-10-08  
+> **Stato:** APPROVATO (Fase 1 Conclusa - Aggiornamento Feature 6: Real-Time Scanner Streaming)  
+> **Ultimo Aggiornamento:** 2026-10-09  
 > **Autore / Ruolo:** TechLead-Engineer-Agent (System Architect & Product Owner)  
 > **Documento di Origine:** [Brainstorming_CyberSec_App.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/Brainstorming_CyberSec_App.md)
 
@@ -24,6 +24,8 @@ Piattaforma di CyberSecurity moderna e modulare concepita per trasformare il vul
   - **Feature 3 (Hierarchical Tree Asset & Scan Folders):** Organizzazione gerarchica ad albero (cartelle e sotto-cartelle annidate) per Target e Scansioni.
   - **Feature 4 (High-Speed LAN Network Discovery):** Modulo stile *Advanced IP Scanner* (pagina dedicata + profilo di scansione) con Ping Sweep / ARP Scan, lookup IEEE OUI del produttore hardware, hostname NetBIOS/mDNS e azioni rapide.
   - **Feature 5 (Remote SSH Host & iptables Firewall Manager):** Gestione credenziali SSH (chiavi private o password cifrate AES-256-GCM), interfaccia grafica visuale per regole firewall (`iptables`/`nftables`) con timer di anti-lockout e terminale Web SSH interattivo integrato (WebSocket + xterm.js).
+  - **Feature 6 (Real-Time Live Streaming Engine via SSE):** Flusso dati in tempo reale via Server-Sent Events per LAN Network Discovery e Scansioni Nmap. I dispositivi LAN compaiono all'istante all'interno della griglia man mano che rispondono, e le scansioni trasmettono fasi, percentuali di avanzamento e finding progressivi con salvataggio incrementale su PostgreSQL.
+  - **Feature 7 (Debug & Testing Live Console Drawer):** Finestra laterale (slide-over panel) dedicata al monitoraggio in tempo reale di tutte le attività (chiamate HTTP REST con endpoint, status, latenza e payload, eventi SSE ricevuti, stream WebSocket, errori/warning di runtime JavaScript). Filtro rapido degli errori, visualizzazione del dettaglio evento e pulsante "Copia Report Diagnostico per AI" preformattato in Markdown per consentire all'utente di inviare istantaneamente stack trace e contesti operativi all'agente per l'immediata risoluzione dei bug.
 - **Milestone 2 (Differentiators):**
   - Attack Path Mapping (Grafo delle Vulnerabilità e lateral movement).
   - Continuous Compliance Score (NIS2, DORA, ISO 27001).
@@ -128,6 +130,30 @@ Piattaforma di CyberSecurity moderna e modulare concepita per trasformare il vul
   - Supporto a comandi interattivi a schermo intero (es. `htop`, `nano`, `top`), colori ANSI e copia/incolla.
   - Modalità visualizzazione: sia finestra a schermo intero sia finestra agganciabile in basso (docked) per affiancare il terminale alla gestione grafica del firewall.
 
+### FR-12: Real-Time Live Streaming Engine per Scansioni e Discovery (Server-Sent Events)
+- **FR-12.1 (LAN Discovery Live Stream):** L'avvio di una ricognizione LAN predispone uno stream SSE (`GET /api/v1/network-discovery/stream?session_id=...`) che trasmette istantaneamente l'evento `device_discovered` con le informazioni di ciascun host (IP, MAC, Vendor OUI, Hostname, RTT) nel momento esatto in cui risponde al probe di rete, oltre all'avanzamento percentuale in tempo reale (0-100%).
+- **FR-12.2 (Vulnerability Scan Live Stream):** L'esecuzione di una scansione di vulnerabilità Nmap espone uno stream SSE (`GET /api/v1/scans/{id}/stream`) che notifica in tempo reale i cambi di fase (Host Discovery, Port Scan, Service Detection, CVE Correlation), la percentuale di avanzamento stimata, i log operativi e le porte/findings scoperte progressivamente.
+- **FR-12.3 (Persistenza Incrementale su PostgreSQL):** I risultati parziali (dispositivi LAN e finding di sicurezza) vengono salvati sul database in modo incrementale durante il ciclo di vita della scansione, garantendo la conservazione e il recupero dei dati parziali anche in caso di ricaricamento della pagina (refresh) o riconnessione del client.
+- **FR-12.4 (Decoupling Connessione & Resilienza):** La disconnessione della sessione SSE da parte del browser non deve interrompere l'esecuzione del job nel backend (a meno di un comando esplicito di annullamento). Alla riconnessione, il client riceve lo snapshot aggiornato e continua ad ascoltare gli eventi successivi.
+
+### FR-13: Finestra Laterale di Debug e Monitoraggio Attività (Debug & Testing Live Console Drawer)
+- **FR-13.1 (Drawer Laterale Slide-Over):** Interfaccia a scomparsa sul lato destro dello schermo (`DebugConsoleDrawer`), accessibile tramite pulsante fluttuante (icona bug/terminale) in basso a destra e scorciatoia da tastiera globale (`Ctrl + Shift + D`).
+- **FR-13.2 (Client-Side Full Interceptor):**
+  - **Chiamate HTTP REST:** Intercettazione trasparente di richieste e risposte Axios (metodo HTTP, URL, query params, request body, status code HTTP, durata in millisecondi, response body o errore).
+  - **Eventi Push SSE:** Registrazione automatica degli eventi in arrivo dagli stream Server-Sent Events (`device_discovered`, `phase`, `progress`, `finding_discovered`, `status_change`, `error`).
+  - **Frame WebSocket:** Tracciamento dei frame e dello stato di connessione del terminale remoto SSH.
+  - **Errori e Warning JS:** Cattura globale degli errori non gestiti (`window.onerror`, `unhandledrejection`) e delle chiamate a `console.error` / `console.warn`.
+- **FR-13.3 (Filtro e Ispezione Rapida degli Errori):**
+  - Barra di filtraggio rapido per livello: `ALL`, `ERROR`, `WARN`, `INFO`.
+  - Filtro per sorgente: `API/HTTP`, `SSE`, `WS`, `RUNTIME`.
+  - Campo di ricerca full-text sui log con evidenziazione.
+  - Vista dettagliata espandibile per ogni riga di log con JSON formattato di request/response payload e stack trace.
+  - Badge numerico sul pulsante fluttuante che segnala all'istante il numero di errori accumulati nella sessione.
+- **FR-13.4 (Copia Diagnostica Pre-formattata per AI & Export):**
+  - Pulsante dedicato *"Copia per AI (Markdown)"*: copia negli appunti un report diagnostico completo pronto per essere incollato direttamente all'agente AI, contenente timestamp, tipo di errore, URL/endpoint, payload, codice di stato e stack trace.
+  - Pulsante *"Esporta JSON"*: download del file di diagnostica strutturato completo.
+  - Pulsante *"Pulisci Log"*: svuota la cronologia in memoria della sessione.
+
 ---
 
 ## 4. Casi d'Uso (Use Cases - UC)
@@ -172,6 +198,14 @@ Piattaforma di CyberSecurity moderna e modulare concepita per trasformare il vul
 - **Attore:** Sysadmin / SecOps.
 - **Flusso:** L'utente apre la sessione di terminale web direttamente dal browser per eseguire verifiche diagnostiche su un server Linux registrato con credenziali sicure.
 
+### UC-11: Monitoraggio in Tempo Reale della Scansione e Ricognizione LAN
+- **Attore:** SecOps Engineer / Sysadmin.
+- **Flusso:** L'utente avvia una scansione LAN o di vulnerabilità. Senza attendere il termine del processo, visualizza in tempo reale la progressione percentuale e i singoli dispositivi o porte che compaiono istantaneamente nella griglia a schermo. Se la pagina viene ricaricata, i dati parziali già salvati su DB vengono ricaricati e il flusso di streaming si riallaccia.
+
+### UC-12: Debugging Interattivo, Triage Errori e Feedback Loop con Agente AI
+- **Attore:** Sviluppatore / Tester / Sysadmin.
+- **Flusso:** Durante l'esecuzione di qualsiasi operazione nella piattaforma (scansione, discovery, firewall, login), l'utente nota un'anomalia o un badge rosso di errore. Apre il pannello laterale (click sul pulsante fluttuante o `Ctrl + Shift + D`), seleziona il filtro `ERROR`, ispeziona la richiesta fallita con status code e corpo risposta, clicca "Copia per AI (Markdown)" e incolla il blocco diagnostico nella chat con l'agente. L'agente analizza la causa radice ed emette il fix immediato.
+
 ---
 
 ## 5. Requisiti Non Funzionali (NFR) Aggiuntivi
@@ -180,9 +214,12 @@ Piattaforma di CyberSecurity moderna e modulare concepita per trasformare il vul
 - **NFR-SEC-07 (Isolamento Sessioni WebSocket SSH):** Le connessioni WebSocket per il terminale remoto devono essere autenticate tramite JWT, vincolate al `tenant_id` dell'utente e terminate tempestivamente in caso di inattività o chiusura finestra.
 - **NFR-REL-04 (Anti-Lockout Firewall Resilience):** Qualsiasi modifica remota alle regole del firewall deve essere atomica e reversibile. In caso di mancata conferma entro il timeout di sicurezza (Safety Rollback Timer), il backend deve eseguire il ripristino automatico dello script delle regole precedente.
 - **NFR-PERF-04 (Discovery LAN Throughput):** La scansione LAN di discovery su una classe C (/24) deve completarsi entro 5-10 secondi grazie a probe paralleli ARP/ICMP senza esecuzione di port-scan profondo non richiesto.
+- **NFR-PERF-05 (Real-Time SSE Event Latency):** Latenza di notifica push SSE inferiore a 200ms dal momento dell'elaborazione nel worker del backend alla ricezione nel client React.
+- **NFR-REL-05 (Stream Resilience & Reconnection):** Meccanismo di auto-reconnect nativo del protocollo SSE in caso di temporanea instabilità di rete con gestione idempotente degli eventi già ricevuti.
+- **NFR-DEV-01 (Zero-Overhead Debugging & Privacy):** Il logger client-side deve conservare al massimo gli ultimi 500 eventi in memoria circolare senza causare degrado di prestazioni o memory leak. Le password e le chiavi segrete inviate nei payload devono essere automaticamente oscurate (`[REDACTED]`) prima di essere visualizzate o copiate.
 
 ---
 
 ## 6. Decisioni Consolidate
-- **Approvazione:** Requisiti e casi d'uso aggiornati e approvati in data 2026-10-08.
-- **Prossima Fase:** Fase 2 (System Design & Architecture Update) su `1_PROJECT_CONTEXT.md` e `2_ARCHITECTURE.md`.
+- **Approvazione:** Requisiti e casi d'uso aggiornati e approvati in data 2026-10-09 (Feature 6: Real-Time Live Streaming via SSE & Feature 7: Debug & Testing Live Console Drawer).
+- **Prossima Fase:** Fase 2 (System Design & Architecture Update) su `1_PROJECT_CONTEXT.md`, `2_ARCHITECTURE.md` e `3_TASK_LIST.md` tramite comando `/architect`.

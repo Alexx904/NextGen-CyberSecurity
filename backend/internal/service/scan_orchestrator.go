@@ -48,6 +48,7 @@ type ScanOrchestrator struct {
 
 	findingRepo domain.FindingRepository
 	correlator  Correlator
+	broadcaster EventBroadcaster
 	jobs        chan *ScanJob
 	activeScans map[uuid.UUID]context.CancelFunc
 	activeMu    sync.RWMutex
@@ -66,6 +67,17 @@ func (o *ScanOrchestrator) SetFindingRepo(repo domain.FindingRepository) {
 // SetCorrelator configura il motore di correlazione vulnerabilità CVE
 func (o *ScanOrchestrator) SetCorrelator(correlator Correlator) {
 	o.correlator = correlator
+}
+
+// SetEventBroadcaster configura il servizio broker di streaming SSE in tempo reale
+func (o *ScanOrchestrator) SetEventBroadcaster(broadcaster EventBroadcaster) {
+	o.broadcaster = broadcaster
+}
+
+func (o *ScanOrchestrator) publishEvent(topic string, event domain.SSEEvent) {
+	if o.broadcaster != nil {
+		o.broadcaster.Publish(topic, event)
+	}
 }
 
 // NewScanOrchestrator istanzia un nuovo orchestratore con worker pool
@@ -246,6 +258,8 @@ func (o *ScanOrchestrator) processJob(job *ScanJob, workerID int) {
 		"tenant_id", job.TenantID,
 	)
 
+	topic := domain.ScanTopic(job.ScanID)
+
 	// 1. Recupero record scansione dal database
 	scan, err := o.scanRepo.GetByID(ctx, job.TenantID, job.ScanID)
 	if err != nil {
@@ -300,6 +314,25 @@ func (o *ScanOrchestrator) processJob(job *ScanJob, workerID int) {
 		return
 	}
 
+	// Notifica avvio scansione e prima fase (HOST_DISCOVERY)
+	o.publishEvent(topic, domain.SSEEvent{
+		Event: domain.EventScanStatusChange,
+		Data: domain.ScanStatusPayload{
+			ScanID:       scan.ID,
+			Status:       domain.ScanStatusRunning,
+			SummaryStats: scan.SummaryStats,
+		},
+	})
+	o.publishEvent(topic, domain.SSEEvent{
+		Event: domain.EventScanPhase,
+		Data: domain.ScanPhasePayload{
+			ScanID:     scan.ID,
+			Phase:      "HOST_DISCOVERY",
+			Message:    "Verifica e censimento host attivi",
+			Percentage: 10.0,
+		},
+	})
+
 	// 5. Configurazione context di scansione con timeout e registrazione per cancellation
 	timeout := time.Duration(profile.TimeoutSeconds) * time.Second
 	if timeout <= 0 {
@@ -318,6 +351,17 @@ func (o *ScanOrchestrator) processJob(job *ScanJob, workerID int) {
 		Timeout: timeout,
 	}
 
+	// Notifica avvio scansione porte
+	o.publishEvent(topic, domain.SSEEvent{
+		Event: domain.EventScanPhase,
+		Data: domain.ScanPhasePayload{
+			ScanID:     scan.ID,
+			Phase:      "PORT_SCAN",
+			Message:    fmt.Sprintf("Scansione porte con profilo %s in corso", profile.Name),
+			Percentage: 25.0,
+		},
+	})
+
 	// 6. Esecuzione del comando Nmap tramite il Runner
 	execResult, runErr := o.runner.RunScan(scanCtx, target.Value, profileConfig)
 
@@ -327,6 +371,13 @@ func (o *ScanOrchestrator) processJob(job *ScanJob, workerID int) {
 			o.logger.Warn("Scansione annullata con successo durante l'esecuzione", "scan_id", scan.ID)
 			_ = scan.MarkCancelled()
 			_ = o.scanRepo.Update(context.Background(), scan)
+			o.publishEvent(topic, domain.SSEEvent{
+				Event: domain.EventScanStatusChange,
+				Data: domain.ScanStatusPayload{
+					ScanID: scan.ID,
+					Status: domain.ScanStatusCancelled,
+				},
+			})
 			return
 		}
 		if errors.Is(scanCtx.Err(), context.DeadlineExceeded) {
@@ -350,18 +401,41 @@ func (o *ScanOrchestrator) processJob(job *ScanJob, workerID int) {
 		return
 	}
 
-	// 9. Persistenza dei finding rilevati su DB
+	// Notifica fase SERVICE_DETECTION
+	o.publishEvent(topic, domain.SSEEvent{
+		Event: domain.EventScanPhase,
+		Data: domain.ScanPhasePayload{
+			ScanID:     scan.ID,
+			Phase:      "SERVICE_DETECTION",
+			Message:    "Rilevamento servizi ed estrazione banner",
+			Percentage: 60.0,
+		},
+	})
+
+	// Notifica fase CVE_CORRELATION
+	o.publishEvent(topic, domain.SSEEvent{
+		Event: domain.EventScanPhase,
+		Data: domain.ScanPhasePayload{
+			ScanID:     scan.ID,
+			Phase:      "CVE_CORRELATION",
+			Message:    "Correlazione vulnerabilità CVE/CVSS su feed locale",
+			Percentage: 80.0,
+		},
+	})
+
+	// 9. Persistenza incrementale dei finding rilevati su DB ed emissione SSE (NFR-REL-02)
 	var findings []*domain.Finding
 	now := time.Now().UTC()
-	for _, h := range report.Hosts {
+	for _, h := range report.GetUpHosts() {
 		for _, p := range h.Ports {
 			if strings.EqualFold(p.State, "open") {
+				var portFindings []*domain.Finding
 				if o.correlator != nil {
-					portFindings, err := o.correlator.CorrelatePort(ctx, scan.ID, scan.TenantID, h, p)
+					pFindings, err := o.correlator.CorrelatePort(ctx, scan.ID, scan.TenantID, h, p)
 					if err != nil {
 						o.logger.Warn("Errore durante correlazione CVE porta", "port", p.PortID, "error", err)
 					}
-					findings = append(findings, portFindings...)
+					portFindings = pFindings
 				} else {
 					f := &domain.Finding{
 						ID:        uuid.New(),
@@ -391,17 +465,31 @@ func (o *ScanOrchestrator) processJob(job *ScanJob, workerID int) {
 							f.RawBanner = &sBanner
 						}
 					}
-					findings = append(findings, f)
+					portFindings = []*domain.Finding{f}
+				}
+
+				if len(portFindings) > 0 {
+					findings = append(findings, portFindings...)
+
+					// Salvataggio incrementale immediato su PostgreSQL (NFR-REL-02)
+					if o.findingRepo != nil {
+						if err := o.findingRepo.CreateBatch(context.Background(), portFindings); err != nil {
+							o.logger.Error("Salvataggio incrementale findings su DB fallito", "scan_id", scan.ID, "error", err)
+						}
+					}
+
+					// Notifica push istantanea per ciascun finding (SSE)
+					for _, pf := range portFindings {
+						o.publishEvent(topic, domain.SSEEvent{
+							Event: domain.EventScanFinding,
+							Data: domain.ScanFindingPayload{
+								ScanID:  scan.ID,
+								Finding: *pf,
+							},
+						})
+					}
 				}
 			}
-		}
-	}
-
-	if o.findingRepo != nil && len(findings) > 0 {
-		if err := o.findingRepo.CreateBatch(context.Background(), findings); err != nil {
-			o.logger.Error("Salvataggio batch findings su DB fallito", "scan_id", scan.ID, "error", err)
-		} else {
-			o.logger.Info("Findings registrati con successo", "scan_id", scan.ID, "count", len(findings))
 		}
 	}
 
@@ -431,16 +519,36 @@ func (o *ScanOrchestrator) processJob(job *ScanJob, workerID int) {
 		return
 	}
 
+	// Notifica finale completamento scansione (SSE)
+	o.publishEvent(topic, domain.SSEEvent{
+		Event: domain.EventScanStatusChange,
+		Data: domain.ScanStatusPayload{
+			ScanID:       scan.ID,
+			Status:       domain.ScanStatusCompleted,
+			SummaryStats: summaryStats,
+		},
+	})
+
 	o.logger.Info("Scansione completata con successo",
 		"scan_id", scan.ID,
 		"up_hosts", summaryStats.UpHosts,
+		"down_hosts", summaryStats.DownHosts,
 		"open_ports", summaryStats.TotalOpenPorts,
 		"duration", summaryStats.DurationSeconds,
 	)
 }
 
-// failScan imposta lo stato a FAILED e persiste l'errore su DB
+// failScan imposta lo stato a FAILED, persiste l'errore su DB ed emette eventi SSE
 func (o *ScanOrchestrator) failScan(scan *domain.Scan, errMsg string) {
+	topic := domain.ScanTopic(scan.ID)
+	o.publishEvent(topic, domain.SSEEvent{
+		Event: domain.EventScanError,
+		Data: domain.ScanErrorPayload{
+			ScanID:  scan.ID,
+			Message: errMsg,
+		},
+	})
+
 	if err := scan.MarkFailed(errMsg); err != nil {
 		o.logger.Error("Transizione a FAILED non valida", "scan_id", scan.ID, "error", err)
 		return
@@ -448,4 +556,12 @@ func (o *ScanOrchestrator) failScan(scan *domain.Scan, errMsg string) {
 	if err := o.scanRepo.Update(context.Background(), scan); err != nil {
 		o.logger.Error("Salvataggio stato FAILED su DB fallito", "scan_id", scan.ID, "error", err)
 	}
+
+	o.publishEvent(topic, domain.SSEEvent{
+		Event: domain.EventScanStatusChange,
+		Data: domain.ScanStatusPayload{
+			ScanID: scan.ID,
+			Status: domain.ScanStatusFailed,
+		},
+	})
 }

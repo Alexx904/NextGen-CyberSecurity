@@ -109,6 +109,55 @@ func (m *mockFindingRepo) GetSeverityCountsByScan(ctx context.Context, tenantID,
 	return counts, nil
 }
 
+type mockScanGroupRepo struct {
+	groups map[uuid.UUID]*domain.TargetGroup
+}
+
+func newMockScanGroupRepo() *mockScanGroupRepo {
+	return &mockScanGroupRepo{groups: make(map[uuid.UUID]*domain.TargetGroup)}
+}
+
+func (m *mockScanGroupRepo) GetByID(ctx context.Context, tenantID, id uuid.UUID) (*domain.TargetGroup, error) {
+	g, ok := m.groups[id]
+	if !ok || g.TenantID != tenantID {
+		return nil, domain.ErrNotFound
+	}
+	return g, nil
+}
+
+func (m *mockScanGroupRepo) List(ctx context.Context, tenantID uuid.UUID) ([]*domain.TargetGroup, error) {
+	var list []*domain.TargetGroup
+	for _, g := range m.groups {
+		if g.TenantID == tenantID {
+			list = append(list, g)
+		}
+	}
+	return list, nil
+}
+
+func (m *mockScanGroupRepo) Create(ctx context.Context, group *domain.TargetGroup) error {
+	m.groups[group.ID] = group
+	return nil
+}
+
+func (m *mockScanGroupRepo) Update(ctx context.Context, group *domain.TargetGroup) error {
+	m.groups[group.ID] = group
+	return nil
+}
+
+func (m *mockScanGroupRepo) Delete(ctx context.Context, tenantID, id uuid.UUID) error {
+	delete(m.groups, id)
+	return nil
+}
+
+func (m *mockScanGroupRepo) GetTargetCountsByGroup(ctx context.Context, tenantID uuid.UUID) (map[uuid.UUID]int, error) {
+	return make(map[uuid.UUID]int), nil
+}
+
+func (m *mockScanGroupRepo) GetSeverityCountsByGroup(ctx context.Context, tenantID uuid.UUID) (map[uuid.UUID]map[domain.SeverityLevel]int, error) {
+	return make(map[uuid.UUID]map[domain.SeverityLevel]int), nil
+}
+
 func TestScanService_CancelScan_Success(t *testing.T) {
 	tenantID := uuid.New()
 	scanID := uuid.New()
@@ -122,7 +171,7 @@ func TestScanService_CancelScan_Success(t *testing.T) {
 	_ = scanRepo.Create(context.Background(), scan)
 
 	orchClient := &mockOrchestratorClient{}
-	svc := NewScanService(scanRepo, &mockProfileRepo{}, &mockTargetRepo{}, newMockFindingRepo(), orchClient)
+	svc := NewScanService(scanRepo, &mockProfileRepo{}, &mockTargetRepo{}, newMockFindingRepo(), newMockScanGroupRepo(), orchClient)
 
 	err := svc.CancelScan(context.Background(), tenantID, scanID)
 	if err != nil {
@@ -140,7 +189,7 @@ func TestScanService_CancelScan_NotFound(t *testing.T) {
 
 	scanRepo := newFullMockScanRepo()
 	orchClient := &mockOrchestratorClient{}
-	svc := NewScanService(scanRepo, &mockProfileRepo{}, &mockTargetRepo{}, newMockFindingRepo(), orchClient)
+	svc := NewScanService(scanRepo, &mockProfileRepo{}, &mockTargetRepo{}, newMockFindingRepo(), newMockScanGroupRepo(), orchClient)
 
 	err := svc.CancelScan(context.Background(), tenantID, scanID)
 	if err == nil || !errors.Is(err, domain.ErrNotFound) {
@@ -161,7 +210,7 @@ func TestScanService_CancelScan_CannotCancelTerminal(t *testing.T) {
 	_ = scanRepo.Create(context.Background(), scan)
 
 	orchClient := &mockOrchestratorClient{}
-	svc := NewScanService(scanRepo, &mockProfileRepo{}, &mockTargetRepo{}, newMockFindingRepo(), orchClient)
+	svc := NewScanService(scanRepo, &mockProfileRepo{}, &mockTargetRepo{}, newMockFindingRepo(), newMockScanGroupRepo(), orchClient)
 
 	err := svc.CancelScan(context.Background(), tenantID, scanID)
 	if err == nil || !errors.Is(err, domain.ErrScanCannotBeCancelled) {
@@ -193,7 +242,7 @@ func TestScanService_StartScan_Success(t *testing.T) {
 	}
 	orchClient := &mockOrchestratorClient{}
 
-	svc := NewScanService(scanRepo, profileRepo, targetRepo, newMockFindingRepo(), orchClient)
+	svc := NewScanService(scanRepo, profileRepo, targetRepo, newMockFindingRepo(), newMockScanGroupRepo(), orchClient)
 
 	scan, err := svc.StartScan(context.Background(), tenantID, targetID, profileID)
 	if err != nil {
@@ -233,7 +282,7 @@ func TestScanService_StartScan_BlacklistedTarget(t *testing.T) {
 	}
 	orchClient := &mockOrchestratorClient{}
 
-	svc := NewScanService(scanRepo, profileRepo, targetRepo, newMockFindingRepo(), orchClient)
+	svc := NewScanService(scanRepo, profileRepo, targetRepo, newMockFindingRepo(), newMockScanGroupRepo(), orchClient)
 
 	_, err := svc.StartScan(context.Background(), tenantID, targetID, profileID)
 	if err == nil || !errors.Is(err, domain.ErrTargetBlacklisted) {
@@ -274,7 +323,7 @@ func TestScanService_StartScan_AlreadyRunning(t *testing.T) {
 	}
 	orchClient := &mockOrchestratorClient{}
 
-	svc := NewScanService(scanRepo, profileRepo, targetRepo, newMockFindingRepo(), orchClient)
+	svc := NewScanService(scanRepo, profileRepo, targetRepo, newMockFindingRepo(), newMockScanGroupRepo(), orchClient)
 
 	_, err := svc.StartScan(context.Background(), tenantID, targetID, profileID)
 	if err == nil || !errors.Is(err, domain.ErrScanAlreadyRunning) {
@@ -296,7 +345,7 @@ func TestScanService_GetScanFindings_Success(t *testing.T) {
 		{ID: fID, ScanID: scanID, TenantID: tenantID, HostIP: "192.168.1.50", Port: 80, Severity: domain.SeverityInfo},
 	})
 
-	svc := NewScanService(scanRepo, &mockProfileRepo{}, &mockTargetRepo{}, findingRepo, &mockOrchestratorClient{})
+	svc := NewScanService(scanRepo, &mockProfileRepo{}, &mockTargetRepo{}, findingRepo, newMockScanGroupRepo(), &mockOrchestratorClient{})
 
 	findings, total, err := svc.GetScanFindings(context.Background(), tenantID, scanID, domain.FindingFilter{})
 	if err != nil {
@@ -313,7 +362,7 @@ func TestScanService_GetScanFindings_ScanNotFound(t *testing.T) {
 	scanID := uuid.New()
 
 	scanRepo := newFullMockScanRepo()
-	svc := NewScanService(scanRepo, &mockProfileRepo{}, &mockTargetRepo{}, newMockFindingRepo(), &mockOrchestratorClient{})
+	svc := NewScanService(scanRepo, &mockProfileRepo{}, &mockTargetRepo{}, newMockFindingRepo(), newMockScanGroupRepo(), &mockOrchestratorClient{})
 
 	_, _, err := svc.GetScanFindings(context.Background(), tenantID, scanID, domain.FindingFilter{})
 	if err == nil || !errors.Is(err, domain.ErrNotFound) {
@@ -329,7 +378,7 @@ func TestScanService_ListProfiles(t *testing.T) {
 		},
 	}
 
-	svc := NewScanService(newFullMockScanRepo(), profileRepo, &mockTargetRepo{}, newMockFindingRepo(), &mockOrchestratorClient{})
+	svc := NewScanService(newFullMockScanRepo(), profileRepo, &mockTargetRepo{}, newMockFindingRepo(), newMockScanGroupRepo(), &mockOrchestratorClient{})
 
 	profiles, err := svc.ListProfiles(context.Background())
 	if err != nil {
@@ -340,3 +389,123 @@ func TestScanService_ListProfiles(t *testing.T) {
 		t.Errorf("attesi 2 profili, trovati %d", len(profiles))
 	}
 }
+
+func TestScanService_StartGroupScan_RecursiveTargets(t *testing.T) {
+	tenantID := uuid.New()
+	profileID := uuid.New()
+
+	// Crea albero cartelle: RootFolder -> SubFolder
+	rootGroupID := uuid.New()
+	subGroupID := uuid.New()
+
+	groupRepo := newMockScanGroupRepo()
+	_ = groupRepo.Create(context.Background(), &domain.TargetGroup{
+		ID:       rootGroupID,
+		TenantID: tenantID,
+		Name:     "Root Folder",
+	})
+	_ = groupRepo.Create(context.Background(), &domain.TargetGroup{
+		ID:       subGroupID,
+		TenantID: tenantID,
+		ParentID: &rootGroupID,
+		Name:     "Sub Folder",
+	})
+
+	// Target 1 in root, Target 2 in subfolder, Target 3 in other folder
+	t1ID := uuid.New()
+	t2ID := uuid.New()
+	otherGroupID := uuid.New()
+	t3ID := uuid.New()
+
+	targetRepo := &mockTargetRepo{
+		targets: map[uuid.UUID]*domain.Target{
+			t1ID: {ID: t1ID, TenantID: tenantID, GroupID: &rootGroupID, Value: "10.0.1.1"},
+			t2ID: {ID: t2ID, TenantID: tenantID, GroupID: &subGroupID, Value: "10.0.2.1"},
+			t3ID: {ID: t3ID, TenantID: tenantID, GroupID: &otherGroupID, Value: "10.0.3.1"},
+		},
+		blacklistedMap: make(map[string]bool),
+	}
+
+	profileRepo := &mockProfileRepo{
+		profiles: map[uuid.UUID]*domain.ScanProfile{
+			profileID: {ID: profileID, Name: "Standard"},
+		},
+	}
+
+	scanRepo := newFullMockScanRepo()
+	orchClient := &mockOrchestratorClient{}
+
+	svc := NewScanService(scanRepo, profileRepo, targetRepo, newMockFindingRepo(), groupRepo, orchClient)
+
+	scans, err := svc.StartGroupScan(context.Background(), tenantID, rootGroupID, profileID)
+	if err != nil {
+		t.Fatalf("StartGroupScan ha fallito inaspettatamente: %v", err)
+	}
+
+	// Devono essere avviate 2 scansioni (t1 e t2, escluso t3)
+	if len(scans) != 2 {
+		t.Fatalf("Attese 2 scansioni avviate, ottenute %d", len(scans))
+	}
+	if len(orchClient.enqueuedScans) != 2 {
+		t.Errorf("Attese 2 scansioni accodate all'orchestrator, ottenute %d", len(orchClient.enqueuedScans))
+	}
+}
+
+func TestScanService_StartGroupScan_SkipsBlacklistedAndActive(t *testing.T) {
+	tenantID := uuid.New()
+	profileID := uuid.New()
+	groupID := uuid.New()
+
+	groupRepo := newMockScanGroupRepo()
+	_ = groupRepo.Create(context.Background(), &domain.TargetGroup{
+		ID:       groupID,
+		TenantID: tenantID,
+		Name:     "Folder",
+	})
+
+	t1ID := uuid.New() // blacklisted
+	t2ID := uuid.New() // already active
+	t3ID := uuid.New() // valid
+
+	targetRepo := &mockTargetRepo{
+		targets: map[uuid.UUID]*domain.Target{
+			t1ID: {ID: t1ID, TenantID: tenantID, GroupID: &groupID, Value: "10.0.1.1", IsBlacklisted: true},
+			t2ID: {ID: t2ID, TenantID: tenantID, GroupID: &groupID, Value: "10.0.1.2"},
+			t3ID: {ID: t3ID, TenantID: tenantID, GroupID: &groupID, Value: "10.0.1.3"},
+		},
+		blacklistedMap: map[string]bool{"10.0.1.1": true},
+	}
+
+	scanRepo := newFullMockScanRepo()
+	// Crea scansione già attiva per t2
+	_ = scanRepo.Create(context.Background(), &domain.Scan{
+		ID:        uuid.New(),
+		TenantID:  tenantID,
+		TargetID:  t2ID,
+		ProfileID: profileID,
+		Status:    domain.ScanStatusRunning,
+	})
+
+	profileRepo := &mockProfileRepo{
+		profiles: map[uuid.UUID]*domain.ScanProfile{
+			profileID: {ID: profileID, Name: "Standard"},
+		},
+	}
+	orchClient := &mockOrchestratorClient{}
+
+	svc := NewScanService(scanRepo, profileRepo, targetRepo, newMockFindingRepo(), groupRepo, orchClient)
+
+	scans, err := svc.StartGroupScan(context.Background(), tenantID, groupID, profileID)
+	if err != nil {
+		t.Fatalf("StartGroupScan ha fallito: %v", err)
+	}
+
+	// Solo t3 deve essere scansionato
+	if len(scans) != 1 {
+		t.Fatalf("Attesa 1 sola scansione per il target valido, ottenute %d", len(scans))
+	}
+	if scans[0].TargetID != t3ID {
+		t.Errorf("Target ID atteso %v, ottenuto %v", t3ID, scans[0].TargetID)
+	}
+}
+

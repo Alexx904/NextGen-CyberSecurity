@@ -1,0 +1,38 @@
+﻿
+Interfaccia: 172.19.128.1 --- 0xe
+  Indirizzo Internet    Indirizzo fisico      Tipo
+  172.19.143.255        ff-ff-ff-ff-ff-ff     statico   
+  224.0.0.22            01-00-5e-00-00-16     statico   
+  224.0.0.251           01-00-5e-00-00-fb     statico   
+  224.0.0.252           01-00-5e-00-00-fc     statico   
+  239.255.255.250       01-00-5e-7f-ff-fa     statico   
+  255.255.255.255       ff-ff-ff-ff-ff-ff     statico   
+
+Interfaccia: 192.168.1.10 --- 0x14
+  Indirizzo Internet    Indirizzo fisico      Tipo
+  192.168.1.1           98-ba-5f-95-4e-50     dinamico  
+  192.168.1.3           a0-d2-b1-c1-4a-9e     dinamico  
+  192.168.1.4           8c-17-59-0f-f7-30     dinamico  
+  192.168.1.5           ee-5b-26-72-a1-e1     dinamico  
+  192.168.1.6           50-07-c3-fe-9a-37     dinamico  
+  192.168.1.7           3a-ef-88-d7-c9-87     dinamico  
+  192.168.1.11          a6-23-99-bd-20-23     dinamico  
+  192.168.1.14          8c-90-2d-12-b1-54     dinamico  
+  192.168.1.15          0c-ee-99-83-3c-ba     dinamico  
+  192.168.1.255         ff-ff-ff-ff-ff-ff     statico   
+  224.0.0.22            01-00-5e-00-00-16     statico   
+  224.0.0.251           01-00-5e-00-00-fb     statico   
+  224.0.0.252           01-00-5e-00-00-fc     statico   
+  239.255.102.18        01-00-5e-7f-66-12     statico   
+  239.255.255.250       01-00-5e-7f-ff-fa     statico   
+  255.255.255.255       ff-ff-ff-ff-ff-ff     statico   
+
+Interfaccia: 172.25.96.1 --- 0x2c
+  Indirizzo Internet    Indirizzo fisico      Tipo
+  172.25.109.246        00-15-5d-0a-3a-40     dinamico  
+  172.25.111.255        ff-ff-ff-ff-ff-ff     statico   
+  224.0.0.22            01-00-5e-00-00-16     statico   
+  224.0.0.251           01-00-5e-00-00-fb     statico   
+  224.0.0.252           01-00-5e-00-00-fc     statico   
+  239.255.255.250       01-00-5e-7f-ff-fa     statico   
+  255.255.255.255       ff-ff-ff-ff-ff-ff     statico   

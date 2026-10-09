@@ -14,12 +14,14 @@ import {
   ExternalLink,
   Power,
   Copy,
-  Check
+  Check,
+  Folder,
 } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { ApiResponse } from '../types/auth';
 import { ScanItem, ScanListResponseData } from '../types/scan';
 import { ScheduleItem, ScheduleListResponseData } from '../types/schedule';
+import { TargetItem, TargetListResponseData, TargetGroupNode } from '../types/target';
 import { ScanProgressBadge } from '../components/ScanProgressBadge';
 import { NewScanModal } from '../components/NewScanModal';
 import { downloadReportFile } from '../utils/download';
@@ -32,6 +34,11 @@ export const Scans: React.FC = () => {
   const [totalScans, setTotalScans] = useState<number>(0);
   const [loadingScans, setLoadingScans] = useState<boolean>(true);
   const [scansError, setScansError] = useState<string | null>(null);
+
+  // Filtro cartella scope per scansioni
+  const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>('');
+  const [targetsMap, setTargetsMap] = useState<Map<string, TargetItem>>(new Map());
+  const [groupsTree, setGroupsTree] = useState<TargetGroupNode[]>([]);
 
   // Stato download report
   const [downloadingScanId, setDownloadingScanId] = useState<string | null>(null);
@@ -97,15 +104,96 @@ export const Scans: React.FC = () => {
     }
   }, []);
 
+  // Caricamento metadati target e gruppi scope per arricchimento vista
+  const fetchMetadata = useCallback(async () => {
+    try {
+      const [targetsRes, groupsRes] = await Promise.all([
+        apiClient.get<ApiResponse<TargetListResponseData>>('/targets?limit=200'),
+        apiClient.get<ApiResponse<TargetGroupNode[]>>('/target-groups'),
+      ]);
+      if (targetsRes.data?.data?.items) {
+        const map = new Map<string, TargetItem>();
+        targetsRes.data.data.items.forEach((t) => map.set(t.id, t));
+        setTargetsMap(map);
+      }
+      if (groupsRes.data?.data) {
+        setGroupsTree(groupsRes.data.data);
+      }
+    } catch {
+      // Ignora errori non bloccanti
+    }
+  }, []);
+
   useEffect(() => {
     fetchScans();
-  }, [fetchScans]);
+    fetchMetadata();
+  }, [fetchScans, fetchMetadata]);
 
   useEffect(() => {
     if (activeTab === 'SCHEDULES') {
       fetchSchedules();
     }
   }, [activeTab, fetchSchedules]);
+
+  // Lista appiattita dei gruppi per dropdown
+  const flatGroups = useMemo(() => {
+    const list: { id: string; name: string }[] = [];
+    function recurse(nodes: TargetGroupNode[], prefix = '') {
+      for (const n of nodes) {
+        list.push({ id: n.id, name: prefix ? `${prefix} / ${n.name}` : n.name });
+        if (n.children && n.children.length > 0) {
+          recurse(n.children, prefix ? `${prefix} / ${n.name}` : n.name);
+        }
+      }
+    }
+    recurse(groupsTree);
+    return list;
+  }, [groupsTree]);
+
+  // Mappa dei gruppi per ID
+  const groupsMap = useMemo(() => {
+    const map = new Map<string, TargetGroupNode>();
+    function recurse(nodes: TargetGroupNode[]) {
+      for (const n of nodes) {
+        map.set(n.id, n);
+        if (n.children && n.children.length > 0) {
+          recurse(n.children);
+        }
+      }
+    }
+    recurse(groupsTree);
+    return map;
+  }, [groupsTree]);
+
+  // Target ID validi per la cartella selezionata (inclusi i sotto-rami)
+  const targetIdsInSelectedGroup = useMemo(() => {
+    if (!selectedGroupFilter) return null;
+    const selectedNode = groupsMap.get(selectedGroupFilter);
+    if (!selectedNode) return null;
+
+    const groupIds = new Set<string>();
+    function collectIds(node: TargetGroupNode) {
+      groupIds.add(node.id);
+      if (node.children) {
+        node.children.forEach(collectIds);
+      }
+    }
+    collectIds(selectedNode);
+
+    const validTargetIds = new Set<string>();
+    targetsMap.forEach((target, id) => {
+      if (target.group_id && groupIds.has(target.group_id)) {
+        validTargetIds.add(id);
+      }
+    });
+    return validTargetIds;
+  }, [selectedGroupFilter, groupsMap, targetsMap]);
+
+  // Scansioni filtrate in base alla cartella target selezionata
+  const displayedScans = useMemo(() => {
+    if (!targetIdsInSelectedGroup) return scans;
+    return scans.filter((s) => targetIdsInSelectedGroup.has(s.target_id));
+  }, [scans, targetIdsInSelectedGroup]);
 
   // Monitoraggio intelligente per polling automatico se vi sono scansioni attive
   const hasActiveScans = useMemo(() => {
@@ -292,6 +380,24 @@ export const Scans: React.FC = () => {
 
         {/* Toolbar destra */}
         <div className="flex items-center space-x-3 text-xs">
+          {activeTab === 'SCANS' && flatGroups.length > 0 && (
+            <div className="flex items-center space-x-1.5 text-xs">
+              <Folder className="w-3.5 h-3.5 text-slate-400" />
+              <select
+                value={selectedGroupFilter}
+                onChange={(e) => setSelectedGroupFilter(e.target.value)}
+                className="bg-slate-900 border border-cyber-border rounded-lg px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-cyan-500"
+              >
+                <option value="">Tutte le cartelle scope</option>
+                {flatGroups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    📂 {g.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {activeTab === 'SCANS' && (
             <label className="hidden md:flex items-center space-x-2 text-slate-400 cursor-pointer select-none">
               <input
@@ -341,22 +447,35 @@ export const Scans: React.FC = () => {
               <RefreshCw className="w-6 h-6 animate-spin text-cyan-400" />
               <span className="text-xs">Caricamento elenco scansioni...</span>
             </div>
-          ) : scans.length === 0 ? (
+          ) : displayedScans.length === 0 ? (
             <div className="py-16 flex flex-col items-center justify-center text-center space-y-3 p-6">
               <div className="w-12 h-12 rounded-xl bg-slate-900 border border-cyber-border flex items-center justify-center text-slate-500">
                 <Terminal className="w-6 h-6" />
               </div>
-              <div className="text-sm font-semibold text-slate-200">Nessuna scansione presente</div>
+              <div className="text-sm font-semibold text-slate-200">
+                {scans.length === 0 ? 'Nessuna scansione presente' : 'Nessuna scansione per la cartella selezionata'}
+              </div>
               <p className="text-xs text-slate-400 max-w-sm">
-                Non è ancora stato avviato alcun processo di analisi di rete per questa organizzazione.
+                {scans.length === 0
+                  ? 'Non è ancora stato avviato alcun processo di analisi di rete per questa organizzazione.'
+                  : 'Nessun job di scansione registrato per i target appartenenti a questa cartella scope.'}
               </p>
-              <button
-                onClick={() => setIsNewScanModalOpen(true)}
-                className="mt-2 inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Avvia prima scansione</span>
-              </button>
+              {scans.length === 0 ? (
+                <button
+                  onClick={() => setIsNewScanModalOpen(true)}
+                  className="mt-2 inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Avvia prima scansione</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => setSelectedGroupFilter('')}
+                  className="mt-2 inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-cyber-border bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs transition-colors"
+                >
+                  <span>Mostra tutte le scansioni</span>
+                </button>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -364,6 +483,7 @@ export const Scans: React.FC = () => {
                 <thead>
                   <tr className="border-b border-cyber-border/80 text-[11px] font-semibold text-slate-400 uppercase tracking-wider bg-slate-900/40">
                     <th className="py-3 px-4">Scansione ID</th>
+                    <th className="py-3 px-4">Target / Cartella</th>
                     <th className="py-3 px-4">Trigger</th>
                     <th className="py-3 px-4">Stato Esecuzione</th>
                     <th className="py-3 px-4">Host Up</th>
@@ -374,8 +494,10 @@ export const Scans: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-cyber-border/40 text-xs">
-                  {scans.map((scan) => {
+                  {displayedScans.map((scan) => {
                     const isRunningOrQueued = scan.status === 'RUNNING' || scan.status === 'QUEUED';
+                    const target = targetsMap.get(scan.target_id);
+                    const group = target?.group_id ? groupsMap.get(target.group_id) : null;
                     return (
                       <tr key={scan.id} className="hover:bg-slate-800/25 transition-colors">
                         {/* ID Scansione */}
@@ -393,6 +515,32 @@ export const Scans: React.FC = () => {
                                 <Copy className="w-3 h-3" />
                               )}
                             </button>
+                          </div>
+                        </td>
+
+                        {/* Target & Cartella */}
+                        <td className="py-3.5 px-4">
+                          <div>
+                            <span className="font-mono text-slate-200 block text-xs font-semibold">
+                              {target ? target.value : `${scan.target_id.slice(0, 8)}...`}
+                            </span>
+                            {group ? (
+                              <span
+                                className="inline-flex items-center space-x-1 px-1.5 py-0.2 rounded text-[10px] font-medium border mt-0.5"
+                                style={{
+                                  backgroundColor: `${group.color_tag || '#06b6d4'}15`,
+                                  borderColor: `${group.color_tag || '#06b6d4'}35`,
+                                  color: group.color_tag || '#06b6d4',
+                                }}
+                              >
+                                <Folder className="w-2.5 h-2.5" />
+                                <span className="truncate max-w-[120px]">{group.name}</span>
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-slate-500 italic">
+                                Non assegnato
+                              </span>
+                            )}
                           </div>
                         </td>
 

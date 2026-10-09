@@ -1,7 +1,7 @@
 # 1. Project Context & Non-Functional Requirements (NFR)
 
-> **Stato:** APPROVATO (Fase 2: System Design - Revisione Milestone 1.1)  
-> **Ultimo Aggiornamento:** 2026-10-08  
+> **Stato:** APPROVATO (Fase 2: System Design - Revisione Milestone 1.1: Real-Time Streaming)  
+> **Ultimo Aggiornamento:** 2026-10-09  
 > **Autore / Ruolo:** TechLead-Engineer-Agent (System Architect & Tech Lead)  
 > **Documento Correlato:** [0_REQUIREMENTS_AND_USE_CASES.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/0_REQUIREMENTS_AND_USE_CASES.md)
 
@@ -14,9 +14,11 @@
 Il sistema supera il tradizionale paradigma del "report statico di vulnerabilità" fornendo:
 - Un motore di scansione di rete black-box altamente performante ed elastico basato su **Go** e **Nmap**.
 - Un catalogo locale e offline-ready di vulnerabilità (**CVE/CPE/CVSS**) con correlazione automatizzata.
+- Un motore di **Real-Time Live Streaming (Server-Sent Events)** che proietta all'istante sullo schermo i dispositivi rilevati e le evidenze di sicurezza senza attendere la conclusione delle scansioni.
 - Un modulo di **High-Speed Network Discovery** (stile Advanced IP Scanner) per il censimento istantaneo dei dispositivi LAN, hardware vendor e latenza.
 - Un'organizzazione gerarchica ad albero (**Nested Tree Explorer**) per asset e campagne di scansione.
 - Un modulo di **Remote SSH Host & iptables/nftables Firewall Management** con safety rollback timer e terminale Web SSH integrato (xterm.js).
+- Una **Live Debug & Testing Console (Slide-over Drawer)** per l'intercettazione e la diagnosi in tempo reale di tutto il traffico API REST, streaming SSE, WebSocket ed errori JavaScript con esportazione Markdown per fixing assistito.
 - Un'architettura ibrida **Multi-Tenant / Single-Tenant** idonea sia per erogazione SaaS (MSSP) sia per installazione On-Premise (Enterprise isolate).
 - Un hub centralizzato di **Reporting White-Label** con personalizzazione grafica e loghi per ogni tenant (Executive & Technical reports).
 
@@ -27,6 +29,8 @@ Il sistema supera il tradizionale paradigma del "report statico di vulnerabilit�
 ### 2.1 In-Scope (Milestone 1 & 1.1)
 - **Asset Scope Management & Tree Explorer:** Gestione target IP/CIDR/domini con struttura gerarchica ad albero (cartelle/sotto-cartelle), blacklist e metriche di rischio aggregate.
 - **Scanning Engine & Alive-Only Host Filter:** Esecuzione concorrente e sicura di Nmap in Docker con profili (Fast, Standard, Full, LAN Discovery) ed esclusione nativa degli host spenti (`down`) nei range IP.
+- **Real-Time Live Streaming Engine (SSE):** Streaming istantaneo unidirezionale Server-Sent Events per LAN Network Discovery (comparsa live progressiva dei nodi nella tabella) e Scansioni Nmap (avanzamento percentuale, stadi di scansione e findings parziali con salvataggio incrementale su PostgreSQL).
+- **Debug & Testing Live Console Drawer:** Finestra laterale (slide-over panel) accessibile via scorciatoia rapida (`Ctrl+Shift+D`) o pulsante fluttuante con badge contatore errori; intercettazione trasparente di chiamate HTTP Axios (request/response, payload, status, latency), stream SSE, frame WebSocket ed errori/warning JavaScript; filtri avanzati per livello/sorgente e copia istantanea del report diagnostico per AI in formato Markdown e JSON.
 - **Job Orchestrator:** Supporto a scansioni On-Demand e Schedulate (cron) a livello di target singolo o intera cartella dell'albero.
 - **CVE Database & Correlator:** Import e indicizzazione locale del feed CVE/CPE con arricchimento CVSS v3.1 e matching sui banner rilevati.
 - **LAN Device Discovery (Advanced IP Scanner mode):** Schermata dedicata `/network-discovery` ad altissima velocità (Ping Sweep / ARP Scan) con identificazione OUI MAC Vendor, hostname e import rapido nei Target.
@@ -58,14 +62,18 @@ Il sistema supera il tradizionale paradigma del "report statico di vulnerabilit�
 - **NFR-PERF-02 (Throughput di Parsing):** Parsing XML Nmap a streaming (`encoding/xml` decoder) per gestire scansioni su ampi range senza picchi di memoria.
 - **NFR-PERF-03 (Indicizzazione Database):** Tabelle con indici compositi B-Tree su `tenant_id`, `group_id`, `scan_id`, `cve_id` e indici GIN sui campi `JSONB`.
 - **NFR-PERF-04 (Throughput LAN Discovery):** La scansione rapida di una classe C `/24` nella modalità Network Discovery deve completarsi entro 5-10 secondi grazie a probe ICMP/ARP paralleli.
+- **NFR-PERF-05 (Real-Time SSE Event Latency):** La latenza tra la scoperta di un host/porta/finding nel worker e la propagazione dell'evento push Server-Sent Events verso il frontend React deve essere inferiore a 200ms.
 
 ### 3.3 Affidabilità, Resilienza e Graceful Shutdown
 - **NFR-REL-01 (Graceful Cancellation):** Vincolo al `context.Context` con propagazione di SIGTERM ai processi attivi.
 - **NFR-REL-02 (Transazionalità e Coerenza):** Registrazione atomica dei risultati e delle transizioni di stato su PostgreSQL.
 - **NFR-REL-03 (Offline-Readiness):** Operatività completa (discovery, fingerprinting, correlazione CVE e report PDF) anche in assenza di connessione Internet.
 - **NFR-REL-04 (Anti-Lockout Firewall Resilience):** Modifiche a `iptables` supportate da **Safety Rollback Timer**: se l'utente non conferma la sessione entro il timeout prestabilito (es. 60s), il backend esegue automaticamente il ripristino delle regole precedenti salvate in backup.
+- **NFR-REL-05 (Stream Decoupling & Reconnection Resilience):** La disconnessione o chiusura accidentale della sessione SSE dal browser non deve arrestare il job di scansione in esecuzione nel backend; alla riconnessione o refresh della pagina, lo stato parziale memorizzato su PostgreSQL viene ripristinato e lo stream si riallaccia istantaneamente.
 
 ### 3.4 Scalabilità e Manutenibilità
 - **NFR-MAINT-01 (Clean Architecture):** Backend strutturato secondo la Clean Architecture (Domain, UseCases, Adapters, Delivery HTTP/WS).
 - **NFR-MAINT-02 (Continuous Integration & Testability):** Copertura con Unit Test e Integration Test con mock.
 - **NFR-MAINT-03 (Structured Logging):** Utilizzo di `log/slog` nativo di Go con output JSON strutturato.
+- **NFR-DEV-01 (Zero-Overhead Debugging & Privacy):** Il logger client-side deve memorizzare in buffer circolare al massimo gli ultimi 500 eventi senza degradare le performance dell'applicazione né provocare memory leak. I campi sensibili (password, token, bearer, passphrase) devono essere mascherati preventivamente (`[REDACTED]`).
+

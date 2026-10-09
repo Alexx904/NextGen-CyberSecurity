@@ -46,6 +46,7 @@ func (s ScanStatus) IsValid() bool {
 type ScanSummaryStats struct {
 	TotalHosts      int     `json:"total_hosts"`
 	UpHosts         int     `json:"up_hosts"`
+	DownHosts       int     `json:"down_hosts"`
 	TotalOpenPorts  int     `json:"total_open_ports"`
 	CriticalCount   int     `json:"critical_count"`
 	HighCount       int     `json:"high_count"`

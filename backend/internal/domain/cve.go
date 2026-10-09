@@ -14,12 +14,13 @@ const (
 	SeverityMedium   SeverityLevel = "MEDIUM"
 	SeverityLow      SeverityLevel = "LOW"
 	SeverityInfo     SeverityLevel = "INFO"
+	SeverityNone     SeverityLevel = "NONE"
 )
 
 // IsValid verifica se il livello di severità è contemplato
 func (s SeverityLevel) IsValid() bool {
 	switch s {
-	case SeverityCritical, SeverityHigh, SeverityMedium, SeverityLow, SeverityInfo:
+	case SeverityCritical, SeverityHigh, SeverityMedium, SeverityLow, SeverityInfo, SeverityNone:
 		return true
 	default:
 		return false

@@ -63,6 +63,7 @@ func TestGetDefaultProfiles(t *testing.T) {
 		ProfileFastDiscovery,
 		ProfileStandardScan,
 		ProfileFullScan,
+		ProfileLANDiscovery,
 	}
 
 	for _, expected := range expectedProfiles {
@@ -93,6 +94,13 @@ func TestBuildSafeArguments_Success(t *testing.T) {
 			target:       "192.168.1.10",
 			expectedLast: "192.168.1.10",
 			shouldContain: []string{"-oX", "-", "-T4", "-F"},
+		},
+		{
+			name:         "LAN Discovery con ARP ping e CIDR",
+			profileArgs:  []string{"-sn", "-PR", "-T4"},
+			target:       "192.168.1.0/24",
+			expectedLast: "192.168.1.0/24",
+			shouldContain: []string{"-oX", "-", "-sn", "-PR", "-T4"},
 		},
 		{
 			name:         "Standard Service Scan con CIDR",

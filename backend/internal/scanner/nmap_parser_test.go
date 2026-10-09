@@ -200,6 +200,9 @@ func TestParseNmapXML_MultiHostFixture(t *testing.T) {
 	if stats.UpHosts != 2 {
 		t.Errorf("UpHosts errato in summary stats: %d", stats.UpHosts)
 	}
+	if stats.DownHosts != 1 {
+		t.Errorf("DownHosts errato in summary stats: atteso 1, ottenuto %d", stats.DownHosts)
+	}
 	if stats.TotalOpenPorts != 5 { // 3 aperte su host 1 (22, 80, 443) + 2 su host 2 (445, 3389)
 		t.Errorf("TotalOpenPorts errato: atteso 5, ottenuto %d", stats.TotalOpenPorts)
 	}
@@ -342,6 +345,97 @@ func TestStreamNmapXML_CallbackErrorPropagation(t *testing.T) {
 
 	if !strings.Contains(err.Error(), "interruzione da parte della callback") {
 		t.Errorf("messaggio di errore inatteso: %v", err)
+	}
+}
+
+func TestParsedScanReport_GetUpHosts(t *testing.T) {
+	report, err := ParseNmapXML(strings.NewReader(realisticNmapXML))
+	if err != nil {
+		t.Fatalf("ParseNmapXML ha restituito un errore inatteso: %v", err)
+	}
+
+	aliveHosts := report.GetUpHosts()
+	if len(aliveHosts) != 2 {
+		t.Fatalf("attesi 2 host attivi, ottenuti %d", len(aliveHosts))
+	}
+
+	for _, h := range aliveHosts {
+		if h.Status != "up" {
+			t.Errorf("host non attivo presente nella lista: IP=%s, status=%s", h.IP, h.Status)
+		}
+		if h.IP == "192.168.1.200" {
+			t.Errorf("l'host down 192.168.1.200 non deve essere presente in GetUpHosts()")
+		}
+	}
+}
+
+// Fixture XML realistica di un range di rete (es. 10.0.0.0/28) con maggioranza di host offline
+const rangeSubnetNmapXML = `<?xml version="1.0" encoding="UTF-8"?>
+<nmaprun scanner="nmap" args="nmap -sV 10.0.0.0/28" start="1700002000" version="7.94">
+<host>
+<status state="up" reason="arp-response"/>
+<address addr="10.0.0.1" addrtype="ipv4"/>
+<ports>
+<port protocol="tcp" portid="80">
+<state state="open"/>
+<service name="http" product="nginx" version="1.22.0"/>
+</port>
+</ports>
+</host>
+<host>
+<status state="down" reason="no-response"/>
+<address addr="10.0.0.2" addrtype="ipv4"/>
+</host>
+<host>
+<status state="down" reason="no-response"/>
+<address addr="10.0.0.3" addrtype="ipv4"/>
+</host>
+<host>
+<status state="up" reason="syn-ack"/>
+<address addr="10.0.0.4" addrtype="ipv4"/>
+<ports>
+<port protocol="tcp" portid="22">
+<state state="open"/>
+<service name="ssh" product="OpenSSH" version="8.2p1"/>
+</port>
+</ports>
+</host>
+<host>
+<status state="down" reason="no-response"/>
+<address addr="10.0.0.5" addrtype="ipv4"/>
+</host>
+<runstats>
+<finished time="1700002010" elapsed="10.0" exit="success"/>
+<hosts up="2" down="3" total="5"/>
+</runstats>
+</nmaprun>`
+
+func TestParseNmapXML_RangeSubnetDownHosts(t *testing.T) {
+	report, err := ParseNmapXML(strings.NewReader(rangeSubnetNmapXML))
+	if err != nil {
+		t.Fatalf("ParseNmapXML fallito: %v", err)
+	}
+
+	if report.TotalHosts != 5 || report.UpHosts != 2 || report.DownHosts != 3 {
+		t.Fatalf("conteggi errati: total=%d, up=%d, down=%d", report.TotalHosts, report.UpHosts, report.DownHosts)
+	}
+
+	alive := report.GetUpHosts()
+	if len(alive) != 2 {
+		t.Fatalf("attesi 2 host up da GetUpHosts(), ottenuti %d", len(alive))
+	}
+
+	stats := report.ToSummaryStats()
+	if stats.TotalHosts != 5 || stats.UpHosts != 2 || stats.DownHosts != 3 {
+		t.Errorf("summary stats errate per range con host offline: %+v", stats)
+	}
+	if stats.TotalOpenPorts != 2 {
+		t.Errorf("attese 2 porte aperte in totale sugli host attivi, ottenute: %d", stats.TotalOpenPorts)
+	}
+
+	cpes := report.ExtractCPEs()
+	if len(cpes) != 0 {
+		t.Errorf("attesi 0 cpes, ottenuti %d", len(cpes))
 	}
 }
 

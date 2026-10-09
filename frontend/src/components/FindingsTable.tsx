@@ -22,12 +22,23 @@ export const FindingsTable: React.FC<FindingsTableProps> = ({
   const [selectedSeverity, setSelectedSeverity] = useState<string>('ALL');
   const [selectedPort, setSelectedPort] = useState<string>('');
   const [minCvss, setMinCvss] = useState<string>('ALL');
+  const [onlyOpenPorts, setOnlyOpenPorts] = useState<boolean>(false);
 
   const [inspectingFinding, setInspectingFinding] = useState<FindingItem | null>(null);
 
   // Filtraggio reattivo
   const filteredFindings = useMemo(() => {
     return findings.filter((f) => {
+      // Bonifica: scarta record privi di host o non responsivi
+      if (!f.host_ip || f.host_ip.trim() === '' || f.host_ip === '0.0.0.0') {
+        return false;
+      }
+
+      // Toggle client-side: escludi host privi di porte aperte/servizi attivi
+      if (onlyOpenPorts && (f.port <= 0 || !f.service_name)) {
+        return false;
+      }
+
       const q = search.toLowerCase().trim();
       const matchesSearch =
         q === '' ||
@@ -51,7 +62,7 @@ export const FindingsTable: React.FC<FindingsTableProps> = ({
 
       return matchesSearch && matchesSeverity && matchesPort && matchesCvss;
     });
-  }, [findings, search, selectedSeverity, selectedPort, minCvss]);
+  }, [findings, search, selectedSeverity, selectedPort, minCvss, onlyOpenPorts]);
 
   const getSeverityBadge = (severity: string) => {
     switch (severity.toUpperCase()) {
@@ -161,6 +172,27 @@ export const FindingsTable: React.FC<FindingsTableProps> = ({
             placeholder="Porta (es. 80)"
             className="w-24 px-2.5 py-1.5 bg-slate-950 border border-cyber-border rounded-lg text-xs text-slate-300 placeholder-slate-600 focus:outline-none focus:border-cyan-500 font-mono"
           />
+
+          {/* Toggle Solo Host con Porte Aperte */}
+          <button
+            type="button"
+            onClick={() => setOnlyOpenPorts(!onlyOpenPorts)}
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+              onlyOpenPorts
+                ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300'
+                : 'bg-slate-950 border-cyber-border text-slate-400 hover:text-slate-200'
+            }`}
+            title="Mostra esclusivamente host con porte aperte e servizi attivi"
+          >
+            <span
+              className={`w-2 h-2 rounded-full transition-colors ${
+                onlyOpenPorts
+                  ? 'bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.8)]'
+                  : 'bg-slate-600'
+              }`}
+            />
+            <span>Solo Porte Aperte</span>
+          </button>
         </div>
       </div>
 
@@ -214,7 +246,13 @@ export const FindingsTable: React.FC<FindingsTableProps> = ({
                       {finding.cve_id || <span className="text-slate-500 font-sans italic">-</span>}
                     </td>
                     <td className="py-3.5 px-4 font-mono text-slate-200">
-                      {finding.host_ip}
+                      <div className="flex items-center space-x-2">
+                        <span
+                          className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]"
+                          title="Host Operativo (UP)"
+                        />
+                        <span>{finding.host_ip}</span>
+                      </div>
                     </td>
                     <td className="py-3.5 px-4 font-mono text-slate-300">
                       {finding.port}/{finding.protocol.toUpperCase()}

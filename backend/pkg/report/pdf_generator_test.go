@@ -245,3 +245,249 @@ func TestPDFGenerator_Generate_EmptyFindingsAndNoLogo(t *testing.T) {
 	}
 }
 
+func TestPDFGenerator_SanitizesEmptyFindings(t *testing.T) {
+	gen := report.NewPDFGenerator()
+	now := time.Now().UTC()
+
+	validFinding := &domain.Finding{
+		ID:        uuid.New(),
+		ScanID:    uuid.New(),
+		TenantID:  uuid.New(),
+		HostIP:    "10.0.0.1",
+		Port:      80,
+		Protocol:  "tcp",
+		Severity:  domain.SeverityMedium,
+		CreatedAt: now,
+	}
+
+	reportData := report.PDFReportData{
+		Tenant: &domain.Tenant{
+			ID:          uuid.New(),
+			Name:        "Test Tenant Sanitization",
+			BrandColors: domain.DefaultBrandColors(),
+		},
+		Scan: &domain.Scan{
+			ID:     uuid.New(),
+			Status: domain.ScanStatusCompleted,
+			SummaryStats: domain.ScanSummaryStats{
+				TotalHosts: 10,
+				UpHosts:    2,
+				DownHosts:  8,
+			},
+			CreatedAt: now,
+		},
+		Target: &domain.Target{
+			Value: "10.0.0.0/28",
+			Type:  domain.TargetTypeRange,
+		},
+		Profile: &domain.ScanProfile{
+			Name:     "Subnet Scan",
+			NmapArgs: "-sV",
+		},
+		Findings: []*domain.Finding{
+			nil,
+			validFinding,
+			{HostIP: ""},
+			{HostIP: "0.0.0.0"},
+			nil,
+		},
+		GeneratedAt: now,
+	}
+
+	pdfBytes, err := gen.Generate(reportData)
+	if err != nil {
+		t.Fatalf("generazione PDF fallita su findings da sanitizzare: %v", err)
+	}
+
+	if !bytes.HasPrefix(pdfBytes, []byte("%PDF-")) {
+		t.Errorf("il file generato non ha l'intestazione standard PDF")
+	}
+}
+
+func TestPDFGenerator_Generate_ExecutiveTemplate(t *testing.T) {
+	gen := report.NewPDFGenerator()
+	now := time.Now().UTC()
+	startedAt := now.Add(-5 * time.Minute)
+	completedAt := now
+
+	logoData := createTinyPNG()
+	tenant := &domain.Tenant{
+		ID:      uuid.New(),
+		Name:    "Global Executive Security Corp",
+		Slug:    "global-exec",
+		LogoURL: &logoData,
+		BrandColors: domain.BrandColors{
+			Primary:   "#1e293b",
+			Secondary: "#0284c7",
+			Accent:    "#38bdf8",
+		},
+	}
+
+	target := &domain.Target{
+		ID:       uuid.New(),
+		TenantID: tenant.ID,
+		Value:    "192.168.10.0/24",
+		Type:     domain.TargetTypeCIDR,
+	}
+
+	profile := &domain.ScanProfile{
+		ID:       uuid.New(),
+		Name:     "Executive Baseline",
+		NmapArgs: "-sV -T4",
+	}
+
+	scan := &domain.Scan{
+		ID:          uuid.New(),
+		TenantID:    tenant.ID,
+		TargetID:    target.ID,
+		ProfileID:   profile.ID,
+		Status:      domain.ScanStatusCompleted,
+		StartedAt:   &startedAt,
+		CompletedAt: &completedAt,
+		SummaryStats: domain.ScanSummaryStats{
+			TotalHosts:    254,
+			UpHosts:       12,
+			DownHosts:     242,
+			CriticalCount: 1,
+			HighCount:     2,
+			MediumCount:   4,
+			LowCount:      5,
+		},
+	}
+
+	cveCrit := "CVE-2023-38606"
+	cvssCrit := 9.8
+	svcHttp := "http"
+	remCrit := "Applicare la patch di sicurezza vendor per prevenire l'esecuzione remota di codice non autenticato."
+
+	findings := []*domain.Finding{
+		{
+			ID:          uuid.New(),
+			ScanID:      scan.ID,
+			TenantID:    tenant.ID,
+			HostIP:      "192.168.10.5",
+			Port:        80,
+			Protocol:    "tcp",
+			ServiceName: &svcHttp,
+			CVEID:       &cveCrit,
+			CVSSScore:   &cvssCrit,
+			Severity:    domain.SeverityCritical,
+			Remediation: &remCrit,
+			CreatedAt:   now,
+		},
+	}
+
+	reportData := report.PDFReportData{
+		Tenant:      tenant,
+		Scan:        scan,
+		Target:      target,
+		Profile:     profile,
+		Findings:    findings,
+		Template:    domain.ReportTemplateExecutive,
+		GeneratedAt: now,
+	}
+
+	pdfBytes, err := gen.Generate(reportData)
+	if err != nil {
+		t.Fatalf("generazione PDF Executive fallita: %v", err)
+	}
+
+	if len(pdfBytes) < 1000 {
+		t.Fatalf("dimensione PDF Executive troppo piccola (%d byte)", len(pdfBytes))
+	}
+
+	if !bytes.HasPrefix(pdfBytes, []byte("%PDF-")) {
+		t.Errorf("intestazione PDF non conforme")
+	}
+}
+
+func TestPDFGenerator_Generate_ExecutiveTemplate_NoFindings(t *testing.T) {
+	gen := report.NewPDFGenerator()
+	now := time.Now().UTC()
+
+	reportData := report.PDFReportData{
+		Tenant: &domain.Tenant{
+			ID:          uuid.New(),
+			Name:        "Clean Infrastructure Tenant",
+			BrandColors: domain.DefaultBrandColors(),
+		},
+		Scan: &domain.Scan{
+			ID:     uuid.New(),
+			Status: domain.ScanStatusCompleted,
+			SummaryStats: domain.ScanSummaryStats{
+				TotalHosts: 1,
+				UpHosts:    1,
+			},
+		},
+		Target: &domain.Target{
+			Value: "10.10.10.1",
+			Type:  domain.TargetTypeIP,
+		},
+		Profile: &domain.ScanProfile{
+			Name: "Quick Audit",
+		},
+		Findings:    []*domain.Finding{},
+		Template:    domain.ReportTemplateExecutive,
+		GeneratedAt: now,
+	}
+
+	pdfBytes, err := gen.Generate(reportData)
+	if err != nil {
+		t.Fatalf("generazione PDF Executive senza finding fallita: %v", err)
+	}
+
+	if !bytes.HasPrefix(pdfBytes, []byte("%PDF-")) {
+		t.Errorf("intestazione PDF non conforme")
+	}
+}
+
+func TestPDFGenerator_Generate_TechnicalTemplate(t *testing.T) {
+	gen := report.NewPDFGenerator()
+	now := time.Now().UTC()
+
+	banner := "Apache/2.4.52 (Ubuntu)"
+	reportData := report.PDFReportData{
+		Tenant: &domain.Tenant{
+			ID:          uuid.New(),
+			Name:        "Technical SecOps Team",
+			BrandColors: domain.DefaultBrandColors(),
+		},
+		Scan: &domain.Scan{
+			ID:     uuid.New(),
+			Status: domain.ScanStatusCompleted,
+		},
+		Target: &domain.Target{
+			Value: "172.16.0.10",
+			Type:  domain.TargetTypeIP,
+		},
+		Profile: &domain.ScanProfile{
+			Name:     "Full Deep Scan",
+			NmapArgs: "-sV -p- -T4",
+		},
+		Findings: []*domain.Finding{
+			{
+				ID:        uuid.New(),
+				HostIP:    "172.16.0.10",
+				Port:      8080,
+				Protocol:  "tcp",
+				Severity:  domain.SeverityMedium,
+				RawBanner: &banner,
+				CreatedAt: now,
+			},
+		},
+		Template:    domain.ReportTemplateTechnical,
+		GeneratedAt: now,
+	}
+
+	pdfBytes, err := gen.Generate(reportData)
+	if err != nil {
+		t.Fatalf("generazione PDF Technical fallita: %v", err)
+	}
+
+	if !bytes.HasPrefix(pdfBytes, []byte("%PDF-")) {
+		t.Errorf("intestazione PDF non conforme")
+	}
+}
+
+
+

@@ -2,11 +2,14 @@ package handler_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -18,13 +21,21 @@ import (
 )
 
 type mockReportService struct {
-	generateScanPDFReportFunc func(ctx context.Context, tenantID, scanID uuid.UUID) ([]byte, string, error)
+	listReportsFunc           func(ctx context.Context, tenantID uuid.UUID, filter domain.ReportFilter) ([]*domain.ReportItem, int, error)
+	generateScanPDFReportFunc func(ctx context.Context, tenantID, scanID uuid.UUID, template domain.ReportTemplate) ([]byte, string, error)
 	generateScanCSVReportFunc func(ctx context.Context, tenantID, scanID uuid.UUID) ([]byte, string, error)
 }
 
-func (m *mockReportService) GenerateScanPDFReport(ctx context.Context, tenantID, scanID uuid.UUID) ([]byte, string, error) {
+func (m *mockReportService) ListReports(ctx context.Context, tenantID uuid.UUID, filter domain.ReportFilter) ([]*domain.ReportItem, int, error) {
+	if m.listReportsFunc != nil {
+		return m.listReportsFunc(ctx, tenantID, filter)
+	}
+	return nil, 0, nil
+}
+
+func (m *mockReportService) GenerateScanPDFReport(ctx context.Context, tenantID, scanID uuid.UUID, template domain.ReportTemplate) ([]byte, string, error) {
 	if m.generateScanPDFReportFunc != nil {
-		return m.generateScanPDFReportFunc(ctx, tenantID, scanID)
+		return m.generateScanPDFReportFunc(ctx, tenantID, scanID, template)
 	}
 	return nil, "", domain.ErrNotFound
 }
@@ -38,6 +49,8 @@ func (m *mockReportService) GenerateScanCSVReport(ctx context.Context, tenantID,
 
 func setupReportRouter(h *handler.ReportHandler) *chi.Mux {
 	r := chi.NewRouter()
+	r.Get("/reports", h.List)
+	r.Get("/reports/{id}/download", h.DownloadReport)
 	r.Get("/scans/{id}/reports/pdf", h.DownloadPDF)
 	r.Get("/scans/{id}/reports/csv", h.DownloadCSV)
 	return r
@@ -54,6 +67,311 @@ func withReportUserClaims(r *http.Request, tenantID uuid.UUID) *http.Request {
 	return r.WithContext(middleware.WithUserClaims(r.Context(), claims))
 }
 
+func TestReportHandler_List_Success(t *testing.T) {
+	tenantID := uuid.New()
+	now := time.Now().UTC()
+	groupName := "External Perimeter"
+	groupID := uuid.New()
+
+	mockItems := []*domain.ReportItem{
+		{
+			ScanID:       uuid.New(),
+			TenantID:     tenantID,
+			TargetID:     uuid.New(),
+			TargetValue:  "203.0.113.1",
+			TargetType:   domain.TargetTypeIP,
+			GroupID:      &groupID,
+			GroupName:    &groupName,
+			ProfileID:    uuid.New(),
+			ProfileName:  "Standard Service Scan",
+			Status:       domain.ScanStatusCompleted,
+			TriggerType:  domain.TriggerManual,
+			StartedAt:    &now,
+			CompletedAt:  &now,
+			MaxSeverity:  domain.SeverityCritical,
+			PostureScore: 40,
+			PostureGrade: "D",
+			CreatedAt:    now,
+		},
+	}
+
+	mockSvc := &mockReportService{
+		listReportsFunc: func(ctx context.Context, tID uuid.UUID, filter domain.ReportFilter) ([]*domain.ReportItem, int, error) {
+			if tID != tenantID {
+				t.Fatalf("tenantID mismatch: atteso %s, ottenuto %s", tenantID, tID)
+			}
+			return mockItems, 1, nil
+		},
+	}
+
+	h := handler.NewReportHandler(mockSvc)
+	router := setupReportRouter(h)
+
+	req := httptest.NewRequest(http.MethodGet, "/reports?limit=10&offset=0", nil)
+	req = withReportUserClaims(req, tenantID)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("atteso status 200, ottenuto %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Success bool `json:"success"`
+		Data    struct {
+			Items  []domain.ReportItem `json:"items"`
+			Total  int                 `json:"total"`
+			Limit  int                 `json:"limit"`
+			Offset int                 `json:"offset"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decodifica risposta fallita: %v", err)
+	}
+
+	if !resp.Success {
+		t.Errorf("atteso success true")
+	}
+	if resp.Data.Total != 1 || len(resp.Data.Items) != 1 {
+		t.Errorf("dati report restituiti errati: total=%d, items=%d", resp.Data.Total, len(resp.Data.Items))
+	}
+	if resp.Data.Items[0].PostureScore != 40 || resp.Data.Items[0].PostureGrade != "D" {
+		t.Errorf("posture score errato: %+v", resp.Data.Items[0])
+	}
+}
+
+func TestReportHandler_List_WithFilters(t *testing.T) {
+	tenantID := uuid.New()
+	targetID := uuid.New()
+	groupID := uuid.New()
+
+	filterReceived := false
+	mockSvc := &mockReportService{
+		listReportsFunc: func(ctx context.Context, tID uuid.UUID, filter domain.ReportFilter) ([]*domain.ReportItem, int, error) {
+			filterReceived = true
+			if filter.TargetID == nil || *filter.TargetID != targetID {
+				t.Errorf("TargetID errato nel filtro: %v", filter.TargetID)
+			}
+			if filter.GroupID == nil || *filter.GroupID != groupID {
+				t.Errorf("GroupID errato nel filtro: %v", filter.GroupID)
+			}
+			if filter.Severity == nil || *filter.Severity != domain.SeverityHigh {
+				t.Errorf("Severity errata nel filtro: %v", filter.Severity)
+			}
+			if filter.TargetType == nil || *filter.TargetType != domain.TargetTypeCIDR {
+				t.Errorf("TargetType errato nel filtro: %v", filter.TargetType)
+			}
+			if filter.Status == nil || *filter.Status != domain.ScanStatusCompleted {
+				t.Errorf("Status errato nel filtro: %v", filter.Status)
+			}
+			if filter.DateFrom == nil || filter.DateTo == nil {
+				t.Errorf("DateFrom o DateTo mancanti nel filtro")
+			}
+			if filter.Search != "test-subnet" {
+				t.Errorf("Search errato: %s", filter.Search)
+			}
+			return []*domain.ReportItem{}, 0, nil
+		},
+	}
+
+	h := handler.NewReportHandler(mockSvc)
+	router := setupReportRouter(h)
+
+	url := fmt.Sprintf("/reports?target_id=%s&group_id=%s&severity=HIGH&target_type=CIDR&status=COMPLETED&date_from=2026-01-01&date_to=2026-12-31&search=test-subnet", targetID, groupID)
+	req := httptest.NewRequest(http.MethodGet, url, nil)
+	req = withReportUserClaims(req, tenantID)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("atteso status 200, ottenuto %d", rec.Code)
+	}
+	if !filterReceived {
+		t.Errorf("il filtro non è stato inoltrato al service")
+	}
+}
+
+func TestReportHandler_List_Unauthorized(t *testing.T) {
+	mockSvc := &mockReportService{}
+	h := handler.NewReportHandler(mockSvc)
+	router := setupReportRouter(h)
+
+	req := httptest.NewRequest(http.MethodGet, "/reports", nil)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("atteso 401 Unauthorized, ottenuto %d", rec.Code)
+	}
+}
+
+func TestReportHandler_List_InvalidParams(t *testing.T) {
+	tenantID := uuid.New()
+	mockSvc := &mockReportService{}
+	h := handler.NewReportHandler(mockSvc)
+	router := setupReportRouter(h)
+
+	// Target ID non valido
+	req1 := httptest.NewRequest(http.MethodGet, "/reports?target_id=invalid-uuid", nil)
+	req1 = withReportUserClaims(req1, tenantID)
+	rec1 := httptest.NewRecorder()
+	router.ServeHTTP(rec1, req1)
+	if rec1.Code != http.StatusBadRequest {
+		t.Errorf("atteso 400 per target_id non valido, ottenuto %d", rec1.Code)
+	}
+
+	// Data non valida
+	req2 := httptest.NewRequest(http.MethodGet, "/reports?date_from=not-a-date", nil)
+	req2 = withReportUserClaims(req2, tenantID)
+	rec2 := httptest.NewRecorder()
+	router.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusBadRequest {
+		t.Errorf("atteso 400 per data non valida, ottenuto %d", rec2.Code)
+	}
+}
+
+func TestReportHandler_DownloadReport_PDF_Executive(t *testing.T) {
+	tenantID := uuid.New()
+	scanID := uuid.New()
+	dummyPDF := []byte("%PDF-1.4 mock executive report")
+	dummyFilename := "report_executive_scan.pdf"
+
+	mockSvc := &mockReportService{
+		generateScanPDFReportFunc: func(ctx context.Context, tID, sID uuid.UUID, tmpl domain.ReportTemplate) ([]byte, string, error) {
+			if tID != tenantID || sID != scanID {
+				t.Fatalf("parametri non corrispondenti: tID=%v, sID=%v", tID, sID)
+			}
+			if tmpl != domain.ReportTemplateExecutive {
+				t.Fatalf("atteso template %s, ottenuto %s", domain.ReportTemplateExecutive, tmpl)
+			}
+			return dummyPDF, dummyFilename, nil
+		},
+	}
+
+	h := handler.NewReportHandler(mockSvc)
+	router := setupReportRouter(h)
+
+	req := httptest.NewRequest(http.MethodGet, "/reports/"+scanID.String()+"/download?type=pdf&template=executive", nil)
+	req = withReportUserClaims(req, tenantID)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("atteso status 200, ottenuto %d", rec.Code)
+	}
+
+	if rec.Header().Get("Content-Type") != "application/pdf" {
+		t.Errorf("Content-Type errato: %s", rec.Header().Get("Content-Type"))
+	}
+	if !strings.Contains(rec.Header().Get("Content-Disposition"), dummyFilename) {
+		t.Errorf("Content-Disposition non contiene filename: %s", rec.Header().Get("Content-Disposition"))
+	}
+}
+
+func TestReportHandler_DownloadReport_PDF_Technical(t *testing.T) {
+	tenantID := uuid.New()
+	scanID := uuid.New()
+	dummyPDF := []byte("%PDF-1.4 mock technical report")
+	dummyFilename := "report_technical_scan.pdf"
+
+	mockSvc := &mockReportService{
+		generateScanPDFReportFunc: func(ctx context.Context, tID, sID uuid.UUID, tmpl domain.ReportTemplate) ([]byte, string, error) {
+			if tmpl != domain.ReportTemplateTechnical {
+				t.Fatalf("atteso template %s, ottenuto %s", domain.ReportTemplateTechnical, tmpl)
+			}
+			return dummyPDF, dummyFilename, nil
+		},
+	}
+
+	h := handler.NewReportHandler(mockSvc)
+	router := setupReportRouter(h)
+
+	req := httptest.NewRequest(http.MethodGet, "/reports/"+scanID.String()+"/download?type=pdf&template=technical", nil)
+	req = withReportUserClaims(req, tenantID)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("atteso status 200, ottenuto %d", rec.Code)
+	}
+}
+
+func TestReportHandler_DownloadReport_CSV(t *testing.T) {
+	tenantID := uuid.New()
+	scanID := uuid.New()
+	dummyCSV := []byte("finding_id,host_ip,port\n1,192.168.1.1,80\n")
+	dummyFilename := "findings_scan.csv"
+
+	mockSvc := &mockReportService{
+		generateScanCSVReportFunc: func(ctx context.Context, tID, sID uuid.UUID) ([]byte, string, error) {
+			return dummyCSV, dummyFilename, nil
+		},
+	}
+
+	h := handler.NewReportHandler(mockSvc)
+	router := setupReportRouter(h)
+
+	req := httptest.NewRequest(http.MethodGet, "/reports/"+scanID.String()+"/download?type=csv", nil)
+	req = withReportUserClaims(req, tenantID)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("atteso status 200, ottenuto %d", rec.Code)
+	}
+	if !strings.Contains(rec.Header().Get("Content-Type"), "text/csv") {
+		t.Errorf("atteso text/csv, ottenuto %s", rec.Header().Get("Content-Type"))
+	}
+}
+
+func TestReportHandler_DownloadReport_NotFound(t *testing.T) {
+	tenantID := uuid.New()
+	scanID := uuid.New()
+
+	mockSvc := &mockReportService{
+		generateScanPDFReportFunc: func(ctx context.Context, tID, sID uuid.UUID, tmpl domain.ReportTemplate) ([]byte, string, error) {
+			return nil, "", domain.ErrNotFound
+		},
+	}
+
+	h := handler.NewReportHandler(mockSvc)
+	router := setupReportRouter(h)
+
+	req := httptest.NewRequest(http.MethodGet, "/reports/"+scanID.String()+"/download", nil)
+	req = withReportUserClaims(req, tenantID)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("atteso 404 Not Found, ottenuto %d", rec.Code)
+	}
+}
+
+func TestReportHandler_DownloadReport_InvalidID(t *testing.T) {
+	tenantID := uuid.New()
+	mockSvc := &mockReportService{}
+	h := handler.NewReportHandler(mockSvc)
+	router := setupReportRouter(h)
+
+	req := httptest.NewRequest(http.MethodGet, "/reports/invalid-uuid/download", nil)
+	req = withReportUserClaims(req, tenantID)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("atteso 400 Bad Request, ottenuto %d", rec.Code)
+	}
+}
+
 func TestReportHandler_DownloadPDF_Success(t *testing.T) {
 	tenantID := uuid.New()
 	scanID := uuid.New()
@@ -61,7 +379,7 @@ func TestReportHandler_DownloadPDF_Success(t *testing.T) {
 	dummyFilename := "report_scan_test.pdf"
 
 	mockSvc := &mockReportService{
-		generateScanPDFReportFunc: func(ctx context.Context, tID, sID uuid.UUID) ([]byte, string, error) {
+		generateScanPDFReportFunc: func(ctx context.Context, tID, sID uuid.UUID, tmpl domain.ReportTemplate) ([]byte, string, error) {
 			if tID != tenantID || sID != scanID {
 				t.Fatalf("parametri non corrispondenti: tID=%v, sID=%v", tID, sID)
 			}
@@ -72,7 +390,7 @@ func TestReportHandler_DownloadPDF_Success(t *testing.T) {
 	h := handler.NewReportHandler(mockSvc)
 	router := setupReportRouter(h)
 
-	req := httptest.NewRequest(http.MethodGet, "/scans/"+scanID.String()+"/reports/pdf", nil)
+	req := httptest.NewRequest(http.MethodGet, "/scans/"+scanID.String()+"/reports/pdf?template=technical", nil)
 	req = withReportUserClaims(req, tenantID)
 	rec := httptest.NewRecorder()
 
@@ -133,7 +451,7 @@ func TestReportHandler_DownloadPDF_NotFound(t *testing.T) {
 	scanID := uuid.New()
 
 	mockSvc := &mockReportService{
-		generateScanPDFReportFunc: func(ctx context.Context, tID, sID uuid.UUID) ([]byte, string, error) {
+		generateScanPDFReportFunc: func(ctx context.Context, tID, sID uuid.UUID, tmpl domain.ReportTemplate) ([]byte, string, error) {
 			return nil, "", domain.ErrNotFound
 		},
 	}
@@ -157,7 +475,7 @@ func TestReportHandler_DownloadPDF_InternalError(t *testing.T) {
 	scanID := uuid.New()
 
 	mockSvc := &mockReportService{
-		generateScanPDFReportFunc: func(ctx context.Context, tID, sID uuid.UUID) ([]byte, string, error) {
+		generateScanPDFReportFunc: func(ctx context.Context, tID, sID uuid.UUID, tmpl domain.ReportTemplate) ([]byte, string, error) {
 			return nil, "", errors.New("generazione fallita")
 		},
 	}
@@ -273,5 +591,3 @@ func TestReportHandler_DownloadCSV_NotFound(t *testing.T) {
 		t.Fatalf("atteso status 404 Not Found, ottenuto %d", rec.Code)
 	}
 }
-
-

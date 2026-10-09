@@ -18,6 +18,7 @@ node_modules/
 .npm/
 .yarn/
 *.log
+coverage/
 
 # Environment and sensitive files
 .env

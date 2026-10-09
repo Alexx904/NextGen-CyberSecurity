@@ -1,129 +1,88 @@
 # 3. Interactive Task List & Implementation Backlog
 
-> **Stato:** APPROVATO (Fase 2: System Design - Backlog Attivo Milestone 1.1)  
-> **Ultimo Aggiornamento:** 2026-10-08  
+> **Stato:** APPROVATO (Fase 2: System Design - Backlog Attivo Milestone 1.2: Real-Time Live Streaming)  
+> **Ultimo Aggiornamento:** 2026-10-09  
 > **Autore / Ruolo:** TechLead-Engineer-Agent (System Architect & Tech Lead)  
 > **Documenti Correlati:** [0_REQUIREMENTS_AND_USE_CASES.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/0_REQUIREMENTS_AND_USE_CASES.md) | [1_PROJECT_CONTEXT.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/1_PROJECT_CONTEXT.md) | [2_ARCHITECTURE.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/2_ARCHITECTURE.md) | [4_CHANGELOG.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/4_CHANGELOG.md)
 
 ---
 
 ## 📋 Regole di Avanzamento (Fase 3 SDLC)
-1. **Micro-Planning obbligatorio (`/plan [task-id]`):** Prima di toccare qualsiasi riga di codice, deve essere formulato e approvato un piano di implementazione dettagliato con firme, file e strategie di test.
-2. **Esecuzione (`/execute`):** Solo dopo l'approvazione del piano si scrive il codice di produzione con i relativi unit test.
-3. **Aggiornamento di Stato:** Il task viene spuntato `- [x]` al completamento della Definition of Done (DoD).
-4. **Archiviazione:** I task TASK-01 fino a TASK-34 completati nella Milestone 1 sono archiviati in [4_CHANGELOG.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/4_CHANGELOG.md).
+1. **Micro-Planning obbligatorio (`/plan [task-id]`):** Prima di toccare qualsiasi riga di codice, deve essere formulato e approvato un piano di implementazione dettagliato con firme, file coinvolti e Test Strategy esplicita.
+2. **Esecuzione (`/execute`):** Solo dopo l'approvazione del piano si scrive il codice di produzione con i relativi test unitari/integrazione.
+3. **Esecuzione & Validazione Test (Zero-Assumption Rule):** Prima di completare il task, i test devono essere eseguiti tramite shell con esito positivo al 100% (exit code 0). È formalmente vietato spuntare il task senza evidenza comprovata di successo.
+4. **Aggiornamento di Stato:** Il task viene spuntato `- [x]` al completamento della Definition of Done (DoD) e verifica dei test.
+5. **Archiviazione:** I task TASK-01 fino a TASK-50 completati nelle Milestone 1 e 1.1 sono archiviati in [4_CHANGELOG.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/4_CHANGELOG.md).
 
 ---
 
-## 🧹 EPIC 12: Alive-Only Host Filtering & Range Data Sanitization (Feature 1)
+## ⚡ EPIC 18: Real-Time Live Streaming Engine via Server-Sent Events (Feature 6)
 
-### Story 12.1: Filtraggio e Bonifica Host Inattivi nei Risultati di Scansione
-- [ ] **TASK-35: Filtraggio Host Inattivi nel Parser XML e Scan Orchestrator (Backend Go)**
-  - **File coinvolti:** `backend/internal/scanner/nmap_parser.go`, `backend/internal/service/scan_orchestrator.go`, `backend/internal/scanner/nmap_parser_test.go`
-  - **Dipendenze:** TASK-14, TASK-15
-  - **DoD:** Il parser XML e lo scan orchestrator escludono a monte dalla generazione dei findings tutti gli host aventi stato `down`. Solo gli host attivi (`up`) vengono elaborati e persistiti; le metriche di riepilogo mantengono il conteggio aggregato `up_hosts` e `down_hosts`. Unit test con fixture di range con host offline.
+### Story 18.1: Modello Eventi SSE e In-Memory Event Broadcaster Hub
+- [x] **TASK-51: Modello Eventi SSE e Servizio In-Memory Event Broadcaster (Backend Go)**
+  - **File coinvolti:** `backend/internal/domain/event.go`, `backend/internal/service/event_broadcaster.go`, `backend/internal/service/event_broadcaster_test.go`
+  - **Dipendenze:** TASK-06
+  - **DoD:** Creazione del modello di dominio `event.go` con tipizzazione per `DeviceDiscoveredEvent`, `ScanProgressEvent`, `ScanPhaseEvent`, `ScanFindingEvent`, `ScanStatusEvent`. Creazione del servizio thread-safe `EventBroadcaster` con canali Go multiplexati per tenant/sessione/scan, registrazione subscriber, buffer non bloccante con drop policy controllata e chiusura pulita su `context.Done`. Unit test completi sul broadcast concorrente con coverage >= 90%.
 
-- [ ] **TASK-36: Ottimizzazione UI e Reportistica per Visualizzazione Esclusiva Host Attivi**
-  - **File coinvolti:** `frontend/src/pages/ScanDetail.tsx`, `frontend/src/components/FindingsTable.tsx`, `backend/pkg/report/pdf_generator.go`, `backend/pkg/report/csv_generator.go`
-  - **Dipendenze:** TASK-35
-  - **DoD:** La schermata di dettaglio scansione e la tabella findings mostrano solo gli asset operativi; l'export PDF e CSV esclude categoricamente righe vuote per host non responsivi. Toggle client-side per escludere facoltativamente anche gli host privi di porte aperte.
+### Story 18.2: Streaming in Tempo Reale per LAN Network Discovery
+- [x] **TASK-52: Live LAN Discovery Engine e Streaming Endpoint SSE (Backend Go)**
+  - **File coinvolti:** `backend/internal/domain/discovery.go`, `backend/internal/service/discovery_service.go`, `backend/internal/delivery/http/handler/discovery_handler.go`, `backend/internal/service/discovery_service_test.go`, `backend/cmd/server/main.go`
+  - **Dipendenze:** TASK-51, TASK-43
+  - **DoD:** Aggiornamento del motore di discovery per emettere eventi push non appena un host risponde al probe (con risoluzione OUI vendor immediata) e aggiornamento della percentuale di sweep. Implementazione endpoint SSE `GET /api/v1/network-discovery/stream` con flushing `http.Flusher`, header `text/event-stream`, autorizzazione JWT e persistenza incrementale dei dispositivi scoperti nella sessione. Unit test completi.
 
----
+### Story 18.3: Streaming Fasi, Progresso e Scoperte Progressive Scansioni Nmap
+- [x] **TASK-53: Streaming Progressivo Scansioni Nmap e Scrittura Incrementale Findings (Backend Go)**
+  - **File coinvolti:** `backend/internal/service/scan_orchestrator.go`, `backend/internal/scanner/nmap_runner.go`, `backend/internal/delivery/http/handler/scan_handler.go`, `backend/internal/service/scan_orchestrator_test.go`, `backend/cmd/server/main.go`
+  - **Dipendenze:** TASK-51, TASK-35
+  - **DoD:** Modifica di `scan_orchestrator` e `nmap_runner` per monitorare l'esecuzione Nmap in tempo reale con flag `--stats-every` e streaming delle porte scoperte. Salvataggio incrementale su PostgreSQL di ogni finding/porta aperta correlata senza attendere il termine del processo; emissione eventi `phase`, `progress`, `finding_discovered` e `status_change` verso `EventBroadcaster`. Implementazione endpoint SSE `GET /api/v1/scans/{id}/stream`. Unit test con simulazione eventi live.
 
-## 📑 EPIC 13: Centralized Reports Hub & Dual-Template White-Label (Feature 2)
+### Story 18.4: Integrazione Frontend Real-Time LAN Discovery
+- [x] **TASK-54: Client SSE e Aggiornamento Tabella Live in Network Discovery (Frontend React)**
+  - **File coinvolti:** `frontend/src/api/discovery.ts`, `frontend/src/pages/NetworkDiscovery.tsx`, `frontend/src/hooks/useSSE.ts`
+  - **Dipendenze:** TASK-52
+  - **DoD:** Creazione hook riutilizzabile o client `EventSource` con autenticazione JWT e gestione auto-reconnection. Aggiornamento di `NetworkDiscovery.tsx` in modo che all'avvio della scansione la tabella venga popolata in tempo reale con animazione riga per riga per ogni dispositivo emesso dall'evento `device_discovered`, con barra di avanzamento e conteggio incrementale. Mantenimento delle azioni rapide (aggiungi a cartella target / scansione immediata) operative sui nodi già comparsi a schermo.
 
-### Story 13.1: Hub Centralizzato di Reportistica e Template Executive/Tecnico
-- [ ] **TASK-37: Backend Endpoint REST e Motore Multi-Template Reports Hub**
-  - **File coinvolti:** `backend/internal/delivery/http/handler/report_handler.go`, `backend/internal/service/report_service.go`, `backend/pkg/report/pdf_generator.go`, `backend/cmd/server/main.go`
-  - **Dipendenze:** TASK-24, TASK-25
-  - **DoD:** Endpoint `GET /api/v1/reports` per consultare lo storico globale delle scansioni/report con filtri per target, date, severità e cartelle. Supporto al parametro query `template=executive` (report manageriale sintetico con grafici e posture index) e `template=technical` (dettaglio tecnico esteso).
+### Story 18.5: Integrazione Frontend Real-Time Scan Detail
+- [x] **TASK-55: Monitoraggio Live di Scansione e Findings Progressivi in ScanDetail (Frontend React)**
+  - **File coinvolti:** `frontend/src/pages/ScanDetail.tsx`, `frontend/src/components/ScanProgressBadge.tsx`, `frontend/src/api/scan.ts`
+  - **Dipendenze:** TASK-53
+  - **DoD:** Aggiornamento di `ScanDetail.tsx` per agganciarsi allo stream SSE `/api/v1/scans/{id}/stream` quando la scansione è `RUNNING` o `QUEUED`. Visualizzazione in diretta della fase corrente, percentuale animata, e inserimento immediato dei finding nella tabella Findings man mano che arrivano, senza necessità di polling o refresh manuale della pagina.
 
-- [ ] **TASK-38: Frontend Reports Hub Dashboard (`frontend/src/pages/Reports.tsx`)**
-  - **File coinvolti:** `frontend/src/pages/Reports.tsx`, `frontend/src/api/client.ts`, `frontend/src/App.tsx`
-  - **Dipendenze:** TASK-37
-  - **DoD:** Schermata Reports completa che sostituisce il segnaposto con una dashboard interattiva: elenco globale dei report, filtri istantanei, selettore template (Executive o Tecnico), download immediato PDF/CSV e visualizzazione dello stato.
-
----
-
-## 🌳 EPIC 14: Hierarchical Tree Asset & Scan Folders (Feature 3)
-
-### Story 14.1: Gerarchia ad Albero per Target e Campagne di Scansione
-- [ ] **TASK-39: Database Migration e Backend Repository/Service Gruppi ad Albero (`parent_id`)**
-  - **File coinvolti:** `backend/internal/repository/migrations/000004_tree_target_groups.up.sql`, `backend/internal/repository/migrations/000004_tree_target_groups.down.sql`, `backend/internal/domain/target.go`, `backend/internal/repository/postgres/target_group_repo.go`, `backend/internal/service/target_group_service.go`
-  - **Dipendenze:** TASK-04, TASK-11
-  - **DoD:** Script di migrazione SQL che introduce `parent_id UUID REFERENCES target_groups(id)` e `color_tag`. Service con metodi per recuperare la gerarchia ad albero, calcolo ricorsivo del conteggio target e determinazione del livello di rischio aggregato. Unit test completi.
-
-- [ ] **TASK-40: Endpoint REST Gruppi ad Albero e Supporto Scansioni su Intera Cartella**
-  - **File coinvolti:** `backend/internal/delivery/http/handler/target_group_handler.go`, `backend/internal/service/scan_service.go`, `backend/cmd/server/main.go`
-  - **Dipendenze:** TASK-39, TASK-17
-  - **DoD:** Endpoint REST `GET /api/v1/target-groups` (albero nidificato), `POST /api/v1/target-groups`, `PUT /api/v1/target-groups/{id}`, `DELETE /api/v1/target-groups/{id}`. Supporto all'avvio di una scansione sull'intero `group_id` ricorsivo.
-
-- [ ] **TASK-41: Frontend Tree Explorer Component & Integrazione in Targets e Scans**
-  - **File coinvolti:** `frontend/src/components/TreeExplorer.tsx`, `frontend/src/pages/Targets.tsx`, `frontend/src/pages/Scans.tsx`, `frontend/src/components/TargetModal.tsx`
-  - **Dipendenze:** TASK-40
-  - **DoD:** Componente navigatore ad albero a sinistra con nodi espandibili, badge contatore e badge colore di rischio. Modal per creare/rinominare cartelle e possibilità di filtrare target e scansioni cliccando sui rami dell'albero.
+### Story 18.6: Collaudo E2E e Verifica delle Performance Real-Time
+- [x] **TASK-56: Test di Integrazione e Validazione E2E per Funzionalità Real-Time (Milestone 1.2)**
+  - **File coinvolti:** `docker-compose.yml`, test scripts / unit test
+  - **Dipendenze:** TASK-51 fino a TASK-55
+  - **DoD:** Test end-to-end con:
+    1. Avvio scansione LAN Discovery e ricezione streaming push dei dispositivi con latenza < 200ms.
+    2. Verifica persistenza incrementale su refresh browser.
+    3. Avvio scansione Nmap con ricezione eventi di cambio fase, progresso e finding live.
+    4. Verifica disconnessione/riconnessione client senza interruzione del job in background.
 
 ---
 
-## ⚡ EPIC 15: High-Speed LAN Network Discovery (Feature 4 - Advanced IP Scanner)
+## 🛠️ EPIC 19: Debug & Testing Live Console Drawer (Feature 7)
 
-### Story 15.1: Ricognizione LAN Rapida con Vendor OUI e Importazione Target
-- [ ] **TASK-42: Motore di Discovery LAN Veloce con Database Locale OUI Vendor (Backend)**
-  - **File coinvolti:** `backend/internal/scanner/oui_database.go`, `backend/internal/service/discovery_service.go`, `backend/internal/scanner/profiles.go`, `backend/internal/domain/discovery.go`
-  - **Dipendenze:** TASK-13, TASK-14
-  - **DoD:** Profilo Nmap ultra-veloce (`-sn -PR -T4`). Modulo di lookup OUI integrato che traduce i primi 3 ottetti del MAC nel produttore hardware (es. Apple, Cisco, Dell, Raspberry Pi). Calcolo latenza RTT e risoluzione hostname.
+### Story 19.1: Core Logging Engine, Redaction e Ring Buffer
+- [x] **TASK-57: Ring Buffer Logger, Sensitive Data Sanitizer & Event Bus (Frontend TypeScript)**
+  - **File coinvolti:** `frontend/src/types/debug.ts`, `frontend/src/utils/debugLogger.ts`, `frontend/src/utils/debugLogger.test.ts`
+  - **Dipendenze:** Nessuna
+  - **DoD:** Definizione tipi `DebugEntry`, `DebugLogLevel`, `DebugLogSource`. Implementazione del singleton thread-safe `debugLogger` con memoria circolare (max 500 eventi), rimozione FIFO degli elementi in eccesso, mascheramento ricorsivo di token e password sensibili (`[REDACTED]`), metodi helper `logApiRequest`, `logApiResponse`, `logApiError`, `logSSEEvent`, `logWSEvent`, `logRuntimeError`, `logCustom`, ed emissione eventi con listener pub/sub. Suite di unit test dedicata con copertura >= 90%.
 
-- [ ] **TASK-43: Endpoint REST Network Discovery e Importazione Massiva Target**
-  - **File coinvolti:** `backend/internal/delivery/http/handler/discovery_handler.go`, `backend/cmd/server/main.go`
-  - **Dipendenze:** TASK-42, TASK-40
-  - **DoD:** Endpoint `POST /api/v1/network-discovery/scan`, `GET /api/v1/network-discovery/results`, e `POST /api/v1/network-discovery/import-targets` (importa più dispositivi come target in una cartella specifica dell'albero).
+### Story 19.2: Intercettazione Globale Rete ed Errori di Runtime
+- [x] **TASK-58: Intercettore Trasparente Axios, Handlers Globali e DebugContext (Frontend React)**
+  - **File coinvolti:** `frontend/src/api/client.ts`, `frontend/src/context/DebugContext.tsx`, `frontend/src/App.tsx`
+  - **Dipendenze:** TASK-57
+  - **DoD:** Integrazione degli interceptor Axios in `api/client.ts` per calcolare tempo di esecuzione (`durationMs`), status HTTP e payload di richiesta/risposta/errore verso `debugLogger`. Registrazione listener `window.addEventListener('error')` e `unhandledrejection`. Creazione di `DebugContext` e `DebugProvider` per distribuire lo stato reattivo dei log, il contatore errori non letti e la visibilità del pannello all'intera applicazione.
 
-- [ ] **TASK-44: Frontend Network Discovery Dashboard (`frontend/src/pages/NetworkDiscovery.tsx`)**
-  - **File coinvolti:** `frontend/src/pages/NetworkDiscovery.tsx`, `frontend/src/App.tsx`, `frontend/src/components/layout/AppLayout.tsx`
-  - **Dipendenze:** TASK-43
-  - **DoD:** Nuova vista dedicata nel menu laterale stile "Advanced IP Scanner": input subnet/range, barra di progresso, tabella in tempo reale con MAC, Produttore, IP, Hostname, Latenza, selezione multipla e pulsanti "Aggiungi a Cartella Target" e "Scansiona Subito".
+### Story 19.3: Interfaccia Utente Slide-Over, Filtri e Formattatore AI Markdown
+- [x] **TASK-59: Componente UI Slide-Over Drawer, Floating Toggle & Markdown Exporter (Frontend React)**
+  - **File coinvolti:** `frontend/src/components/debug/DebugConsoleDrawer.tsx`, `frontend/src/components/debug/DebugFloatingToggle.tsx`, `frontend/src/utils/markdownExporter.ts`, `frontend/src/components/layout/AppLayout.tsx`
+  - **Dipendenze:** TASK-58
+  - **DoD:** Realizzazione del drawer laterale destro con transizione CSS fluida, apribile tramite pulsante fluttuante con badge contatore errori o combinazione tasti `Ctrl + Shift + D`. Barra strumenti con filtri per livello (`ALL`, `ERROR`, `WARN`, `INFO`), sorgente (`API`, `SSE`, `WS`, `RUNTIME`), barra di ricerca rapida testuale. Visualizzatore espandibile per ciascun record di log con JSON formattato. Pulsante "Copia per AI (Markdown)" che genera un blocco formattato pronto per la chat, pulsante "Esporta JSON" e "Pulisci Log".
 
----
+### Story 19.4: Build Type-Safety & Test di Integrazione
+- [x] **TASK-60: Verifica Type-Safety e Collaudo E2E Console di Debug (Frontend React)**
+  - **File coinvolti:** `frontend/src/App.tsx`, `frontend/package.json`, test scripts
+  - **Dipendenze:** TASK-57, TASK-58, TASK-59
+  - **DoD:** Esecuzione di `npm run build` (`tsc && vite build`) con esito 0 errori. Esecuzione suite unit test. Verifica funzionale dell'apertura del pannello, registrazione di una chiamata HTTP reale (es. `/api/v1/health`), simulazione di un errore 4xx/5xx con incremento del badge contatore ed emissione del report Markdown formattato.
 
-## 🛡️ EPIC 16: Remote SSH Host Management, iptables Firewall GUI & Web Terminal (Feature 5)
-
-### Story 16.1: Infrastruttura Dati, Crittografia AES-256-GCM e Client SSH Nativo
-- [ ] **TASK-45: Database Migration e Modulo Crittografico Credenziali SSH (AES-256-GCM)**
-  - **File coinvolti:** `backend/internal/repository/migrations/000005_ssh_servers_firewall.up.sql`, `backend/internal/repository/migrations/000005_ssh_servers_firewall.down.sql`, `backend/pkg/crypto/aes_gcm.go`, `backend/internal/domain/ssh_server.go`, `backend/internal/repository/postgres/ssh_server_repo.go`
-  - **Dipendenze:** TASK-05
-  - **DoD:** Tabella `ssh_servers` e `firewall_backups`. Modulo `pkg/crypto` con crittografia autenticata AES-256-GCM per proteggere password e chiavi private a riposo. Unit test crittografici al 100%.
-
-- [ ] **TASK-46: Client SSH Go Nativo e Servizio Gestione Firewall con Anti-Lockout Timer**
-  - **File coinvolti:** `backend/internal/service/ssh_service.go`, `backend/internal/service/firewall_service.go`, `backend/internal/domain/firewall.go`
-  - **Dipendenze:** TASK-45
-  - **DoD:** Client SSH basato su `golang.org/x/crypto/ssh` per password e chiavi private. Servizio firewall che esegue `iptables -L -n -v --line-numbers`, parsa le regole delle catene `INPUT`, `OUTPUT`, `FORWARD`, e applica modifiche attivando un goroutine timer di safety rollback (es. 60s) con restore automatico da snapshot se non confermato.
-
-- [ ] **TASK-47: WebSocket Gateway per Web Terminal SSH PTY Interattivo**
-  - **File coinvolti:** `backend/internal/delivery/ws/ssh_terminal_ws.go`, `backend/cmd/server/main.go`
-  - **Dipendenze:** TASK-46
-  - **DoD:** Endpoint `/ws/v1/ssh/servers/{id}/terminal` con upgrade WebSocket e validazione JWT. Allocazione PTY remoto e bridging bidirezionale dello stream stdin/stdout/stderr con supporto al resize terminale.
-
-- [ ] **TASK-48: Endpoint REST Gestione Server SSH e Operazioni Firewall**
-  - **File coinvolti:** `backend/internal/delivery/http/handler/ssh_firewall_handler.go`, `backend/cmd/server/main.go`
-  - **Dipendenze:** TASK-46
-  - **DoD:** Endpoint REST `GET /api/v1/ssh/servers`, `POST /api/v1/ssh/servers`, `POST /api/v1/ssh/servers/{id}/test-connection`, `DELETE /api/v1/ssh/servers/{id}`, `GET /api/v1/ssh/servers/{id}/firewall`, `POST /api/v1/ssh/servers/{id}/firewall/rules`, `DELETE /api/v1/ssh/servers/{id}/firewall/rules/{line}`, `POST /api/v1/ssh/servers/{id}/firewall/apply`, `POST /api/v1/ssh/servers/{id}/firewall/confirm`, `POST /api/v1/ssh/servers/{id}/firewall/rollback`.
-
-- [ ] **TASK-49: Frontend Interfaccia Grafica Firewall & Web Terminal SSH**
-  - **File coinvolti:** `frontend/src/pages/SSHServers.tsx`, `frontend/src/components/FirewallManager.tsx`, `frontend/src/components/WebTerminalModal.tsx`, `frontend/src/App.tsx`, `frontend/src/components/layout/AppLayout.tsx`, `frontend/package.json`
-  - **Dipendenze:** TASK-47, TASK-48
-  - **DoD:** Schermata per censimento server SSH; vista grafica a schede delle catene `INPUT`/`OUTPUT`/`FORWARD` con regole, azioni, protocolli e porte; modal guidato per nuova regola; banner countdown del Safety Rollback Timer con pulsante di conferma; modal terminale interattivo a schermo intero con `@xterm/xterm`.
-
----
-
-## 🧪 EPIC 17: Full-Stack Verification & Integration Test (Milestone 1.1)
-
-### Story 17.1: Collaudo E2E delle Nuove Funzionalità
-- [ ] **TASK-50: Test di Integrazione e Validazione E2E Full Stack**
-  - **File coinvolti:** `docker-compose.yml`, test scripts
-  - **Dipendenze:** TASK-35 fino a TASK-49
-  - **DoD:** Collaudo end-to-end con:
-    1. Scansione subnet con verifica esclusione host inattivi.
-    2. Navigazione e download report dall'Hub `/reports` con entrambi i template.
-    3. Creazione cartelle ad albero e spostamento target.
-    4. Esecuzione scansione rapida LAN Discovery con rilevamento vendor e import in cartella.
-    5. Connessione a server SSH di test, apertura terminale Web e modifica sicura di una regola firewall iptables con conferma del safety timer.

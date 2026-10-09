@@ -22,6 +22,7 @@ type ScanService interface {
 	GetScan(ctx context.Context, tenantID, scanID uuid.UUID) (*domain.Scan, error)
 	ListScans(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*domain.Scan, int, error)
 	StartScan(ctx context.Context, tenantID, targetID, profileID uuid.UUID) (*domain.Scan, error)
+	StartGroupScan(ctx context.Context, tenantID, groupID, profileID uuid.UUID) ([]*domain.Scan, error)
 	GetScanFindings(ctx context.Context, tenantID, scanID uuid.UUID, filter domain.FindingFilter) ([]*domain.Finding, int, error)
 	ListProfiles(ctx context.Context) ([]*domain.ScanProfile, error)
 }
@@ -31,6 +32,7 @@ type scanService struct {
 	profileRepo  domain.ScanProfileRepository
 	targetRepo   domain.TargetRepository
 	findingRepo  domain.FindingRepository
+	groupRepo    domain.TargetGroupRepository
 	orchestrator OrchestratorClient
 }
 
@@ -40,6 +42,7 @@ func NewScanService(
 	profileRepo domain.ScanProfileRepository,
 	targetRepo domain.TargetRepository,
 	findingRepo domain.FindingRepository,
+	groupRepo domain.TargetGroupRepository,
 	orchestrator OrchestratorClient,
 ) ScanService {
 	return &scanService{
@@ -47,6 +50,7 @@ func NewScanService(
 		profileRepo:  profileRepo,
 		targetRepo:   targetRepo,
 		findingRepo:  findingRepo,
+		groupRepo:    groupRepo,
 		orchestrator: orchestrator,
 	}
 }
@@ -160,3 +164,99 @@ func (s *scanService) GetScanFindings(ctx context.Context, tenantID, scanID uuid
 func (s *scanService) ListProfiles(ctx context.Context) ([]*domain.ScanProfile, error) {
 	return s.profileRepo.List(ctx)
 }
+
+// StartGroupScan avvia ricorsivamente una scansione su tutti i target validi appartenenti
+// alla cartella specificata e a tutti i suoi sotto-alberi discendenti (FR-09.4)
+func (s *scanService) StartGroupScan(ctx context.Context, tenantID, groupID, profileID uuid.UUID) ([]*domain.Scan, error) {
+	if tenantID == uuid.Nil || groupID == uuid.Nil || profileID == uuid.Nil {
+		return nil, domain.ErrValidation
+	}
+
+	// 1. Verifica esistenza profilo di scansione
+	if _, err := s.profileRepo.GetByID(ctx, profileID); err != nil {
+		return nil, fmt.Errorf("profilo di scansione non valido: %w", err)
+	}
+
+	// 2. Verifica appartenenza ed esistenza del gruppo radice
+	if _, err := s.groupRepo.GetByID(ctx, tenantID, groupID); err != nil {
+		return nil, err
+	}
+
+	// 3. Risoluzione ricorsiva di tutti i gruppi nel sotto-albero
+	allGroups, err := s.groupRepo.List(ctx, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("recupero gerarchia cartelle fallito: %w", err)
+	}
+
+	subtreeGroupIDs := map[uuid.UUID]bool{groupID: true}
+	added := true
+	for added {
+		added = false
+		for _, g := range allGroups {
+			if g.ParentID != nil && subtreeGroupIDs[*g.ParentID] && !subtreeGroupIDs[g.ID] {
+				subtreeGroupIDs[g.ID] = true
+				added = true
+			}
+		}
+	}
+
+	// 4. Recupero di tutti i target del tenant per filtrare quelli associati ai gruppi del sotto-albero
+	targets, _, err := s.targetRepo.List(ctx, tenantID, domain.TargetFilter{Limit: 1000})
+	if err != nil {
+		return nil, fmt.Errorf("recupero target per scansione cartella fallito: %w", err)
+	}
+
+	var targetsToScan []*domain.Target
+	for _, t := range targets {
+		if t.GroupID != nil && subtreeGroupIDs[*t.GroupID] && !t.IsBlacklisted {
+			targetsToScan = append(targetsToScan, t)
+		}
+	}
+
+	if len(targetsToScan) == 0 {
+		return []*domain.Scan{}, nil
+	}
+
+	// 5. Avvio sicuro dei job di scansione per ciascun target non bloccato
+	var startedScans []*domain.Scan
+	for _, target := range targetsToScan {
+		// Controllo blacklist globale/tenant
+		isBL, err := s.targetRepo.IsBlacklisted(ctx, tenantID, target.Value)
+		if err != nil || isBL {
+			continue
+		}
+
+		// Controllo scansioni concorrenti attive sullo stesso target
+		activeScan, err := s.scanRepo.GetActiveByTarget(ctx, tenantID, target.ID)
+		if err != nil || activeScan != nil {
+			continue
+		}
+
+		now := time.Now()
+		scan := &domain.Scan{
+			ID:          uuid.New(),
+			TenantID:    tenantID,
+			TargetID:    target.ID,
+			ProfileID:   profileID,
+			TriggerType: domain.TriggerManual,
+			Status:      domain.ScanStatusQueued,
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		}
+
+		if err := s.scanRepo.Create(ctx, scan); err != nil {
+			continue
+		}
+
+		if err := s.orchestrator.Enqueue(tenantID, scan.ID); err != nil {
+			_ = scan.MarkFailed("coda del worker pool satura")
+			_ = s.scanRepo.Update(ctx, scan)
+			continue
+		}
+
+		startedScans = append(startedScans, scan)
+	}
+
+	return startedScans, nil
+}
+

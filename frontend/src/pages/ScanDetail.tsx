@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -12,16 +12,33 @@ import {
   RefreshCw,
   AlertCircle,
   Copy,
-  Check
+  Check,
+  Zap,
 } from 'lucide-react';
 import { apiClient } from '../api/client';
+import { scanApi } from '../api/scan';
+import { useSSE } from '../hooks/useSSE';
 import { ApiResponse } from '../types/auth';
-import { ScanItem } from '../types/scan';
+import {
+  ScanItem,
+  ScanPhasePayload,
+  ScanProgressPayload,
+  ScanFindingPayload,
+  ScanStatusPayload,
+  ScanErrorPayload,
+} from '../types/scan';
 import { FindingItem, FindingListResponseData } from '../types/finding';
 import { ScanProgressBadge } from '../components/ScanProgressBadge';
 import { SeverityChart } from '../components/SeverityChart';
 import { FindingsTable } from '../components/FindingsTable';
 import { downloadReportFile } from '../utils/download';
+
+const SCAN_PHASES = [
+  { key: 'HOST_DISCOVERY', label: 'Host Discovery', desc: 'Verifica host alive e ping sweep' },
+  { key: 'PORT_SCAN', label: 'Port Scan', desc: 'Analisi porte aperte TCP/UDP' },
+  { key: 'SERVICE_DETECTION', label: 'Service Detection', desc: 'Rilevamento servizi e versioni (sV)' },
+  { key: 'CVE_CORRELATION', label: 'CVE Correlation', desc: 'Correlazione CPE/CVE vulnerabilità' },
+];
 
 export const ScanDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -31,10 +48,106 @@ export const ScanDetail: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Stato monitoraggio streaming live SSE
+  const [livePhase, setLivePhase] = useState<{
+    phase: string;
+    percentage: number;
+    message: string;
+  } | null>(null);
+  const [liveError, setLiveError] = useState<string | null>(null);
+  const [, setNewlyDiscoveredFindingIds] = useState<Set<string>>(new Set());
+
   const [copiedId, setCopiedId] = useState<boolean>(false);
   const [downloadingPdf, setDownloadingPdf] = useState<boolean>(false);
   const [downloadingCsv, setDownloadingCsv] = useState<boolean>(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  const isLive = scan?.status === 'RUNNING' || scan?.status === 'QUEUED';
+
+  // URL dello stream Server-Sent Events per scansioni attive
+  const streamUrl = useMemo(() => {
+    return id && isLive ? scanApi.getStreamUrl(id) : null;
+  }, [id, isLive]);
+
+  // Hook Server-Sent Events per il monitoraggio reattivo del job
+  useSSE({
+    url: streamUrl,
+    enabled: Boolean(isLive && streamUrl),
+    onEvent: (eventType, data) => {
+      if (eventType === 'phase') {
+        const payload = data as ScanPhasePayload;
+        if (payload) {
+          setLivePhase({
+            phase: payload.phase,
+            percentage: payload.percentage,
+            message: payload.message,
+          });
+        }
+      } else if (eventType === 'progress') {
+        const payload = data as ScanProgressPayload;
+        if (payload) {
+          setLivePhase((prev) => ({
+            phase: prev?.phase || 'PORT_SCAN',
+            percentage: payload.percentage,
+            message: payload.message || prev?.message || '',
+          }));
+        }
+      } else if (eventType === 'finding_discovered') {
+        const payload = data as ScanFindingPayload;
+        if (payload?.finding) {
+          setFindings((prev) => {
+            if (prev.some((f) => f.id === payload.finding.id)) {
+              return prev;
+            }
+            return [payload.finding, ...prev];
+          });
+          setNewlyDiscoveredFindingIds((prev) => new Set(prev).add(payload.finding.id));
+
+          // Incremento dinamico delle metriche di riepilogo
+          setScan((prev) => {
+            if (!prev) return prev;
+            const updatedStats = { ...prev.summary_stats };
+            updatedStats.total_open_ports += 1;
+            const sev = payload.finding.severity;
+            if (sev === 'CRITICAL') updatedStats.critical_count += 1;
+            else if (sev === 'HIGH') updatedStats.high_count += 1;
+            else if (sev === 'MEDIUM') updatedStats.medium_count += 1;
+            else if (sev === 'LOW') updatedStats.low_count += 1;
+            else if (sev === 'INFO') updatedStats.info_count += 1;
+
+            return {
+              ...prev,
+              summary_stats: updatedStats,
+            };
+          });
+        }
+      } else if (eventType === 'status_change') {
+        const payload = data as ScanStatusPayload;
+        if (payload) {
+          setScan((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              status: payload.status,
+              summary_stats: payload.summary_stats || prev.summary_stats,
+            };
+          });
+          if (
+            payload.status === 'COMPLETED' ||
+            payload.status === 'FAILED' ||
+            payload.status === 'CANCELLED'
+          ) {
+            setLivePhase(null);
+          }
+        }
+      } else if (eventType === 'error') {
+        const payload = data as ScanErrorPayload;
+        if (payload?.message) {
+          setLiveError(payload.message);
+        }
+      }
+    },
+  });
 
   const fetchScanDetails = useCallback(async () => {
     if (!id) return;
@@ -146,6 +259,7 @@ export const ScanDetail: React.FC = () => {
   const stats = scan.summary_stats || {
     total_hosts: 0,
     up_hosts: 0,
+    down_hosts: 0,
     total_open_ports: 0,
     critical_count: 0,
     high_count: 0,
@@ -200,7 +314,11 @@ export const ScanDetail: React.FC = () => {
                       <Copy className="w-3.5 h-3.5" />
                     )}
                   </button>
-                  <ScanProgressBadge status={scan.status} />
+                  <ScanProgressBadge
+                    status={scan.status}
+                    phase={livePhase?.phase}
+                    percentage={livePhase?.percentage}
+                  />
                 </div>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400 mt-1">
                   <span>
@@ -276,12 +394,26 @@ export const ScanDetail: React.FC = () => {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-cyber-border/60">
           <div className="p-3.5 rounded-xl bg-slate-900/60 border border-cyber-border">
             <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-              <span>Host Responsivi</span>
+              <span>Host Operativi (UP)</span>
               <Server className="w-4 h-4 text-cyan-400" />
             </div>
-            <div className="text-xl font-bold text-white font-mono">
-              {stats.up_hosts} <span className="text-xs text-slate-500 font-normal">/ {stats.total_hosts}</span>
+            <div className="flex items-baseline space-x-1.5">
+              <span className="text-xl font-bold text-white font-mono">
+                {stats.up_hosts}
+              </span>
+              <span className="text-xs text-slate-500 font-normal">
+                / {stats.total_hosts || stats.up_hosts}
+              </span>
             </div>
+            {stats.down_hosts !== undefined && stats.down_hosts > 0 ? (
+              <div className="text-[10px] text-amber-400/90 mt-1 flex items-center space-x-1">
+                <span>{stats.down_hosts} offline esclusi</span>
+              </div>
+            ) : (
+              <div className="text-[10px] text-emerald-400/80 mt-1 flex items-center space-x-1">
+                <span>100% responsivi</span>
+              </div>
+            )}
           </div>
 
           <div className="p-3.5 rounded-xl bg-slate-900/60 border border-cyber-border">
@@ -315,6 +447,100 @@ export const ScanDetail: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Notifica di errore live SSE */}
+      {liveError && (
+        <div className="p-4 rounded-xl border border-rose-900/50 bg-rose-950/20 flex items-center space-x-3 text-rose-300">
+          <AlertCircle className="w-5 h-5 flex-shrink-0 text-rose-400" />
+          <div className="text-sm font-medium">{liveError}</div>
+        </div>
+      )}
+
+      {/* Live Scan Execution Card & Stepper */}
+      {isLive && (
+        <div className="p-5 rounded-2xl border border-cyan-500/40 bg-cyan-950/20 shadow-xl space-y-4 animate-in fade-in duration-300">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center space-x-3 text-cyan-300">
+              <Zap className="w-5 h-5 text-cyan-400 animate-pulse flex-shrink-0" />
+              <div>
+                <div className="flex items-center space-x-2">
+                  <span className="font-bold text-white text-sm">
+                    Scansione in tempo reale attiva
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[10px] font-mono font-semibold uppercase animate-pulse">
+                    LIVE STREAM
+                  </span>
+                </div>
+                <p className="text-cyan-400/80 text-xs mt-0.5">
+                  {livePhase?.message || 'Esecuzione job di scansione e streaming findings live...'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-3 text-xs font-mono self-end sm:self-auto">
+              <span className="text-slate-400">Progresso stimato:</span>
+              <span className="text-cyan-400 font-bold text-base">
+                {(livePhase?.percentage ?? (scan?.status === 'RUNNING' ? 20 : 5)).toFixed(0)}%
+              </span>
+            </div>
+          </div>
+
+          {/* Stepper a 4 fasi */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-1">
+            {SCAN_PHASES.map((p, idx) => {
+              const currentPhaseIdx = SCAN_PHASES.findIndex((sp) => sp.key === livePhase?.phase);
+              const isPast = currentPhaseIdx > idx || scan?.status === 'COMPLETED';
+              const isCurrent = currentPhaseIdx === idx && scan?.status === 'RUNNING';
+
+              return (
+                <div
+                  key={p.key}
+                  className={`p-2.5 rounded-xl border text-xs transition-all ${
+                    isCurrent
+                      ? 'bg-cyan-500/10 border-cyan-400/60 shadow-[0_0_15px_rgba(6,182,212,0.2)]'
+                      : isPast
+                      ? 'bg-emerald-950/20 border-emerald-500/40 text-emerald-300'
+                      : 'bg-slate-900/40 border-cyber-border/60 text-slate-500'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2 mb-1">
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        isCurrent
+                          ? 'bg-cyan-400 animate-ping'
+                          : isPast
+                          ? 'bg-emerald-400'
+                          : 'bg-slate-600'
+                      }`}
+                    />
+                    <span
+                      className={`font-semibold ${
+                        isCurrent ? 'text-white' : isPast ? 'text-emerald-300' : 'text-slate-400'
+                      }`}
+                    >
+                      {p.label}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 leading-tight truncate">{p.desc}</p>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Progress bar fluida */}
+          <div className="w-full h-2 rounded-full bg-slate-900 border border-cyan-900/50 overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-cyan-500 via-teal-400 to-emerald-400 transition-all duration-500 ease-out shadow-[0_0_10px_rgba(6,182,212,0.5)]"
+              style={{
+                width: `${Math.min(
+                  100,
+                  Math.max(5, livePhase?.percentage ?? (scan?.status === 'RUNNING' ? 20 : 5))
+                )}%`,
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Grafico Severità */}
       <div className="p-6 rounded-2xl border border-cyber-border bg-cyber-card/40 space-y-4">

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"nextgen-cybersec/internal/delivery/http/middleware"
 	"nextgen-cybersec/internal/delivery/http/response"
 	"nextgen-cybersec/internal/domain"
+	"nextgen-cybersec/internal/service"
 	"nextgen-cybersec/pkg/auth"
 )
 
@@ -24,6 +26,7 @@ type mockScanService struct {
 	getScanFunc         func(ctx context.Context, tenantID, scanID uuid.UUID) (*domain.Scan, error)
 	listScansFunc       func(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*domain.Scan, int, error)
 	startScanFunc       func(ctx context.Context, tenantID, targetID, profileID uuid.UUID) (*domain.Scan, error)
+	startGroupScanFunc  func(ctx context.Context, tenantID, groupID, profileID uuid.UUID) ([]*domain.Scan, error)
 	getScanFindingsFunc func(ctx context.Context, tenantID, scanID uuid.UUID, filter domain.FindingFilter) ([]*domain.Finding, int, error)
 	listProfilesFunc    func(ctx context.Context) ([]*domain.ScanProfile, error)
 }
@@ -56,6 +59,13 @@ func (m *mockScanService) StartScan(ctx context.Context, tenantID, targetID, pro
 	return nil, nil
 }
 
+func (m *mockScanService) StartGroupScan(ctx context.Context, tenantID, groupID, profileID uuid.UUID) ([]*domain.Scan, error) {
+	if m.startGroupScanFunc != nil {
+		return m.startGroupScanFunc(ctx, tenantID, groupID, profileID)
+	}
+	return nil, nil
+}
+
 func (m *mockScanService) GetScanFindings(ctx context.Context, tenantID, scanID uuid.UUID, filter domain.FindingFilter) ([]*domain.Finding, int, error) {
 	if m.getScanFindingsFunc != nil {
 		return m.getScanFindingsFunc(ctx, tenantID, scanID, filter)
@@ -74,6 +84,7 @@ func setupScanRouter(h *handler.ScanHandler) *chi.Mux {
 	r := chi.NewRouter()
 	r.Get("/scans", h.List)
 	r.Get("/scans/{id}", h.GetByID)
+	r.Get("/scans/{id}/stream", h.Stream)
 	r.Get("/scans/{id}/findings", h.GetFindings)
 	r.Post("/scans", h.Start)
 	r.Post("/scans/{id}/cancel", h.Cancel)
@@ -105,7 +116,7 @@ func TestScanHandler_Cancel_Success(t *testing.T) {
 		},
 	}
 
-	h := handler.NewScanHandler(mockSvc)
+	h := handler.NewScanHandler(mockSvc, nil)
 	router := setupScanRouter(h)
 
 	req := httptest.NewRequest(http.MethodPost, "/scans/"+scanID.String()+"/cancel", nil)
@@ -131,7 +142,7 @@ func TestScanHandler_Cancel_Success(t *testing.T) {
 func TestScanHandler_Cancel_InvalidID(t *testing.T) {
 	tenantID := uuid.New()
 	mockSvc := &mockScanService{}
-	h := handler.NewScanHandler(mockSvc)
+	h := handler.NewScanHandler(mockSvc, nil)
 	router := setupScanRouter(h)
 
 	req := httptest.NewRequest(http.MethodPost, "/scans/not-a-valid-uuid/cancel", nil)
@@ -148,7 +159,7 @@ func TestScanHandler_Cancel_InvalidID(t *testing.T) {
 func TestScanHandler_Cancel_Unauthorized(t *testing.T) {
 	scanID := uuid.New()
 	mockSvc := &mockScanService{}
-	h := handler.NewScanHandler(mockSvc)
+	h := handler.NewScanHandler(mockSvc, nil)
 	router := setupScanRouter(h)
 
 	req := httptest.NewRequest(http.MethodPost, "/scans/"+scanID.String()+"/cancel", nil)
@@ -171,7 +182,7 @@ func TestScanHandler_Cancel_NotFound(t *testing.T) {
 		},
 	}
 
-	h := handler.NewScanHandler(mockSvc)
+	h := handler.NewScanHandler(mockSvc, nil)
 	router := setupScanRouter(h)
 
 	req := httptest.NewRequest(http.MethodPost, "/scans/"+scanID.String()+"/cancel", nil)
@@ -195,7 +206,7 @@ func TestScanHandler_Cancel_Conflict(t *testing.T) {
 		},
 	}
 
-	h := handler.NewScanHandler(mockSvc)
+	h := handler.NewScanHandler(mockSvc, nil)
 	router := setupScanRouter(h)
 
 	req := httptest.NewRequest(http.MethodPost, "/scans/"+scanID.String()+"/cancel", nil)
@@ -229,7 +240,7 @@ func TestScanHandler_Start_Success(t *testing.T) {
 		},
 	}
 
-	h := handler.NewScanHandler(mockSvc)
+	h := handler.NewScanHandler(mockSvc, nil)
 	router := setupScanRouter(h)
 
 	payload := map[string]interface{}{
@@ -252,7 +263,7 @@ func TestScanHandler_Start_Success(t *testing.T) {
 func TestScanHandler_Start_InvalidPayload(t *testing.T) {
 	tenantID := uuid.New()
 	mockSvc := &mockScanService{}
-	h := handler.NewScanHandler(mockSvc)
+	h := handler.NewScanHandler(mockSvc, nil)
 	router := setupScanRouter(h)
 
 	req := httptest.NewRequest(http.MethodPost, "/scans", bytes.NewReader([]byte(`{"target_id": ""}`)))
@@ -281,7 +292,7 @@ func TestScanHandler_GetByID_Success(t *testing.T) {
 		},
 	}
 
-	h := handler.NewScanHandler(mockSvc)
+	h := handler.NewScanHandler(mockSvc, nil)
 	router := setupScanRouter(h)
 
 	req := httptest.NewRequest(http.MethodGet, "/scans/"+scanID.String(), nil)
@@ -305,7 +316,7 @@ func TestScanHandler_List_Success(t *testing.T) {
 		},
 	}
 
-	h := handler.NewScanHandler(mockSvc)
+	h := handler.NewScanHandler(mockSvc, nil)
 	router := setupScanRouter(h)
 
 	req := httptest.NewRequest(http.MethodGet, "/scans?limit=10&offset=0", nil)
@@ -341,7 +352,7 @@ func TestScanHandler_GetFindings_Success(t *testing.T) {
 		},
 	}
 
-	h := handler.NewScanHandler(mockSvc)
+	h := handler.NewScanHandler(mockSvc, nil)
 	router := setupScanRouter(h)
 
 	req := httptest.NewRequest(http.MethodGet, "/scans/"+scanID.String()+"/findings?severity=INFO", nil)
@@ -364,7 +375,7 @@ func TestScanHandler_ListProfiles_Success(t *testing.T) {
 		},
 	}
 
-	h := handler.NewScanHandler(mockSvc)
+	h := handler.NewScanHandler(mockSvc, nil)
 	router := setupScanRouter(h)
 
 	req := httptest.NewRequest(http.MethodGet, "/scan-profiles", nil)
@@ -375,4 +386,190 @@ func TestScanHandler_ListProfiles_Success(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("atteso status 200 OK, ottenuto %d", rec.Code)
 	}
+}
+
+func TestScanHandler_Stream(t *testing.T) {
+	tenantID := uuid.New()
+	scanID := uuid.New()
+
+	t.Run("NotFound_Error", func(t *testing.T) {
+		mockSvc := &mockScanService{
+			getScanFunc: func(ctx context.Context, tID, sID uuid.UUID) (*domain.Scan, error) {
+				return nil, domain.ErrNotFound
+			},
+		}
+
+		h := handler.NewScanHandler(mockSvc, nil)
+		router := setupScanRouter(h)
+
+		req := httptest.NewRequest(http.MethodGet, "/scans/"+scanID.String()+"/stream", nil)
+		req = withSecOpsContext(req, tenantID)
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("atteso status 404 NOT_FOUND, ottenuto %d", rec.Code)
+		}
+	})
+
+	t.Run("InvalidID_BadRequest", func(t *testing.T) {
+		h := handler.NewScanHandler(&mockScanService{}, nil)
+		router := setupScanRouter(h)
+
+		req := httptest.NewRequest(http.MethodGet, "/scans/invalid-uuid/stream", nil)
+		req = withSecOpsContext(req, tenantID)
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("atteso status 400 INVALID_ID, ottenuto %d", rec.Code)
+		}
+	})
+
+	t.Run("CompletedScanReplay_Success", func(t *testing.T) {
+		completedAt := time.Now()
+		mockSvc := &mockScanService{
+			getScanFunc: func(ctx context.Context, tID, sID uuid.UUID) (*domain.Scan, error) {
+				return &domain.Scan{
+					ID:          scanID,
+					TenantID:    tenantID,
+					Status:      domain.ScanStatusCompleted,
+					CompletedAt: &completedAt,
+					SummaryStats: domain.ScanSummaryStats{
+						TotalHosts: 1,
+						UpHosts:    1,
+					},
+				}, nil
+			},
+			getScanFindingsFunc: func(ctx context.Context, tID, sID uuid.UUID, filter domain.FindingFilter) ([]*domain.Finding, int, error) {
+				return []*domain.Finding{
+					{
+						ID:       uuid.New(),
+						ScanID:   scanID,
+						TenantID: tenantID,
+						HostIP:   "10.0.0.1",
+						Port:     80,
+						Protocol: "tcp",
+						Severity: domain.SeverityMedium,
+					},
+				}, 1, nil
+			},
+		}
+
+		h := handler.NewScanHandler(mockSvc, nil)
+		router := setupScanRouter(h)
+
+		req := httptest.NewRequest(http.MethodGet, "/scans/"+scanID.String()+"/stream", nil)
+		req = withSecOpsContext(req, tenantID)
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("atteso status 200, ottenuto %d", rec.Code)
+		}
+
+		body := rec.Body.String()
+		if !strings.Contains(body, "event: status_change") {
+			t.Errorf("atteso 'event: status_change' nel body:\n%s", body)
+		}
+		if !strings.Contains(body, "event: finding_discovered") {
+			t.Errorf("atteso 'event: finding_discovered' nel body:\n%s", body)
+		}
+		if !strings.Contains(body, "10.0.0.1") {
+			t.Errorf("atteso IP finding nel replay:\n%s", body)
+		}
+	})
+
+	t.Run("LiveStreaming_Success", func(t *testing.T) {
+		startedAt := time.Now()
+		mockSvc := &mockScanService{
+			getScanFunc: func(ctx context.Context, tID, sID uuid.UUID) (*domain.Scan, error) {
+				return &domain.Scan{
+					ID:        scanID,
+					TenantID:  tenantID,
+					Status:    domain.ScanStatusRunning,
+					StartedAt: &startedAt,
+				}, nil
+			},
+			getScanFindingsFunc: func(ctx context.Context, tID, sID uuid.UUID, filter domain.FindingFilter) ([]*domain.Finding, int, error) {
+				return nil, 0, nil
+			},
+		}
+
+		broadcaster := service.NewEventBroadcaster(10, nil)
+		defer broadcaster.Close()
+
+		h := handler.NewScanHandler(mockSvc, broadcaster)
+		router := setupScanRouter(h)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		req := httptest.NewRequest(http.MethodGet, "/scans/"+scanID.String()+"/stream", nil)
+		req = req.WithContext(ctx)
+		req = withSecOpsContext(req, tenantID)
+		rec := httptest.NewRecorder()
+
+		doneCh := make(chan struct{})
+		go func() {
+			router.ServeHTTP(rec, req)
+			close(doneCh)
+		}()
+
+		time.Sleep(30 * time.Millisecond)
+
+		// Pubblica evento live finding_discovered
+		topic := domain.ScanTopic(scanID)
+		broadcaster.Publish(topic, domain.SSEEvent{
+			Event: domain.EventScanFinding,
+			Data: domain.ScanFindingPayload{
+				ScanID: scanID,
+				Finding: domain.Finding{
+					ID:       uuid.New(),
+					HostIP:   "192.168.1.100",
+					Port:     443,
+					Protocol: "tcp",
+					Severity: domain.SeverityHigh,
+				},
+			},
+		})
+
+		// Pubblica evento finale status_change COMPLETED (causerà la chiusura dello stream)
+		broadcaster.Publish(topic, domain.SSEEvent{
+			Event: domain.EventScanStatusChange,
+			Data: domain.ScanStatusPayload{
+				ScanID: scanID,
+				Status: domain.ScanStatusCompleted,
+				SummaryStats: domain.ScanSummaryStats{
+					UpHosts: 1,
+				},
+			},
+		})
+
+		select {
+		case <-doneCh:
+			// Chiuso correttamente su status COMPLETED
+		case <-time.After(1 * time.Second):
+			cancel()
+			t.Fatal("timeout in attesa del completamento dello stream")
+		}
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("atteso status 200, ottenuto %d", rec.Code)
+		}
+
+		body := rec.Body.String()
+		if !strings.Contains(body, "event: finding_discovered") {
+			t.Errorf("atteso 'event: finding_discovered' in streaming:\n%s", body)
+		}
+		if !strings.Contains(body, "192.168.1.100") {
+			t.Errorf("atteso IP scoperto nello stream:\n%s", body)
+		}
+		if !strings.Contains(body, "COMPLETED") {
+			t.Errorf("atteso evento status COMPLETED nello stream:\n%s", body)
+		}
+	})
 }

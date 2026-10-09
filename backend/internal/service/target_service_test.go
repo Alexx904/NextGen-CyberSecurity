@@ -135,6 +135,15 @@ func (m *mockGroupRepo) Create(ctx context.Context, group *domain.TargetGroup) e
 	return nil
 }
 
+func (m *mockGroupRepo) Update(ctx context.Context, group *domain.TargetGroup) error {
+	key := group.TenantID.String() + ":" + group.ID.String()
+	if _, ok := m.groups[key]; !ok {
+		return domain.ErrNotFound
+	}
+	m.groups[key] = group
+	return nil
+}
+
 func (m *mockGroupRepo) Delete(ctx context.Context, tenantID, id uuid.UUID) error {
 	key := tenantID.String() + ":" + id.String()
 	if _, ok := m.groups[key]; !ok {
@@ -142,6 +151,14 @@ func (m *mockGroupRepo) Delete(ctx context.Context, tenantID, id uuid.UUID) erro
 	}
 	delete(m.groups, key)
 	return nil
+}
+
+func (m *mockGroupRepo) GetTargetCountsByGroup(ctx context.Context, tenantID uuid.UUID) (map[uuid.UUID]int, error) {
+	return make(map[uuid.UUID]int), nil
+}
+
+func (m *mockGroupRepo) GetSeverityCountsByGroup(ctx context.Context, tenantID uuid.UUID) (map[uuid.UUID]map[domain.SeverityLevel]int, error) {
+	return make(map[uuid.UUID]map[domain.SeverityLevel]int), nil
 }
 
 func TestTargetService_CreateTarget_TypesInference(t *testing.T) {
