@@ -23,7 +23,7 @@
 ## 🚀 Coda di Sviluppo Attiva (Prioritàvalidate dal PO)
 
 ### Sprint Immediato: Robustezza & Ottimizzazione (Approvati da PO)
-- [~] **ONBOARD-01 · Pipeline CI/CD GitHub Actions per Test & Build Automatici**
+- [x] **ONBOARD-01 · Pipeline CI/CD GitHub Actions per Test & Build Automatici**
   - File: `.github/workflows/ci.yml`
   - Dipende da: Nessuna
   - Test: Validazione workflow con test backend `go test ./...`, lint `go vet ./...`, frontend `npm test` e `npm run build`

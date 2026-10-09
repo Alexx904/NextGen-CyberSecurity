@@ -68,3 +68,4 @@ jobs:
 
       - name: Type-Check & Build Frontend
         run: npm run build
+

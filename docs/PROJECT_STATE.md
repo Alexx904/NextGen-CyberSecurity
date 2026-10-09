@@ -40,9 +40,7 @@ Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git
 
 ## In attesa di accettazione utente
 
-| Task | Feature | Come provarla (sintesi) | Consegnata il |
-|---|---|---|---|
-| ONBOARD-01 | Pipeline CI/CD GitHub Actions | Ispezionare `.github/workflows/ci.yml`. Il file è pronto per essere eseguito dai GitHub Actions runners su push/PR. | 2026-10-09 |
+- (nessuno)
 
 ## Bloccati / Domande aperte per l'utente
 
@@ -74,6 +72,7 @@ Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git
 
 ## Log sessioni (ultime 5, la più recente in alto)
 
+- 2026-10-09 · Task ONBOARD-01 accettato dal PO (`[x]`). Pipeline CI/CD GitHub Actions consolidata · Test VERDI
 - 2026-10-09 · Esecuzione ONBOARD-01: creata pipeline GitHub Actions in `.github/workflows/ci.yml` per backend (Go 1.22 test/build/vet) e frontend (Node 20 vitest/build) · Sintassi YAML verificata
 - 2026-10-09 · Merge branch `chore/agent-onboarding` su `main` e creazione branch feature `feat/ONBOARD-01-ci-cd` · Baseline VERDE
 - 2026-10-09 · Validazione onboarding da parte del PO. Registrate scelte operative: CI/CD (Sì), Code-Splitting (Sì), Attack Path Mapping (Priorità Milestone 2) · Baseline VERDE
