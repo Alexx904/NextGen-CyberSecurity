@@ -61,31 +61,31 @@
   - DoD: Visualizzazione dei report raggruppati per Cartella/Azienda Scope con card di riepilogo Security Posture Score & Grade per cliente. Espansione per ispezionare gli specifici report per IP con 1-click download (Executive PDF, Tecnico PDF, CSV RFC 4180) e toggle vista raggruppata / vista cronologica.
 
 ### Sprint Attivo: Personalizzazione Avanzata Profili di Scansione & Categorie Specialistiche (FR-16)
-- [ ] **FEAT-SCAN-PROF-01 · Migration Database & Domain Model per Categorie e Profili Custom**
+- [~] **FEAT-SCAN-PROF-01 · Migration Database & Domain Model per Categorie e Profili Custom**
   - File: `backend/internal/repository/migrations/000006_scan_profile_categories.up.sql`, `backend/internal/domain/scan.go`, `backend/internal/repository/postgres/scan_repo.go`
   - Dipende da: Nessuna
-  - Test: Unit test su repository profili e migration up/down
+  - Test: Unit & migration integration test (PASS)
   - DoD: Estensione tabella `scan_profiles` con colonna `category` (PEN_TEST, SYSTEM_FLAWS, WEB_APP, DISCOVERY, COMPLIANCE, CUSTOM), `is_custom` e `tenant_id` opzionale con indici. Aggiornamento interfaccia `domain.ScanProfileRepository` (ListByCategory, CreateCustom, DeleteCustom) e mapping struct Go.
 
-- [ ] **FEAT-SCAN-PROF-02 · Catalogo Profili Specialistici & API REST Profili Custom (Backend Go)**
+- [~] **FEAT-SCAN-PROF-02 · Catalogo Profili Specialistici & API REST Profili Custom (Backend Go)**
   - File: `backend/internal/scanner/profiles.go`, `backend/internal/service/scan_service.go`, `backend/internal/delivery/http/handler/scan_handler.go`
   - Dipende da: FEAT-SCAN-PROF-01
-  - Test: Unit & integration test su validazione Nmap safe args e REST API handler
+  - Test: Unit & integration test su validazione Nmap safe args e REST API handler (PASS)
   - DoD: Registrazione catalogo profili predefiniti per ciascuna categoria specialistica (Stealth SYN, Aggressive Pen Test, Firewall Bypass, System Flaws OS & Demoni, Critical Services RCE, Web Stack Audit, Discovery Sweep, Insecure Protocols). Endpoint `GET /api/v1/scan-profiles?category=...`, `POST /api/v1/scan-profiles` con validazione anti-injection e `DELETE /api/v1/scan-profiles/{id}`.
 
-- [ ] **FEAT-SCAN-PROF-03 · Frontend UI Semplice & Professionale per Avvio e Configurazione Scansione**
+- [~] **FEAT-SCAN-PROF-03 · Frontend UI Semplice & Professionale per Avvio e Configurazione Scansione**
   - File: `frontend/src/components/NewScanModal.tsx`, `frontend/src/types/scan.ts`
   - Dipende da: FEAT-SCAN-PROF-02
-  - Test: Vitest rendering test su navigazione categorie, configuratore porte/stealth e live command preview
+  - Test: Vitest rendering test su navigazione categorie, configuratore porte/stealth e live command preview (7/7 PASS)
   - DoD: Modale Nuova Scansione con:
     1. Modalità Guidata / Semplice: card delle 5 categorie specialistiche (Pen Test, Falle di Sistema, Web App, Discovery, Compliance) con schede profilo complete (descrizione, cosa rileva, impatto);
     2. Modalità Professionale / Avanzata: configuratore porte (Top 100/1000, All 65535, porte custom), timing template (T1-T5), stealth options (`-sS`, `-sA`, `-Pn`, `--open`), OS detection (`-O`), live preview del comando Nmap sicuro e possibilità di salvataggio come profilo custom;
     3. Pieno supporto a scansioni on-demand e schedulazioni ricorrenti.
 
-- [ ] **FEAT-SCAN-PROF-04 · Suite di Test E2E, Unitari e Verifica Regressione Zero**
+- [~] **FEAT-SCAN-PROF-04 · Suite di Test E2E, Unitari e Verifica Regressione Zero**
   - File: `backend/internal/scanner/profiles_test.go`, `frontend/src/components/NewScanModal.test.tsx`
   - Dipende da: FEAT-SCAN-PROF-03
-  - Test: `go test ./...` e `npm test` al 100% PASS
+  - Test: `go test ./...` (14/14 pkg PASS) e `npm test` (83/83 test PASS, exit code 0)
   - DoD: Validazione completa end-to-end con test automatici su parsing profili, avvio scansione con profilo specialistico o custom e verifica assenza di regressioni.
 
 - [x] **FEAT-M2-01 · Spike & Intake: Attack Path Mapping (Grafo Visuale Vulnerabilità)**
