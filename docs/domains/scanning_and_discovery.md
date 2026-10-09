@@ -47,3 +47,4 @@ Header di risposta: `Content-Type: text/event-stream`, `Cache-Control: no-cache`
 - `progress`: Percentuale di avanzamento dinamica (`percentage: float64`, `message: string`).
 - `finding_discovered`: Notifica di porta aperta / servizio / CVE individuata con persistenza incrementale su PostgreSQL.
 - `status_change`: Notifica di conclusione (`COMPLETED`, `FAILED`, `CANCELLED`) con statistiche riassuntive.
+

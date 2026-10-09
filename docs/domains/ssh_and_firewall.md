@@ -40,3 +40,4 @@
 ### 3.2 Frontend xterm.js
 - Modal interattivo `WebTerminalModal.tsx` equipaggiato con `@xterm/xterm` e `@xterm/addon-fit`.
 - Rendering fluido, supporto colori ANSI 256, copia/incolla nativo e terminazione istantanea della sessione alla chiusura del modal.
+

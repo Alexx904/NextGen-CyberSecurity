@@ -30,3 +30,4 @@
 - **PDF Executive Report:** Sintesi per il management con indicatori grafici, posture di rischio aggregata e raccomandazioni strategiche con branding del tenant.
 - **PDF Technical Deep-Dive Report:** Analisi puntuale di ogni host, porte aperte, banner di servizio, CVE correlate con punteggio CVSS v3.1 e passaggi di remediation dettagliati.
 - **Esportazione CSV RFC 4180:** Export tabellare grezzo compatibile con Excel, SIEM ed elaborazioni esterne.
+

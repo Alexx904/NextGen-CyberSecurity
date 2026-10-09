@@ -37,3 +37,4 @@
   2. Tabella riassuntiva degli errori.
   3. Dettaglio completo degli stack trace e dei corpi di errore HTTP.
 - Consente al Product Owner di incollare direttamente i log nella chat con l'agente per una risoluzione immediata dei problemi senza dover aprire i DevTools del browser.
+

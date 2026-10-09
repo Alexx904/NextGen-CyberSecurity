@@ -3,9 +3,9 @@
 > Memoria viva dell'agente. Letta a inizio sessione, aggiornata a fine di ogni turno.
 > Non cancellare sezioni: se vuote, scrivi "nessuno".
 
-**Ultimo aggiornamento:** 2026-10-09 21:55  
-**Modalità progetto:** esistente (onboarded il 2026-10-09)  
-**Fase:** Onboarded / Manutenzione & Roadmap Milestone 2  
+**Ultimo aggiornamento:** 2026-10-09 22:00  
+**Modalità progetto:** esistente (onboarded il 2026-10-09, validato dall'utente)  
+**Fase:** Manutenzione & Sviluppo Milestone 2  
 
 ## Project Profile
 
@@ -20,7 +20,7 @@ Comando lint/format:     go vet ./... (backend)
 Percorsi per livello:    unit=backend/pkg, backend/internal/domain, backend/internal/scanner; service=backend/internal/service; integration=backend/internal/delivery, backend/internal/repository/postgres; frontend=frontend/src/tests, frontend/src/**/*.test.tsx
 Prerequisiti ambiente:   Docker & Docker Compose (PostgreSQL 16, Nmap su Linux container)
 Come avviare l'app:      docker compose up --build (oppure 'go run ./cmd/server' + 'cd frontend && npm run dev')
-Branch principale:       main (onboarding branch: chore/agent-onboarding)
+Branch principale:       main (onboarding completato su chore/agent-onboarding)
 Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git push --force, DROP database senza conferma esplicita
 ```
 
@@ -40,33 +40,37 @@ Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git
 
 ## In attesa di accettazione utente
 
-| Task | Feature | Come provarla (sintesi) | Consegnata il |
-|---|---|---|---|
-| ONBOARD | Onboarding Progetto & Struttura Autonoma v6.0 | Consultare `docs/` (PROJECT_STATE, 0_REQUIREMENTS, 2_ARCHITECTURE, 3_TASK_LIST) e verificare che build e test siano verdi. | 2026-10-09 |
+- (nessuno)
 
 ## Bloccati / Domande aperte per l'utente
 
-1. **CI/CD Pipeline:** Vuoi che impostiamo una pipeline GitHub Actions in `.github/workflows/ci.yml` per eseguire automaticamente i test e la build a ogni push?
-2. **Ottimizzazione Bundle Frontend:** Desideri dare priorità al code-splitting con `React.lazy` su Vite per snellire il file JavaScript principale (attualmente > 1.2 MB non compresso)?
-3. **Roadmap Milestone 2:** Tra **Attack Path Mapping** (grafo interattivo di lateral movement) e **Continuous Compliance Score** (NIS2 / DORA / ISO 27001), quale feature strategica ha priorità per il prossimo sprint?
+- (nessuno)
 
-## Assunzioni fatte (da confermare)
+## Assunzioni confermate
 
-- L'ambiente primario di esecuzione per la produzione e per i collaudi E2E live con Nmap è Docker Compose (`docker-compose.yml`), con Linux capabilities `NET_RAW` e `NET_ADMIN`.
-- La struttura dei documenti legacy (`Agent.md`, `Brainstorming_CyberSec_App.md`) è archiviata e conservata storicamente in `docs/_legacy/` con mapping tracciato in `docs/_legacy/MAPPING.md`.
-- I 60 task delle Milestone 1, 1.1 e 1.2 sono completati, testati e consolidati nel changelog (`docs/4_CHANGELOG.md`).
+- Struttura documentale autonoma v6.0 approvata dal Product Owner.
+- Archiviazione storica dei file legacy in `docs/_legacy/` confermata.
+- Pipeline CI/CD GitHub Actions da implementare con priorità P1.
+- Code-splitting bundle frontend da implementare con priorità P1/P2.
+- Feature cardine di Milestone 2 identificata: **Attack Path Mapping** (grafo visuale vulnerabilità e percorsi di attacco).
 
 ## Decisioni recenti (ultime 10, dettagli negli ADR)
 
-- **ADR-01:** Modularizzazione di `2_ARCHITECTURE.md` con scomposizione per domini in `docs/domains/` (`scanning_and_discovery.md`, `ssh_and_firewall.md`, `reporting_and_assets.md`, `debug_console.md`) per garantire efficienza di contesto e rispetto del limite di 400 righe.
-- **ADR-02:** Preservazione totale della cronologia Git via `git mv` per file storici e introduzione del registro `docs/_legacy/MAPPING.md`.
-- **ADR-03:** Creazione del branch dedicato `chore/agent-onboarding` per tutte le modifiche strutturali e documentali senza impattare il codice sorgente o la configurazione di runtime.
+- **PO-01 (2026-10-09):** Approvazione implementazione pipeline CI/CD GitHub Actions per backend e frontend.
+- **PO-02 (2026-10-09):** Approvazione ottimizzazione bundle frontend tramite code-splitting e `React.lazy`.
+- **PO-03 (2026-10-09):** Priorità strategica Milestone 2 assegnata a Attack Path Mapping.
+- **ADR-01:** Modularizzazione di `2_ARCHITECTURE.md` con scomposizione per domini in `docs/domains/` (`scanning_and_discovery.md`, `ssh_and_firewall.md`, `reporting_and_assets.md`, `debug_console.md`).
+- **ADR-02:** Preservazione della cronologia Git via `git mv` per file storici e tracciamento in `docs/_legacy/MAPPING.md`.
+- **ADR-03:** Creazione del branch dedicato `chore/agent-onboarding` per tutte le modifiche strutturali.
 
 ## Prossimi passi
 
-1. Attendere feedback e validazione dell'utente sull'onboarding e risposta alle 3 domande aperte.
-2. Procedere sul task approvato del backlog (`3_TASK_LIST.md`).
+1. Chiedere all'utente conferma per eseguire il merge di `chore/agent-onboarding` su `main`.
+2. Implementare `ONBOARD-01` (Pipeline CI/CD GitHub Actions in `.github/workflows/ci.yml`).
+3. Implementare `ONBOARD-03` (Code-splitting bundle frontend in `frontend/src/App.tsx` e `frontend/vite.config.ts`).
+4. Avviare intake e system design per `FEAT-M2-01` (Attack Path Mapping).
 
 ## Log sessioni (ultime 5, la più recente in alto)
 
+- 2026-10-09 · Validazione onboarding da parte del PO. Registrate scelte operative: CI/CD (Sì), Code-Splitting (Sì), Attack Path Mapping (Priorità Milestone 2) · Baseline VERDE
 - 2026-10-09 · Esecuzione `/onboard`: inventario, baseline test 100% verde (Go + Vitest + build), modularizzazione `docs/domains/`, creazione `MAPPING.md` e configurazione memoria viva `PROJECT_STATE.md` · Baseline VERDE (exit code 0)
