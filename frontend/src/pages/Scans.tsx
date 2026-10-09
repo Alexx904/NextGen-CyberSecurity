@@ -16,6 +16,15 @@ import {
   Copy,
   Check,
   Folder,
+  FolderOpen,
+  ChevronDown,
+  ChevronRight,
+  LayoutGrid,
+  List,
+  Search,
+  Crosshair,
+  Layers,
+  X,
 } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { ApiResponse } from '../types/auth';
@@ -34,6 +43,11 @@ export const Scans: React.FC = () => {
   const [totalScans, setTotalScans] = useState<number>(0);
   const [loadingScans, setLoadingScans] = useState<boolean>(true);
   const [scansError, setScansError] = useState<string | null>(null);
+
+  // Modalità di visualizzazione: Raggruppata per Cartella/Azienda vs Tabella Lineare
+  const [viewMode, setViewMode] = useState<'GROUPED' | 'TABLE'>('GROUPED');
+  const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<string>>(new Set());
+  const [searchFilter, setSearchFilter] = useState<string>('');
 
   // Filtro cartella scope per scansioni
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>('');
@@ -194,6 +208,147 @@ export const Scans: React.FC = () => {
     if (!targetIdsInSelectedGroup) return scans;
     return scans.filter((s) => targetIdsInSelectedGroup.has(s.target_id));
   }, [scans, targetIdsInSelectedGroup]);
+
+  interface ScansByTarget {
+    targetId: string;
+    targetValue: string;
+    targetType: string;
+    targetDescription?: string;
+    scans: ScanItem[];
+  }
+
+  interface ScansGroup {
+    id: string;
+    name: string;
+    color_tag: string;
+    targets: ScansByTarget[];
+    totalScans: number;
+    totalHostsUp: number;
+    criticalCount: number;
+    highCount: number;
+    mediumCount: number;
+    lowCount: number;
+    hasRunning: boolean;
+  }
+
+  // Raggruppamento per Cartella/Azienda Scope e poi per Target/IP
+  const groupedScans = useMemo(() => {
+    const term = searchFilter.trim().toLowerCase();
+    const filtered = displayedScans.filter((s) => {
+      if (!term) return true;
+      const target = targetsMap.get(s.target_id);
+      const targetVal = target?.value.toLowerCase() || '';
+      const desc = target?.description?.toLowerCase() || '';
+      const scanId = s.id.toLowerCase();
+      const groupName = target?.group_id ? groupsMap.get(target.group_id)?.name.toLowerCase() || '' : '';
+      return targetVal.includes(term) || desc.includes(term) || scanId.includes(term) || groupName.includes(term);
+    });
+
+    const groupsData = new Map<string, Map<string, ScanItem[]>>();
+
+    filtered.forEach((scan) => {
+      const target = targetsMap.get(scan.target_id);
+      const groupId = target?.group_id || 'unassigned';
+      if (!groupsData.has(groupId)) {
+        groupsData.set(groupId, new Map());
+      }
+      const targetMap = groupsData.get(groupId)!;
+      if (!targetMap.has(scan.target_id)) {
+        targetMap.set(scan.target_id, []);
+      }
+      targetMap.get(scan.target_id)!.push(scan);
+    });
+
+    const result: ScansGroup[] = [];
+
+    groupsData.forEach((targetsMapForGroup, groupId) => {
+      let name = 'Bersagli Non Assegnati (Root Scope)';
+      let color_tag = '#64748b';
+      if (groupId !== 'unassigned') {
+        const gNode = groupsMap.get(groupId);
+        if (gNode) {
+          name = gNode.name;
+          color_tag = gNode.color_tag || '#06b6d4';
+        } else {
+          name = 'Cartella / Ambito Sconosciuto';
+        }
+      }
+
+      const targets: ScansByTarget[] = [];
+      let totalScans = 0;
+      let totalHostsUp = 0;
+      let criticalCount = 0;
+      let highCount = 0;
+      let mediumCount = 0;
+      let lowCount = 0;
+      let hasRunning = false;
+
+      targetsMapForGroup.forEach((scansForTarget, targetId) => {
+        const targetObj = targetsMap.get(targetId);
+        targets.push({
+          targetId,
+          targetValue: targetObj?.value || `${targetId.slice(0, 8)}...`,
+          targetType: targetObj?.type || 'IP',
+          targetDescription: targetObj?.description,
+          scans: scansForTarget,
+        });
+
+        totalScans += scansForTarget.length;
+        scansForTarget.forEach((s) => {
+          totalHostsUp += s.summary_stats?.up_hosts ?? 0;
+          criticalCount += s.summary_stats?.critical_count ?? 0;
+          highCount += s.summary_stats?.high_count ?? 0;
+          mediumCount += s.summary_stats?.medium_count ?? 0;
+          lowCount += s.summary_stats?.low_count ?? 0;
+          if (s.status === 'RUNNING' || s.status === 'QUEUED') {
+            hasRunning = true;
+          }
+        });
+      });
+
+      // Ordina bersagli per indirizzo / valore
+      targets.sort((a, b) => a.targetValue.localeCompare(b.targetValue));
+
+      result.push({
+        id: groupId,
+        name,
+        color_tag,
+        targets,
+        totalScans,
+        totalHostsUp,
+        criticalCount,
+        highCount,
+        mediumCount,
+        lowCount,
+        hasRunning,
+      });
+    });
+
+    result.sort((a, b) => {
+      if (a.id === 'unassigned') return 1;
+      if (b.id === 'unassigned') return -1;
+      return a.name.localeCompare(b.name);
+    });
+
+    return result;
+  }, [displayedScans, targetsMap, groupsMap, searchFilter]);
+
+  const toggleGroup = (groupId: string) => {
+    setCollapsedGroupIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  };
+
+  const expandAllGroups = () => {
+    setCollapsedGroupIds(new Set());
+  };
+
+  const collapseAllGroups = () => {
+    setCollapsedGroupIds(new Set(groupedScans.map((g) => g.id)));
+  };
 
   // Monitoraggio intelligente per polling automatico se vi sono scansioni attive
   const hasActiveScans = useMemo(() => {
@@ -424,11 +579,90 @@ export const Scans: React.FC = () => {
         </div>
       </div>
 
+      {/* Sotto-Toolbar di Ricerca e Selezione Vista (Tab SCANS) */}
+      {activeTab === 'SCANS' && (
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3 rounded-xl border border-cyber-border bg-[#111726]/60 backdrop-blur-md text-xs">
+          {/* Ricerca per IP o Cartella */}
+          <div className="relative flex-1 max-w-md">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+              placeholder="Cerca per IP, host, cartella scope o ID scansione..."
+              className="w-full pl-9 pr-7 py-1.5 rounded-lg bg-slate-950 border border-cyber-border text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500 text-xs font-mono"
+            />
+            {searchFilter && (
+              <button
+                type="button"
+                onClick={() => setSearchFilter('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Switch Modalità: Raggruppata per Cartella/Azienda vs Tabellare */}
+          <div className="flex items-center space-x-2 self-end sm:self-auto">
+            {viewMode === 'GROUPED' && groupedScans.length > 0 && (
+              <div className="flex items-center space-x-1.5 mr-2">
+                <button
+                  type="button"
+                  onClick={expandAllGroups}
+                  className="px-2 py-1 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-cyber-border text-[11px] font-medium transition-colors"
+                  title="Espandi tutti i gruppi"
+                >
+                  Espandi tutti
+                </button>
+                <button
+                  type="button"
+                  onClick={collapseAllGroups}
+                  className="px-2 py-1 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-cyber-border text-[11px] font-medium transition-colors"
+                  title="Comprimi tutti i gruppi"
+                >
+                  Comprimi tutti
+                </button>
+              </div>
+            )}
+
+            <div className="flex items-center rounded-lg border border-cyber-border bg-slate-950 p-0.5">
+              <button
+                type="button"
+                onClick={() => setViewMode('GROUPED')}
+                className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                  viewMode === 'GROUPED'
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="Visualizzazione organizzata per Cartella / Azienda e singoli IP"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Vista per Cartella/Azienda</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('TABLE')}
+                className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                  viewMode === 'TABLE'
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="Visualizzazione tabellare lineare"
+              >
+                <List className="w-3.5 h-3.5" />
+                <span>Tabella Lineare</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Scheda 1: Scansioni Eseguite & Live */}
       {activeTab === 'SCANS' && (
-        <div className="rounded-xl border border-cyber-border bg-cyber-card/40 overflow-hidden shadow-xl">
+        <div className="space-y-4">
           {scansError && (
-            <div className="m-4 p-3.5 rounded-lg border border-rose-800/50 bg-rose-950/30 text-rose-300 text-xs flex items-center justify-between">
+            <div className="p-3.5 rounded-lg border border-rose-800/50 bg-rose-950/30 text-rose-300 text-xs flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
                 <span>{scansError}</span>
@@ -443,21 +677,27 @@ export const Scans: React.FC = () => {
           )}
 
           {loadingScans ? (
-            <div className="py-16 flex flex-col items-center justify-center text-slate-400 space-y-3">
+            <div className="py-16 rounded-xl border border-cyber-border bg-cyber-card/40 flex flex-col items-center justify-center text-slate-400 space-y-3">
               <RefreshCw className="w-6 h-6 animate-spin text-cyan-400" />
-              <span className="text-xs">Caricamento elenco scansioni...</span>
+              <span className="text-xs">Caricamento storico scansioni e perimetri...</span>
             </div>
-          ) : displayedScans.length === 0 ? (
-            <div className="py-16 flex flex-col items-center justify-center text-center space-y-3 p-6">
+          ) : displayedScans.length === 0 || (viewMode === 'GROUPED' && groupedScans.length === 0) ? (
+            <div className="py-16 rounded-xl border border-cyber-border bg-cyber-card/40 flex flex-col items-center justify-center text-center space-y-3 p-6">
               <div className="w-12 h-12 rounded-xl bg-slate-900 border border-cyber-border flex items-center justify-center text-slate-500">
                 <Terminal className="w-6 h-6" />
               </div>
               <div className="text-sm font-semibold text-slate-200">
-                {scans.length === 0 ? 'Nessuna scansione presente' : 'Nessuna scansione per la cartella selezionata'}
+                {scans.length === 0
+                  ? 'Nessuna scansione presente'
+                  : searchFilter
+                  ? `Nessun risultato per "${searchFilter}"`
+                  : 'Nessuna scansione per la cartella selezionata'}
               </div>
               <p className="text-xs text-slate-400 max-w-sm">
                 {scans.length === 0
                   ? 'Non è ancora stato avviato alcun processo di analisi di rete per questa organizzazione.'
+                  : searchFilter
+                  ? 'Verifica i termini inseriti o prova a cercare per IP o ID parziale.'
                   : 'Nessun job di scansione registrato per i target appartenenti a questa cartella scope.'}
               </p>
               {scans.length === 0 ? (
@@ -470,209 +710,472 @@ export const Scans: React.FC = () => {
                 </button>
               ) : (
                 <button
-                  onClick={() => setSelectedGroupFilter('')}
+                  onClick={() => {
+                    setSelectedGroupFilter('');
+                    setSearchFilter('');
+                  }}
                   className="mt-2 inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-cyber-border bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs transition-colors"
                 >
-                  <span>Mostra tutte le scansioni</span>
+                  <span>Azzera filtri e mostra tutto</span>
                 </button>
               )}
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-cyber-border/80 text-[11px] font-semibold text-slate-400 uppercase tracking-wider bg-slate-900/40">
-                    <th className="py-3 px-4">Scansione ID</th>
-                    <th className="py-3 px-4">Target / Cartella</th>
-                    <th className="py-3 px-4">Trigger</th>
-                    <th className="py-3 px-4">Stato Esecuzione</th>
-                    <th className="py-3 px-4">Host Up</th>
-                    <th className="py-3 px-4">Vulnerabilità Rilevate</th>
-                    <th className="py-3 px-4">Durata</th>
-                    <th className="py-3 px-4">Data Creazione</th>
-                    <th className="py-3 px-4 text-right">Azioni</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-cyber-border/40 text-xs">
-                  {displayedScans.map((scan) => {
-                    const isRunningOrQueued = scan.status === 'RUNNING' || scan.status === 'QUEUED';
-                    const target = targetsMap.get(scan.target_id);
-                    const group = target?.group_id ? groupsMap.get(target.group_id) : null;
-                    return (
-                      <tr key={scan.id} className="hover:bg-slate-800/25 transition-colors">
-                        {/* ID Scansione */}
-                        <td className="py-3.5 px-4 font-mono font-medium text-slate-100">
+          ) : viewMode === 'GROUPED' ? (
+            /* Vista Raggruppata per Cartella/Azienda Scope */
+            <div className="space-y-4">
+              {groupedScans.map((group) => {
+                const isExpanded = !collapsedGroupIds.has(group.id);
+
+                return (
+                  <div
+                    key={group.id}
+                    className="rounded-xl border border-cyber-border bg-[#111726]/80 backdrop-blur-md overflow-hidden shadow-lg transition-all"
+                  >
+                    {/* Header Cartella / Azienda */}
+                    <div
+                      onClick={() => toggleGroup(group.id)}
+                      className="p-3.5 bg-slate-900/70 hover:bg-slate-900 border-b border-cyber-border/80 cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 select-none"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <button
+                          type="button"
+                          className="p-1 rounded text-slate-400 hover:text-white transition-colors"
+                          title={isExpanded ? 'Comprimi cartella' : 'Espandi cartella'}
+                        >
+                          {isExpanded ? (
+                            <ChevronDown className="w-4 h-4 text-cyan-400" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4 text-slate-400" />
+                          )}
+                        </button>
+
+                        <div
+                          className="p-2 rounded-lg border flex items-center justify-center shrink-0"
+                          style={{
+                            backgroundColor: `${group.color_tag}15`,
+                            borderColor: `${group.color_tag}40`,
+                            color: group.color_tag,
+                          }}
+                        >
+                          {isExpanded ? <FolderOpen className="w-4 h-4" /> : <Folder className="w-4 h-4" />}
+                        </div>
+
+                        <div>
                           <div className="flex items-center space-x-2">
-                            <span className="text-cyan-400">{scan.id.slice(0, 8)}...</span>
-                            <button
-                              onClick={() => handleCopy(scan.id)}
-                              className="text-slate-500 hover:text-slate-300 p-1 rounded"
-                              title="Copia ID scansione"
-                            >
-                              {copiedId === scan.id ? (
-                                <Check className="w-3 h-3 text-emerald-400" />
-                              ) : (
-                                <Copy className="w-3 h-3" />
-                              )}
-                            </button>
-                          </div>
-                        </td>
-
-                        {/* Target & Cartella */}
-                        <td className="py-3.5 px-4">
-                          <div>
-                            <span className="font-mono text-slate-200 block text-xs font-semibold">
-                              {target ? target.value : `${scan.target_id.slice(0, 8)}...`}
+                            <h3 className="text-sm font-bold text-white tracking-wide">{group.name}</h3>
+                            <span className="text-[11px] px-2 py-0.5 rounded-full font-mono bg-slate-800 text-slate-300 border border-slate-700">
+                              {group.targets.length} {group.targets.length === 1 ? 'Target / IP' : 'Target / IP'}
                             </span>
-                            {group ? (
-                              <span
-                                className="inline-flex items-center space-x-1 px-1.5 py-0.2 rounded text-[10px] font-medium border mt-0.5"
-                                style={{
-                                  backgroundColor: `${group.color_tag || '#06b6d4'}15`,
-                                  borderColor: `${group.color_tag || '#06b6d4'}35`,
-                                  color: group.color_tag || '#06b6d4',
-                                }}
-                              >
-                                <Folder className="w-2.5 h-2.5" />
-                                <span className="truncate max-w-[120px]">{group.name}</span>
-                              </span>
-                            ) : (
-                              <span className="text-[10px] text-slate-500 italic">
-                                Non assegnato
+                            {group.hasRunning && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 animate-pulse font-medium">
+                                Job in corso
                               </span>
                             )}
                           </div>
-                        </td>
+                          <p className="text-[11px] text-slate-400 mt-0.5">
+                            {group.totalScans} {group.totalScans === 1 ? 'scansione totale' : 'scansioni totali'} · {group.totalHostsUp} host UP
+                          </p>
+                        </div>
+                      </div>
 
-                        {/* Trigger */}
-                        <td className="py-3.5 px-4 text-slate-300">
-                          <span className="px-2 py-0.5 rounded bg-slate-900 border border-cyber-border text-[11px]">
-                            {scan.trigger_type}
-                          </span>
-                        </td>
+                      {/* Badges metriche e conteggi vulnerabilità */}
+                      <div className="flex items-center space-x-2 shrink-0">
+                        <div className="flex items-center space-x-1.5 text-[11px] font-mono">
+                          {group.criticalCount > 0 && (
+                            <span className="px-2 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/30 font-bold">
+                              {group.criticalCount} Crit
+                            </span>
+                          )}
+                          {group.highCount > 0 && (
+                            <span className="px-2 py-0.5 rounded bg-orange-500/15 text-orange-400 border border-orange-500/30 font-bold">
+                              {group.highCount} High
+                            </span>
+                          )}
+                          {group.mediumCount > 0 && (
+                            <span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                              {group.mediumCount} Med
+                            </span>
+                          )}
+                          {group.criticalCount === 0 && group.highCount === 0 && group.mediumCount === 0 && (
+                            <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px]">
+                              0 Crit/High
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
 
-                        {/* Stato */}
-                        <td className="py-3.5 px-4">
-                          <ScanProgressBadge status={scan.status} />
-                        </td>
+                    {/* Contenuto espanso: Targets e Scansioni */}
+                    {isExpanded && (
+                      <div className="p-3 sm:p-4 space-y-4 bg-slate-950/40">
+                        {group.targets.map((tgt) => (
+                          <div
+                            key={tgt.targetId}
+                            className="rounded-lg border border-cyber-border/70 bg-[#0d121f]/90 overflow-hidden shadow-sm"
+                          >
+                            {/* Header per singolo Target / IP */}
+                            <div className="px-3.5 py-2.5 bg-slate-900/60 border-b border-cyber-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                              <div className="flex items-center space-x-2.5">
+                                <Crosshair className="w-4 h-4 text-cyan-400 shrink-0" />
+                                <span className="font-mono font-bold text-white text-xs text-cyan-300">
+                                  {tgt.targetValue}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopy(tgt.targetValue)}
+                                  className="text-slate-500 hover:text-slate-300 p-0.5 rounded transition-colors"
+                                  title="Copia valore target"
+                                >
+                                  {copiedId === tgt.targetValue ? (
+                                    <Check className="w-3 h-3 text-emerald-400" />
+                                  ) : (
+                                    <Copy className="w-3 h-3" />
+                                  )}
+                                </button>
+                                <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                                  {tgt.targetType}
+                                </span>
+                                {tgt.targetDescription && (
+                                  <span className="text-slate-400 text-xs truncate max-w-xs italic hidden md:inline">
+                                    — {tgt.targetDescription}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[11px] text-slate-400 font-mono">
+                                {tgt.scans.length} {tgt.scans.length === 1 ? 'audit storico' : 'audit storici'}
+                              </div>
+                            </div>
 
-                        {/* Host Up */}
-                        <td className="py-3.5 px-4 text-slate-300 font-mono">
-                          {scan.summary_stats?.up_hosts ?? 0} / {scan.summary_stats?.total_hosts ?? 0}
-                        </td>
-
-                        {/* Chip Vulnerabilità */}
-                        <td className="py-3.5 px-4">
-                          <div className="flex items-center space-x-1 text-[11px]">
-                            {(scan.summary_stats?.critical_count ?? 0) > 0 && (
-                              <span className="px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/30 font-semibold">
-                                C:{scan.summary_stats.critical_count}
-                              </span>
-                            )}
-                            {(scan.summary_stats?.high_count ?? 0) > 0 && (
-                              <span className="px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/30 font-semibold">
-                                H:{scan.summary_stats.high_count}
-                              </span>
-                            )}
-                            {(scan.summary_stats?.medium_count ?? 0) > 0 && (
-                              <span className="px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-400 border border-yellow-500/30">
-                                M:{scan.summary_stats.medium_count}
-                              </span>
-                            )}
-                            {(scan.summary_stats?.low_count ?? 0) > 0 && (
-                              <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/30">
-                                L:{scan.summary_stats.low_count}
-                              </span>
-                            )}
-                            {(scan.summary_stats?.critical_count ?? 0) === 0 &&
-                              (scan.summary_stats?.high_count ?? 0) === 0 &&
-                              (scan.summary_stats?.medium_count ?? 0) === 0 &&
-                              (scan.summary_stats?.low_count ?? 0) === 0 && (
-                                <span className="text-slate-500">-</span>
-                              )}
+                            {/* Elenco scansioni per questo IP */}
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-left border-collapse text-xs">
+                                <thead>
+                                  <tr className="border-b border-cyber-border/40 text-[10px] font-semibold text-slate-400 uppercase tracking-wider bg-slate-900/20">
+                                    <th className="py-2.5 px-3">Scansione ID</th>
+                                    <th className="py-2.5 px-3">Trigger</th>
+                                    <th className="py-2.5 px-3">Stato</th>
+                                    <th className="py-2.5 px-3">Host Up</th>
+                                    <th className="py-2.5 px-3">Vulnerabilità</th>
+                                    <th className="py-2.5 px-3">Durata</th>
+                                    <th className="py-2.5 px-3">Data</th>
+                                    <th className="py-2.5 px-3 text-right">Azioni</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-cyber-border/30">
+                                  {tgt.scans.map((scan) => {
+                                    const isRunningOrQueued = scan.status === 'RUNNING' || scan.status === 'QUEUED';
+                                    return (
+                                      <tr key={scan.id} className="hover:bg-slate-800/20 transition-colors">
+                                        <td className="py-2.5 px-3 font-mono text-cyan-400 font-medium">
+                                          <div className="flex items-center space-x-1.5">
+                                            <span>{scan.id.slice(0, 8)}...</span>
+                                            <button
+                                              onClick={() => handleCopy(scan.id)}
+                                              className="text-slate-500 hover:text-slate-300 p-0.5 rounded"
+                                              title="Copia ID scansione"
+                                            >
+                                              {copiedId === scan.id ? (
+                                                <Check className="w-3 h-3 text-emerald-400" />
+                                              ) : (
+                                                <Copy className="w-3 h-3" />
+                                              )}
+                                            </button>
+                                          </div>
+                                        </td>
+                                        <td className="py-2.5 px-3 text-slate-300">
+                                          <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-cyber-border text-[10px]">
+                                            {scan.trigger_type}
+                                          </span>
+                                        </td>
+                                        <td className="py-2.5 px-3">
+                                          <ScanProgressBadge status={scan.status} />
+                                        </td>
+                                        <td className="py-2.5 px-3 text-slate-300 font-mono">
+                                          {scan.summary_stats?.up_hosts ?? 0} / {scan.summary_stats?.total_hosts ?? 0}
+                                        </td>
+                                        <td className="py-2.5 px-3">
+                                          <div className="flex items-center space-x-1 text-[10px]">
+                                            {(scan.summary_stats?.critical_count ?? 0) > 0 && (
+                                              <span className="px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/30 font-semibold">
+                                                C:{scan.summary_stats.critical_count}
+                                              </span>
+                                            )}
+                                            {(scan.summary_stats?.high_count ?? 0) > 0 && (
+                                              <span className="px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/30 font-semibold">
+                                                H:{scan.summary_stats.high_count}
+                                              </span>
+                                            )}
+                                            {(scan.summary_stats?.medium_count ?? 0) > 0 && (
+                                              <span className="px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-400 border border-yellow-500/30">
+                                                M:{scan.summary_stats.medium_count}
+                                              </span>
+                                            )}
+                                            {(scan.summary_stats?.low_count ?? 0) > 0 && (
+                                              <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/30">
+                                                L:{scan.summary_stats.low_count}
+                                              </span>
+                                            )}
+                                            {(scan.summary_stats?.critical_count ?? 0) === 0 &&
+                                              (scan.summary_stats?.high_count ?? 0) === 0 &&
+                                              (scan.summary_stats?.medium_count ?? 0) === 0 &&
+                                              (scan.summary_stats?.low_count ?? 0) === 0 && (
+                                                <span className="text-slate-500">-</span>
+                                              )}
+                                          </div>
+                                        </td>
+                                        <td className="py-2.5 px-3 text-slate-400 font-mono text-[11px]">
+                                          {scan.summary_stats?.duration_seconds
+                                            ? `${scan.summary_stats.duration_seconds.toFixed(1)}s`
+                                            : '-'}
+                                        </td>
+                                        <td className="py-2.5 px-3 text-slate-400 text-[11px]">
+                                          {new Date(scan.created_at).toLocaleString('it-IT', {
+                                            day: '2-digit',
+                                            month: '2-digit',
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                          })}
+                                        </td>
+                                        <td className="py-2.5 px-3 text-right">
+                                          <div className="flex items-center justify-end space-x-1.5">
+                                            <Link
+                                              to={`/scans/${scan.id}`}
+                                              className="p-1.5 rounded-lg border border-cyber-border bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-cyan-400 transition-colors"
+                                              title="Dettaglio Scansione & Vulnerabilità"
+                                            >
+                                              <ExternalLink className="w-3.5 h-3.5" />
+                                            </Link>
+                                            {scan.status === 'COMPLETED' && (
+                                              <>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleDownloadPdf(scan.id)}
+                                                  disabled={downloadingScanId === scan.id}
+                                                  className="p-1.5 rounded-lg border border-cyber-border bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-emerald-400 transition-colors disabled:opacity-50"
+                                                  title="Scarica Report PDF White-Label"
+                                                >
+                                                  {downloadingScanId === scan.id && downloadType === 'pdf' ? (
+                                                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                                                  ) : (
+                                                    <FileText className="w-3.5 h-3.5" />
+                                                  )}
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleDownloadCsv(scan.id)}
+                                                  disabled={downloadingScanId === scan.id}
+                                                  className="p-1.5 rounded-lg border border-cyber-border bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-blue-400 transition-colors disabled:opacity-50"
+                                                  title="Scarica CSV Findings"
+                                                >
+                                                  {downloadingScanId === scan.id && downloadType === 'csv' ? (
+                                                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-400" />
+                                                  ) : (
+                                                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                                                  )}
+                                                </button>
+                                              </>
+                                            )}
+                                            {isRunningOrQueued && (
+                                              <button
+                                                onClick={() => setScanToCancel(scan)}
+                                                className="p-1.5 rounded-lg border border-rose-900/40 bg-rose-950/20 text-rose-400 hover:bg-rose-900/40 transition-colors"
+                                                title="Interrompi Scansione"
+                                              >
+                                                <StopCircle className="w-3.5 h-3.5" />
+                                              </button>
+                                            )}
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
                           </div>
-                        </td>
-
-                        {/* Durata */}
-                        <td className="py-3.5 px-4 text-slate-400 font-mono">
-                          {scan.summary_stats?.duration_seconds
-                            ? `${scan.summary_stats.duration_seconds.toFixed(1)}s`
-                            : '-'}
-                        </td>
-
-                        {/* Data */}
-                        <td className="py-3.5 px-4 text-slate-400">
-                          {new Date(scan.created_at).toLocaleString('it-IT', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </td>
-
-                        {/* Azioni */}
-                        <td className="py-3.5 px-4 text-right">
-                          <div className="flex items-center justify-end space-x-1.5">
-                            {/* Visualizza Dettaglio e Findings */}
-                            <Link
-                              to={`/scans/${scan.id}`}
-                              className="p-1.5 rounded-lg border border-cyber-border bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-cyan-400 transition-colors"
-                              title="Dettaglio Scansione & Vulnerabilità"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                            </Link>
-
-                            {/* Download PDF White-Label */}
-                            {scan.status === 'COMPLETED' && (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDownloadPdf(scan.id)}
-                                  disabled={downloadingScanId === scan.id}
-                                  className="p-1.5 rounded-lg border border-cyber-border bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                  title="Scarica Report PDF White-Label"
-                                >
-                                  {downloadingScanId === scan.id && downloadType === 'pdf' ? (
-                                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-400" />
-                                  ) : (
-                                    <FileText className="w-3.5 h-3.5" />
-                                  )}
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => handleDownloadCsv(scan.id)}
-                                  disabled={downloadingScanId === scan.id}
-                                  className="p-1.5 rounded-lg border border-cyber-border bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-blue-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                  title="Scarica CSV Findings"
-                                >
-                                  {downloadingScanId === scan.id && downloadType === 'csv' ? (
-                                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-400" />
-                                  ) : (
-                                    <FileSpreadsheet className="w-3.5 h-3.5" />
-                                  )}
-                                </button>
-                              </>
-                            )}
-
-                            {/* Annulla Scansione (SIGTERM) */}
-                            {isRunningOrQueued && (
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            /* Vista Tabellare Lineare Classica */
+            <div className="rounded-xl border border-cyber-border bg-cyber-card/40 overflow-hidden shadow-xl">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-cyber-border/80 text-[11px] font-semibold text-slate-400 uppercase tracking-wider bg-slate-900/40">
+                      <th className="py-3 px-4">Scansione ID</th>
+                      <th className="py-3 px-4">Target / Cartella</th>
+                      <th className="py-3 px-4">Trigger</th>
+                      <th className="py-3 px-4">Stato Esecuzione</th>
+                      <th className="py-3 px-4">Host Up</th>
+                      <th className="py-3 px-4">Vulnerabilità Rilevate</th>
+                      <th className="py-3 px-4">Durata</th>
+                      <th className="py-3 px-4">Data Creazione</th>
+                      <th className="py-3 px-4 text-right">Azioni</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-cyber-border/40 text-xs">
+                    {displayedScans.map((scan) => {
+                      const isRunningOrQueued = scan.status === 'RUNNING' || scan.status === 'QUEUED';
+                      const target = targetsMap.get(scan.target_id);
+                      const group = target?.group_id ? groupsMap.get(target.group_id) : null;
+                      return (
+                        <tr key={scan.id} className="hover:bg-slate-800/25 transition-colors">
+                          <td className="py-3.5 px-4 font-mono font-medium text-slate-100">
+                            <div className="flex items-center space-x-2">
+                              <span className="text-cyan-400">{scan.id.slice(0, 8)}...</span>
                               <button
-                                onClick={() => setScanToCancel(scan)}
-                                className="p-1.5 rounded-lg border border-rose-900/40 bg-rose-950/20 text-rose-400 hover:bg-rose-900/40 hover:border-rose-800 transition-colors"
-                                title="Interrompi Scansione"
+                                onClick={() => handleCopy(scan.id)}
+                                className="text-slate-500 hover:text-slate-300 p-1 rounded"
+                                title="Copia ID scansione"
                               >
-                                <StopCircle className="w-3.5 h-3.5" />
+                                {copiedId === scan.id ? (
+                                  <Check className="w-3 h-3 text-emerald-400" />
+                                ) : (
+                                  <Copy className="w-3 h-3" />
+                                )}
                               </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <div>
+                              <span className="font-mono text-slate-200 block text-xs font-semibold">
+                                {target ? target.value : `${scan.target_id.slice(0, 8)}...`}
+                              </span>
+                              {group ? (
+                                <span
+                                  className="inline-flex items-center space-x-1 px-1.5 py-0.2 rounded text-[10px] font-medium border mt-0.5"
+                                  style={{
+                                    backgroundColor: `${group.color_tag || '#06b6d4'}15`,
+                                    borderColor: `${group.color_tag || '#06b6d4'}35`,
+                                    color: group.color_tag || '#06b6d4',
+                                  }}
+                                >
+                                  <Folder className="w-2.5 h-2.5" />
+                                  <span className="truncate max-w-[120px]">{group.name}</span>
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-slate-500 italic">
+                                  Non assegnato
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4 text-slate-300">
+                            <span className="px-2 py-0.5 rounded bg-slate-900 border border-cyber-border text-[11px]">
+                              {scan.trigger_type}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <ScanProgressBadge status={scan.status} />
+                          </td>
+                          <td className="py-3.5 px-4 text-slate-300 font-mono">
+                            {scan.summary_stats?.up_hosts ?? 0} / {scan.summary_stats?.total_hosts ?? 0}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center space-x-1 text-[11px]">
+                              {(scan.summary_stats?.critical_count ?? 0) > 0 && (
+                                <span className="px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/30 font-semibold">
+                                  C:{scan.summary_stats.critical_count}
+                                </span>
+                              )}
+                              {(scan.summary_stats?.high_count ?? 0) > 0 && (
+                                <span className="px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/30 font-semibold">
+                                  H:{scan.summary_stats.high_count}
+                                </span>
+                              )}
+                              {(scan.summary_stats?.medium_count ?? 0) > 0 && (
+                                <span className="px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-400 border border-yellow-500/30">
+                                  M:{scan.summary_stats.medium_count}
+                                </span>
+                              )}
+                              {(scan.summary_stats?.low_count ?? 0) > 0 && (
+                                <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/30">
+                                  L:{scan.summary_stats.low_count}
+                                </span>
+                              )}
+                              {(scan.summary_stats?.critical_count ?? 0) === 0 &&
+                                (scan.summary_stats?.high_count ?? 0) === 0 &&
+                                (scan.summary_stats?.medium_count ?? 0) === 0 &&
+                                (scan.summary_stats?.low_count ?? 0) === 0 && (
+                                  <span className="text-slate-500">-</span>
+                                )}
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4 text-slate-400 font-mono">
+                            {scan.summary_stats?.duration_seconds
+                              ? `${scan.summary_stats.duration_seconds.toFixed(1)}s`
+                              : '-'}
+                          </td>
+                          <td className="py-3.5 px-4 text-slate-400">
+                            {new Date(scan.created_at).toLocaleString('it-IT', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </td>
+                          <td className="py-3.5 px-4 text-right">
+                            <div className="flex items-center justify-end space-x-1.5">
+                              <Link
+                                to={`/scans/${scan.id}`}
+                                className="p-1.5 rounded-lg border border-cyber-border bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-cyan-400 transition-colors"
+                                title="Dettaglio Scansione & Vulnerabilità"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </Link>
+                              {scan.status === 'COMPLETED' && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDownloadPdf(scan.id)}
+                                    disabled={downloadingScanId === scan.id}
+                                    className="p-1.5 rounded-lg border border-cyber-border bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-emerald-400 transition-colors disabled:opacity-50"
+                                    title="Scarica Report PDF White-Label"
+                                  >
+                                    {downloadingScanId === scan.id && downloadType === 'pdf' ? (
+                                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                                    ) : (
+                                      <FileText className="w-3.5 h-3.5" />
+                                    )}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDownloadCsv(scan.id)}
+                                    disabled={downloadingScanId === scan.id}
+                                    className="p-1.5 rounded-lg border border-cyber-border bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-blue-400 transition-colors disabled:opacity-50"
+                                    title="Scarica CSV Findings"
+                                  >
+                                    {downloadingScanId === scan.id && downloadType === 'csv' ? (
+                                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-400" />
+                                    ) : (
+                                      <FileSpreadsheet className="w-3.5 h-3.5" />
+                                    )}
+                                  </button>
+                                </>
+                              )}
+                              {isRunningOrQueued && (
+                                <button
+                                  onClick={() => setScanToCancel(scan)}
+                                  className="p-1.5 rounded-lg border border-rose-900/40 bg-rose-950/20 text-rose-400 hover:bg-rose-900/40 transition-colors"
+                                  title="Interrompi Scansione"
+                                >
+                                  <StopCircle className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>
