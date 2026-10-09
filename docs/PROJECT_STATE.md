@@ -70,8 +70,8 @@ Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git
 
 ## Log sessioni (ultime 5, la più recente in alto)
 
+- 2026-10-09 · Fix Debug Console: spostati DebugFloatingToggle e DebugConsoleDrawer in App.tsx (attivi globalmente anche su /login), z-index elevato a z-50, rebuild container Docker frontend completato · Test 65/65 PASS
 - 2026-10-09 · Esecuzione FEAT-M2-02: implementato AttackPathService (correlazione DMZ/RCE -> internal DB/host, mitigazione chokepoints), AttackPathHandler con test unitari completi, cablaggio rotte in main.go · Backend test/vet/build e Frontend vitest/build 100% VERDI
 - 2026-10-09 · Task FEAT-M2-01 accettato e verificato dal PO (`[x]`). Ingegneria dei requisiti e modello di dominio Attack Path consolidati · Test e Build VERDI
 - 2026-10-09 · Esecuzione FEAT-M2-01: formalizzati FR-14 e UC-13 in 0_REQUIREMENTS.md, redatto docs/domains/attack_path.md, implementato modello di dominio Go attack_path.go con algoritmi di Cumulative Risk Scoring e Chokepoints · Test domain PASS 100%
 - 2026-10-09 · Task ONBOARD-03 accettato dal PO (`[x]`). Ottimizzazione bundle e code-splitting consolidati su main · Test e Build VERDI
-- 2026-10-09 · Esecuzione ONBOARD-03: implementato code-splitting con React.lazy in App.tsx e manualChunks in vite.config.ts. Dimensione chunk principale ridotta da 1.2 MB a 91 kB, 0 warning Vite · Test 65/65 PASS
