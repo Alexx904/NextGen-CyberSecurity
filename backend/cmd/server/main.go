@@ -228,6 +228,13 @@ func main() {
 		api.Route("/scan-profiles", func(profileRouter chi.Router) {
 			profileRouter.Use(appmw.Authenticate(tokenManager))
 			profileRouter.Get("/", scanHandler.ListProfiles)
+
+			profileRouter.Group(func(secOpsRouter chi.Router) {
+				secOpsRouter.Use(appmw.RequireTenant())
+				secOpsRouter.Use(appmw.RequireSecOps())
+				secOpsRouter.Post("/", scanHandler.CreateProfile)
+				secOpsRouter.Delete("/{id}", scanHandler.DeleteProfile)
+			})
 		})
 
 		api.Route("/scans", func(scanRouter chi.Router) {

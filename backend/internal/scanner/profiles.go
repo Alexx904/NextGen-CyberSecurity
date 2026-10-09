@@ -14,18 +14,27 @@ import (
 type ProfileType string
 
 const (
-	ProfileFastDiscovery ProfileType = "Fast Discovery"
-	ProfileStandardScan  ProfileType = "Standard Service Scan"
-	ProfileFullScan      ProfileType = "Full Deep Scan"
-	ProfileLANDiscovery  ProfileType = "LAN Discovery"
+	ProfileFastDiscovery    ProfileType = "Fast Discovery"
+	ProfileStandardScan     ProfileType = "Standard Service Scan"
+	ProfileFullScan         ProfileType = "Full Deep Scan"
+	ProfileLANDiscovery     ProfileType = "LAN Discovery"
+	ProfileStealthSYN       ProfileType = "Stealth SYN Penetration Audit"
+	ProfileFirewallBypass   ProfileType = "Firewall & Filter Bypass Check"
+	ProfileSystemFlawsOS    ProfileType = "OS & System Daemon Flaws Audit"
+	ProfileCriticalServices ProfileType = "Critical Services & RCE Surface"
+	ProfileWebSurface       ProfileType = "Web & API Surface Audit"
+	ProfileFullWebStack     ProfileType = "Full Web Stack Deep Versioning"
+	ProfileFastPingSweep    ProfileType = "Fast Ping & Host Sweep (LAN)"
+	ProfileLegacyProtocols  ProfileType = "Legacy & Insecure Protocol Check"
 )
 
 // ProfileConfig racchiude le specifiche operative di un profilo di scansione Nmap
 type ProfileConfig struct {
-	Name           string        `json:"name"`
-	Args           []string      `json:"args"`
-	Timeout        time.Duration `json:"timeout"`
-	Description    string        `json:"description"`
+	Name        string                     `json:"name"`
+	Args        []string                   `json:"args"`
+	Timeout     time.Duration              `json:"timeout"`
+	Description string                     `json:"description"`
+	Category    domain.ScanProfileCategory `json:"category"`
 }
 
 // GetDefaultProfiles restituisce i profili di scansione di default preimpostati nel sistema
@@ -36,24 +45,84 @@ func GetDefaultProfiles() map[ProfileType]ProfileConfig {
 			Args:        []string{"-T4", "-F"},
 			Timeout:     15 * time.Minute, // 900 secondi
 			Description: "Discovery rapida degli host attivi e delle top 100 porte TCP",
+			Category:    domain.ProfileCategoryDiscovery,
 		},
 		ProfileStandardScan: {
 			Name:        string(ProfileStandardScan),
 			Args:        []string{"-sV", "-T4"},
 			Timeout:     60 * time.Minute, // 3600 secondi
 			Description: "Scansione standard delle top 1000 porte TCP con rilevamento versioni dei servizi",
+			Category:    domain.ProfileCategorySystemFlaws,
 		},
 		ProfileFullScan: {
 			Name:        string(ProfileFullScan),
 			Args:        []string{"-p-", "-sV", "-O", "-T4"},
 			Timeout:     240 * time.Minute, // 14400 secondi
 			Description: "Scansione completa su 65535 porte TCP, OS detection e rilevamento servizi approfondito",
+			Category:    domain.ProfileCategoryPenTest,
 		},
 		ProfileLANDiscovery: {
 			Name:        string(ProfileLANDiscovery),
 			Args:        []string{"-sn", "-PE", "-PS22,80,443,445", "-T4", "-n"},
 			Timeout:     2 * time.Minute, // 120 secondi
 			Description: "Ricognizione LAN ultra-veloce con ping sweep affidabile e probe ICMP/SYN senza TCP ACK",
+			Category:    domain.ProfileCategoryDiscovery,
+		},
+		ProfileStealthSYN: {
+			Name:        string(ProfileStealthSYN),
+			Args:        []string{"-sS", "-Pn", "-T2", "--open"},
+			Timeout:     60 * time.Minute,
+			Description: "Ricognizione stealth a basso rumore con pacchetti SYN senza handshake TCP completo, elusione baseline firewall e solo porte aperte",
+			Category:    domain.ProfileCategoryPenTest,
+		},
+		ProfileFirewallBypass: {
+			Name:        string(ProfileFirewallBypass),
+			Args:        []string{"-sA", "-Pn", "-T3"},
+			Timeout:     30 * time.Minute,
+			Description: "Mappatura filtri firewall perimetrali e apparati IDS con pacchetti TCP ACK per verificare se i firewall sono stateful o stateless",
+			Category:    domain.ProfileCategoryPenTest,
+		},
+		ProfileSystemFlawsOS: {
+			Name:        string(ProfileSystemFlawsOS),
+			Args:        []string{"-sV", "-O", "--version-intensity", "7", "-T4"},
+			Timeout:     60 * time.Minute,
+			Description: "Rilevamento dettagliato del sistema operativo e fingerprinting approfondito dei demoni di sistema (SSH, SMB, RDP, NetBIOS, RPC)",
+			Category:    domain.ProfileCategorySystemFlaws,
+		},
+		ProfileCriticalServices: {
+			Name:        string(ProfileCriticalServices),
+			Args:        []string{"-sV", "-p", "21,22,23,25,53,80,110,135,139,143,443,445,1433,1521,3306,3389,5432,5900,6379,8080,8443", "-T4"},
+			Timeout:     30 * time.Minute,
+			Description: "Audit mirato sui vettori critici più colpite da exploit remoti e vulnerabilità note RCE/PrivEsc (DB, Remote Desktop, Mail, Condivisioni)",
+			Category:    domain.ProfileCategorySystemFlaws,
+		},
+		ProfileWebSurface: {
+			Name:        string(ProfileWebSurface),
+			Args:        []string{"-sV", "-p", "80,443,8000,8080,8443,8888,3000,5000,9000", "-T4", "--open"},
+			Timeout:     20 * time.Minute,
+			Description: "Rilevamento mirato di server HTTP/HTTPS, API REST, backend microservizi e reverse proxy applicativi (Nginx, Apache, Traefik)",
+			Category:    domain.ProfileCategoryWebApp,
+		},
+		ProfileFullWebStack: {
+			Name:        string(ProfileFullWebStack),
+			Args:        []string{"-sV", "--version-all", "-p", "80,443,8008,8080,8443,9090,9443", "-T4"},
+			Timeout:     40 * time.Minute,
+			Description: "Versioning approfondito con interrogazione intensiva dei banner HTTP e intestazioni TLS per scovare componenti obsoleti",
+			Category:    domain.ProfileCategoryWebApp,
+		},
+		ProfileFastPingSweep: {
+			Name:        string(ProfileFastPingSweep),
+			Args:        []string{"-sn", "-PE", "-PS22,80,443,445", "-T4", "-n"},
+			Timeout:     2 * time.Minute,
+			Description: "Ricognizione LAN ultra-rapida con ping sweep, ICMP echo e probe SYN senza port scan per mappare tutti gli host accesi",
+			Category:    domain.ProfileCategoryDiscovery,
+		},
+		ProfileLegacyProtocols: {
+			Name:        string(ProfileLegacyProtocols),
+			Args:        []string{"-sV", "-p", "21,23,69,79,110,143,512,513,514", "-T3"},
+			Timeout:     15 * time.Minute,
+			Description: "Verifica conformità e sicurezza per rilevare servizi in chiaro e protocolli legacy obsoleti (Telnet, FTP, TFTP, Rsh, Rlogin, POP3)",
+			Category:    domain.ProfileCategoryCompliance,
 		},
 	}
 }

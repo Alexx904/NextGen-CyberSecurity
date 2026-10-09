@@ -36,7 +36,7 @@ Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git
 
 ## In corso
 
-- (nessuno)
+- **FEAT-SCAN-PROF-01 .. 04 · Personalizzazione Avanzata Profili di Scansione & Categorie Specialistiche (FR-16)**: Categorizzazione specialistica (Pen Test, Falle di Sistema, Web App, Discovery, Compliance), configuratore custom semplice e professionale con live preview Nmap sicura e gestione profili per tenant.
 
 ## In attesa di accettazione utente
 

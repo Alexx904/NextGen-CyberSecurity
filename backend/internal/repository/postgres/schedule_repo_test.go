@@ -34,7 +34,7 @@ func TestScheduleRepo_Integration(t *testing.T) {
 	profileRepo := postgres.NewScanProfileRepo(db.Pool)
 
 	// Recupero di un profilo esistente
-	profiles, err := profileRepo.List(ctx)
+	profiles, err := profileRepo.List(ctx, nil)
 	if err != nil || len(profiles) == 0 {
 		t.Fatalf("Nessun profilo di scansione disponibile per il test")
 	}

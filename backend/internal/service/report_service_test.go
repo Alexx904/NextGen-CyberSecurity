@@ -106,8 +106,17 @@ func (m *reportMockProfileRepo) GetByID(ctx context.Context, id uuid.UUID) (*dom
 func (m *reportMockProfileRepo) GetByName(ctx context.Context, name string) (*domain.ScanProfile, error) {
 	return nil, domain.ErrNotFound
 }
-func (m *reportMockProfileRepo) List(ctx context.Context) ([]*domain.ScanProfile, error) {
+func (m *reportMockProfileRepo) List(ctx context.Context, tenantID *uuid.UUID) ([]*domain.ScanProfile, error) {
 	return nil, nil
+}
+func (m *reportMockProfileRepo) ListByCategory(ctx context.Context, tenantID *uuid.UUID, category domain.ScanProfileCategory) ([]*domain.ScanProfile, error) {
+	return nil, nil
+}
+func (m *reportMockProfileRepo) Create(ctx context.Context, profile *domain.ScanProfile) error {
+	return nil
+}
+func (m *reportMockProfileRepo) Delete(ctx context.Context, tenantID, id uuid.UUID) error {
+	return nil
 }
 
 type reportMockFindingRepo struct {

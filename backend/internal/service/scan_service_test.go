@@ -380,7 +380,7 @@ func TestScanService_ListProfiles(t *testing.T) {
 
 	svc := NewScanService(newFullMockScanRepo(), profileRepo, &mockTargetRepo{}, newMockFindingRepo(), newMockScanGroupRepo(), &mockOrchestratorClient{})
 
-	profiles, err := svc.ListProfiles(context.Background())
+	profiles, err := svc.ListProfiles(context.Background(), nil, nil)
 	if err != nil {
 		t.Fatalf("ListProfiles ha fallito: %v", err)
 	}

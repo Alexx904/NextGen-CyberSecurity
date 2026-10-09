@@ -242,6 +242,21 @@ Piattaforma di CyberSecurity moderna e modulare concepita per trasformare il vul
 - **Attore:** Security Consultant / Auditor / Sysadmin.
 - **Flusso:** L'operatore si reca presso diverse aziende o filiali con il medesimo computer portatile. Utilizza il Network Discovery per scoprire velocemente la LAN locale e importa gli host attivi in una cartella Scope dedicata al cliente (es. "Azienda Alfa", "Azienda Beta"). Nelle sezioni *Scansioni*, *Vulnerabilità* e *Report*, naviga la nuova interfaccia raggruppata per cartella: visualizza i gruppi separati con metriche chiare, apre la cartella dell'azienda desiderata e ispeziona nello specifico ciascun IP con le relative scansioni, vulnerabilità rilevate e report white-label pronti al download, mantenendo il perimetro dei diversi clienti rigorosamente isolato e visivamente ordinato.
 
+### FR-16: Personalizzazione Avanzata Profili di Scansione & Categorie Professionali
+- **FR-16.1 (Categorizzazione dei Profili di Scansione):** Il sistema deve organizzare i profili di scansione in macro-categorie specialistiche:
+  1. *Penetration Testing & Probing*: Audit ad alta intensità per simulazioni di attacco, ricognizione furtiva SYN stealth (`-sS`), full port scan (65535 porte `-p-`), verifica bypass firewall (`-sA`);
+  2. *Falle di Sistema & Vulnerability Assessment*: Audit approfondito del sistema operativo (`-O`), correlazione versioni dei demoni di sistema (RPC, SMB, RDP, SSH, database) e mapping CVE;
+  3. *Web Application & API Services*: Audit focalizzato sullo stack web, API gateway e reverse proxy (porte 80, 443, 8080, 8443, 3000, 5000);
+  4. *Network & Asset Discovery*: Ping sweep e ricognizione rapida host UP su LAN/WAN (`-sn -PE -PS...`);
+  5. *Compliance & Hardening Check*: Rilevamento protocolli insicuri o non cifrati (Telnet, FTP, Rsh, VNC non protetto) e baseline di conformità.
+- **FR-16.2 (Configuratore Professionale Custom Scansione):** L'utente deve poter comporre scansioni personalizzate on-the-fly definendo granularmente: range porte (Top 100/1000, Tutte, porte custom separate da virgola o range), timing template (da T1 stealth a T4 aggressive), version intensity, OS detection, solo porte aperte (`--open`), ping bypass (`-Pn`).
+- **FR-16.3 (Live Command Preview Sicuro):** L'interfaccia deve mostrare l'anteprima in tempo reale del comando Nmap generato, con validazione rigorosa per prevenire flag injection (`IsSafeArgument`).
+- **FR-16.4 (Gestione e Salvataggio Profili Custom):** Possibilità di salvare una configurazione personalizzata come nuovo profilo riutilizzabile e schedulabile dal tenant, con persistenza su database (`POST /api/v1/scan-profiles`, `DELETE /api/v1/scan-profiles/{id}`).
+
+### UC-15: Scansione Specialistica e Personalizzata di Vulnerabilità
+- **Attore:** Penetration Tester / Security Engineer / IT Auditor.
+- **Flusso:** L'utente apre il modale *Nuova Scansione*. Seleziona il target (o la cartella dell'azienda). Può scegliere la modalità **Semplice / Guidata** per selezionare con 1 click un profilo preimpostato categorizzato in base all'obiettivo dell'audit (Pen Test, Falle di Sistema, Web App, Discovery, Compliance) con spiegazione chiara di impatto e tempo stimato; oppure passare alla modalità **Professionale** per personalizzare porte specifiche, livello di stealth, OS detection e flag addizionali, visualizzando l'anteprima del comando e salvando facoltativamente il profilo custom. La scansione viene validata ed eseguita in modo sicuro dal backend.
+
 ---
 
 ## 5. Requisiti Non Funzionali (NFR) Aggiuntivi
@@ -257,5 +272,6 @@ Piattaforma di CyberSecurity moderna e modulare concepita per trasformare il vul
 ---
 
 ## 6. Decisioni Consolidate
-- **Approvazione:** Requisiti e casi d'uso aggiornati e approvati in data 2026-10-09 (Feature 6: Real-Time Live Streaming via SSE & Feature 7: Debug & Testing Live Console Drawer).
+- **Approvazione:** Requisiti e casi d'uso aggiornati e approvati in data 2026-10-09 (Feature 6: Real-Time Live Streaming via SSE, Feature 7: Debug & Testing Live Console Drawer, Feature 8: Workstation Multi-Company Workflow, Feature 9: Specialized Scan Profiles & Professional Customization).
 - **Prossima Fase:** Fase 2 (System Design & Architecture Update) su `1_PROJECT_CONTEXT.md`, `2_ARCHITECTURE.md` e `3_TASK_LIST.md` tramite comando `/architect`.
+

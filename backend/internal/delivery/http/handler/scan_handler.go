@@ -404,6 +404,18 @@ type ProfileResponse struct {
 	NmapArgs       string  `json:"nmap_args"`
 	Description    *string `json:"description,omitempty"`
 	TimeoutSeconds int     `json:"timeout_seconds"`
+	Category       string  `json:"category"`
+	IsCustom       bool    `json:"is_custom"`
+	TenantID       *string `json:"tenant_id,omitempty"`
+}
+
+// CreateProfileRequest definisce il payload per la creazione di un profilo custom
+type CreateProfileRequest struct {
+	Name           string  `json:"name"`
+	NmapArgs       string  `json:"nmap_args"`
+	Description    *string `json:"description,omitempty"`
+	TimeoutSeconds int     `json:"timeout_seconds"`
+	Category       string  `json:"category"`
 }
 
 // GetFindings gestisce GET /api/v1/scans/{id}/findings con filtri e paginazione
@@ -474,9 +486,20 @@ func (h *ScanHandler) GetFindings(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ListProfiles gestisce GET /api/v1/scan-profiles per la lista dei profili disponibili
+// ListProfiles gestisce GET /api/v1/scan-profiles per la lista dei profili disponibili con filtro categoria opzionale
 func (h *ScanHandler) ListProfiles(w http.ResponseWriter, r *http.Request) {
-	profiles, err := h.scanService.ListProfiles(r.Context())
+	var tenantIDPtr *uuid.UUID
+	if tenantID, ok := middleware.GetTenantID(r.Context()); ok {
+		tenantIDPtr = &tenantID
+	}
+
+	var categoryPtr *domain.ScanProfileCategory
+	if catStr := r.URL.Query().Get("category"); catStr != "" {
+		cat := domain.ScanProfileCategory(catStr)
+		categoryPtr = &cat
+	}
+
+	profiles, err := h.scanService.ListProfiles(r.Context(), tenantIDPtr, categoryPtr)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Errore durante il recupero dei profili di scansione")
 		return
@@ -484,17 +507,110 @@ func (h *ScanHandler) ListProfiles(w http.ResponseWriter, r *http.Request) {
 
 	items := make([]ProfileResponse, 0, len(profiles))
 	for _, p := range profiles {
+		var tenantIDStr *string
+		if p.TenantID != nil {
+			tStr := p.TenantID.String()
+			tenantIDStr = &tStr
+		}
 		items = append(items, ProfileResponse{
 			ID:             p.ID.String(),
 			Name:           p.Name,
 			NmapArgs:       p.NmapArgs,
 			Description:    p.Description,
 			TimeoutSeconds: p.TimeoutSeconds,
+			Category:       string(p.Category),
+			IsCustom:       p.IsCustom,
+			TenantID:       tenantIDStr,
 		})
 	}
 
 	response.JSON(w, http.StatusOK, map[string]interface{}{
 		"items": items,
 		"total": len(items),
+	})
+}
+
+// CreateProfile gestisce POST /api/v1/scan-profiles per la creazione sicura di un profilo custom
+func (h *ScanHandler) CreateProfile(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := middleware.GetTenantID(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "UNAUTHORIZED", "Identificativo tenant mancante o non valido")
+		return
+	}
+
+	var req CreateProfileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "INVALID_BODY", "Payload JSON non valido")
+		return
+	}
+
+	category := domain.ScanProfileCategory(req.Category)
+	if category == "" {
+		category = domain.ProfileCategoryCustom
+	}
+
+	profile, err := h.scanService.CreateCustomProfile(
+		r.Context(),
+		tenantID,
+		req.Name,
+		req.NmapArgs,
+		req.Description,
+		req.TimeoutSeconds,
+		category,
+	)
+	if err != nil {
+		if errors.Is(err, domain.ErrValidation) || errors.Is(err, domain.ErrDisallowedScanOption) {
+			response.Error(w, http.StatusBadRequest, "INVALID_PARAM", err.Error())
+			return
+		}
+		response.Error(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Creazione profilo custom fallita")
+		return
+	}
+
+	var tenantIDStr *string
+	if profile.TenantID != nil {
+		tStr := profile.TenantID.String()
+		tenantIDStr = &tStr
+	}
+
+	response.JSON(w, http.StatusCreated, ProfileResponse{
+		ID:             profile.ID.String(),
+		Name:           profile.Name,
+		NmapArgs:       profile.NmapArgs,
+		Description:    profile.Description,
+		TimeoutSeconds: profile.TimeoutSeconds,
+		Category:       string(profile.Category),
+		IsCustom:       profile.IsCustom,
+		TenantID:       tenantIDStr,
+	})
+}
+
+// DeleteProfile gestisce DELETE /api/v1/scan-profiles/{id} per eliminare un profilo custom
+func (h *ScanHandler) DeleteProfile(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := middleware.GetTenantID(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "UNAUTHORIZED", "Identificativo tenant mancante o non valido")
+		return
+	}
+
+	idParam := chi.URLParam(r, "id")
+	profileID, err := uuid.Parse(idParam)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "INVALID_ID", "ID profilo non valido")
+		return
+	}
+
+	if err := h.scanService.DeleteCustomProfile(r.Context(), tenantID, profileID); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			response.Error(w, http.StatusNotFound, "NOT_FOUND", "Profilo custom non trovato o protetto")
+			return
+		}
+		response.Error(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Eliminazione profilo fallita")
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"message": "Profilo custom eliminato con successo",
 	})
 }

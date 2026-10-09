@@ -195,8 +195,27 @@ func (m *mockProfileRepoForSched) GetByName(ctx context.Context, name string) (*
 	return nil, domain.ErrNotFound
 }
 
-func (m *mockProfileRepoForSched) List(ctx context.Context) ([]*domain.ScanProfile, error) {
+func (m *mockProfileRepoForSched) List(ctx context.Context, tenantID *uuid.UUID) ([]*domain.ScanProfile, error) {
 	return nil, nil
+}
+
+func (m *mockProfileRepoForSched) ListByCategory(ctx context.Context, tenantID *uuid.UUID, category domain.ScanProfileCategory) ([]*domain.ScanProfile, error) {
+	return nil, nil
+}
+
+func (m *mockProfileRepoForSched) Create(ctx context.Context, profile *domain.ScanProfile) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	cp := *profile
+	m.profiles[profile.ID] = &cp
+	return nil
+}
+
+func (m *mockProfileRepoForSched) Delete(ctx context.Context, tenantID, id uuid.UUID) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.profiles, id)
+	return nil
 }
 
 // --- Helpers di Test ---

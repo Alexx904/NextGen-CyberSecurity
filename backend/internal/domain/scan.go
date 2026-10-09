@@ -56,15 +56,30 @@ type ScanSummaryStats struct {
 	DurationSeconds float64 `json:"duration_seconds"`
 }
 
-// ScanProfile definisce la configurazione dei flag di scansione Nmap preimpostati
+// ScanProfileCategory definisce le macro-aree specialistiche dei profili di scansione
+type ScanProfileCategory string
+
+const (
+	ProfileCategoryPenTest     ScanProfileCategory = "PEN_TEST"
+	ProfileCategorySystemFlaws ScanProfileCategory = "SYSTEM_FLAWS"
+	ProfileCategoryWebApp      ScanProfileCategory = "WEB_APP"
+	ProfileCategoryDiscovery   ScanProfileCategory = "DISCOVERY"
+	ProfileCategoryCompliance  ScanProfileCategory = "COMPLIANCE"
+	ProfileCategoryCustom      ScanProfileCategory = "CUSTOM"
+)
+
+// ScanProfile definisce la configurazione dei flag di scansione Nmap preimpostati o custom
 type ScanProfile struct {
-	ID             uuid.UUID `json:"id" db:"id"`
-	Name           string    `json:"name" db:"name"`
-	NmapArgs       string    `json:"nmap_args" db:"nmap_args"`
-	Description    *string   `json:"description,omitempty" db:"description"`
-	TimeoutSeconds int       `json:"timeout_seconds" db:"timeout_seconds"`
-	CreatedAt      time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at" db:"updated_at"`
+	ID             uuid.UUID           `json:"id" db:"id"`
+	Name           string              `json:"name" db:"name"`
+	NmapArgs       string              `json:"nmap_args" db:"nmap_args"`
+	Description    *string             `json:"description,omitempty" db:"description"`
+	TimeoutSeconds int                 `json:"timeout_seconds" db:"timeout_seconds"`
+	Category       ScanProfileCategory `json:"category" db:"category"`
+	IsCustom       bool                `json:"is_custom" db:"is_custom"`
+	TenantID       *uuid.UUID          `json:"tenant_id,omitempty" db:"tenant_id"`
+	CreatedAt      time.Time           `json:"created_at" db:"created_at"`
+	UpdatedAt      time.Time           `json:"updated_at" db:"updated_at"`
 }
 
 // Scan rappresenta un'esecuzione (on-demand o schedulata) di vulnerability scanning
@@ -165,7 +180,10 @@ type ScanRepository interface {
 type ScanProfileRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*ScanProfile, error)
 	GetByName(ctx context.Context, name string) (*ScanProfile, error)
-	List(ctx context.Context) ([]*ScanProfile, error)
+	List(ctx context.Context, tenantID *uuid.UUID) ([]*ScanProfile, error)
+	ListByCategory(ctx context.Context, tenantID *uuid.UUID, category ScanProfileCategory) ([]*ScanProfile, error)
+	Create(ctx context.Context, profile *ScanProfile) error
+	Delete(ctx context.Context, tenantID, id uuid.UUID) error
 }
 
 // ScheduleRepository definisce l'interfaccia per la gestione delle pianificazioni ricorrenti

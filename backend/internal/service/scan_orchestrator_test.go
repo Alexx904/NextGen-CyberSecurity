@@ -104,12 +104,35 @@ func (m *mockProfileRepo) GetByName(ctx context.Context, name string) (*domain.S
 	return nil, domain.ErrNotFound
 }
 
-func (m *mockProfileRepo) List(ctx context.Context) ([]*domain.ScanProfile, error) {
+func (m *mockProfileRepo) List(ctx context.Context, tenantID *uuid.UUID) ([]*domain.ScanProfile, error) {
 	var list []*domain.ScanProfile
 	for _, p := range m.profiles {
 		list = append(list, p)
 	}
 	return list, nil
+}
+
+func (m *mockProfileRepo) ListByCategory(ctx context.Context, tenantID *uuid.UUID, category domain.ScanProfileCategory) ([]*domain.ScanProfile, error) {
+	var list []*domain.ScanProfile
+	for _, p := range m.profiles {
+		if p.Category == category {
+			list = append(list, p)
+		}
+	}
+	return list, nil
+}
+
+func (m *mockProfileRepo) Create(ctx context.Context, profile *domain.ScanProfile) error {
+	if m.profiles == nil {
+		m.profiles = make(map[uuid.UUID]*domain.ScanProfile)
+	}
+	m.profiles[profile.ID] = profile
+	return nil
+}
+
+func (m *mockProfileRepo) Delete(ctx context.Context, tenantID, id uuid.UUID) error {
+	delete(m.profiles, id)
+	return nil
 }
 
 type mockTargetRepo struct {

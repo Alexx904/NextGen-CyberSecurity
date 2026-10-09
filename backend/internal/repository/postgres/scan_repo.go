@@ -291,18 +291,22 @@ func NewScanProfileRepo(pool *pgxpool.Pool) *ScanProfileRepo {
 // GetByID recupera un profilo di scansione tramite UUID
 func (r *ScanProfileRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.ScanProfile, error) {
 	query := `
-		SELECT id, name, nmap_args, description, timeout_seconds, created_at, updated_at
+		SELECT id, name, nmap_args, description, timeout_seconds, category, is_custom, tenant_id, created_at, updated_at
 		FROM scan_profiles
 		WHERE id = $1
 	`
 
 	var p domain.ScanProfile
+	var catStr string
 	err := r.pool.QueryRow(ctx, query, id).Scan(
 		&p.ID,
 		&p.Name,
 		&p.NmapArgs,
 		&p.Description,
 		&p.TimeoutSeconds,
+		&catStr,
+		&p.IsCustom,
+		&p.TenantID,
 		&p.CreatedAt,
 		&p.UpdatedAt,
 	)
@@ -312,6 +316,7 @@ func (r *ScanProfileRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Sc
 		}
 		return nil, fmt.Errorf("recupero profilo per ID fallito: %w", err)
 	}
+	p.Category = domain.ScanProfileCategory(catStr)
 
 	return &p, nil
 }
@@ -319,18 +324,22 @@ func (r *ScanProfileRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Sc
 // GetByName recupera un profilo di scansione tramite nome identificativo
 func (r *ScanProfileRepo) GetByName(ctx context.Context, name string) (*domain.ScanProfile, error) {
 	query := `
-		SELECT id, name, nmap_args, description, timeout_seconds, created_at, updated_at
+		SELECT id, name, nmap_args, description, timeout_seconds, category, is_custom, tenant_id, created_at, updated_at
 		FROM scan_profiles
 		WHERE name = $1
 	`
 
 	var p domain.ScanProfile
+	var catStr string
 	err := r.pool.QueryRow(ctx, query, name).Scan(
 		&p.ID,
 		&p.Name,
 		&p.NmapArgs,
 		&p.Description,
 		&p.TimeoutSeconds,
+		&catStr,
+		&p.IsCustom,
+		&p.TenantID,
 		&p.CreatedAt,
 		&p.UpdatedAt,
 	)
@@ -340,19 +349,35 @@ func (r *ScanProfileRepo) GetByName(ctx context.Context, name string) (*domain.S
 		}
 		return nil, fmt.Errorf("recupero profilo per nome fallito: %w", err)
 	}
+	p.Category = domain.ScanProfileCategory(catStr)
 
 	return &p, nil
 }
 
-// List recupera l'elenco di tutti i profili di scansione registrati
-func (r *ScanProfileRepo) List(ctx context.Context) ([]*domain.ScanProfile, error) {
-	query := `
-		SELECT id, name, nmap_args, description, timeout_seconds, created_at, updated_at
-		FROM scan_profiles
-		ORDER BY name ASC
-	`
+// List recupera i profili di sistema globali e i profili custom del tenant specificato
+func (r *ScanProfileRepo) List(ctx context.Context, tenantID *uuid.UUID) ([]*domain.ScanProfile, error) {
+	var query string
+	var rows pgx.Rows
+	var err error
 
-	rows, err := r.pool.Query(ctx, query)
+	if tenantID == nil {
+		query = `
+			SELECT id, name, nmap_args, description, timeout_seconds, category, is_custom, tenant_id, created_at, updated_at
+			FROM scan_profiles
+			WHERE tenant_id IS NULL
+			ORDER BY category ASC, name ASC
+		`
+		rows, err = r.pool.Query(ctx, query)
+	} else {
+		query = `
+			SELECT id, name, nmap_args, description, timeout_seconds, category, is_custom, tenant_id, created_at, updated_at
+			FROM scan_profiles
+			WHERE tenant_id IS NULL OR tenant_id = $1
+			ORDER BY category ASC, name ASC
+		`
+		rows, err = r.pool.Query(ctx, query, *tenantID)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("recupero lista profili fallito: %w", err)
 	}
@@ -361,17 +386,22 @@ func (r *ScanProfileRepo) List(ctx context.Context) ([]*domain.ScanProfile, erro
 	var profiles []*domain.ScanProfile
 	for rows.Next() {
 		var p domain.ScanProfile
+		var catStr string
 		if err := rows.Scan(
 			&p.ID,
 			&p.Name,
 			&p.NmapArgs,
 			&p.Description,
 			&p.TimeoutSeconds,
+			&catStr,
+			&p.IsCustom,
+			&p.TenantID,
 			&p.CreatedAt,
 			&p.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("lettura riga profilo fallita: %w", err)
 		}
+		p.Category = domain.ScanProfileCategory(catStr)
 		profiles = append(profiles, &p)
 	}
 
@@ -380,4 +410,126 @@ func (r *ScanProfileRepo) List(ctx context.Context) ([]*domain.ScanProfile, erro
 	}
 
 	return profiles, nil
+}
+
+// ListByCategory filtra i profili per specifica categoria specialistica
+func (r *ScanProfileRepo) ListByCategory(ctx context.Context, tenantID *uuid.UUID, category domain.ScanProfileCategory) ([]*domain.ScanProfile, error) {
+	var query string
+	var rows pgx.Rows
+	var err error
+
+	if tenantID == nil {
+		query = `
+			SELECT id, name, nmap_args, description, timeout_seconds, category, is_custom, tenant_id, created_at, updated_at
+			FROM scan_profiles
+			WHERE tenant_id IS NULL AND category = $1
+			ORDER BY name ASC
+		`
+		rows, err = r.pool.Query(ctx, query, string(category))
+	} else {
+		query = `
+			SELECT id, name, nmap_args, description, timeout_seconds, category, is_custom, tenant_id, created_at, updated_at
+			FROM scan_profiles
+			WHERE (tenant_id IS NULL OR tenant_id = $1) AND category = $2
+			ORDER BY name ASC
+		`
+		rows, err = r.pool.Query(ctx, query, *tenantID, string(category))
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("recupero profili per categoria fallito: %w", err)
+	}
+	defer rows.Close()
+
+	var profiles []*domain.ScanProfile
+	for rows.Next() {
+		var p domain.ScanProfile
+		var catStr string
+		if err := rows.Scan(
+			&p.ID,
+			&p.Name,
+			&p.NmapArgs,
+			&p.Description,
+			&p.TimeoutSeconds,
+			&catStr,
+			&p.IsCustom,
+			&p.TenantID,
+			&p.CreatedAt,
+			&p.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("lettura riga profilo per categoria fallita: %w", err)
+		}
+		p.Category = domain.ScanProfileCategory(catStr)
+		profiles = append(profiles, &p)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterazione profili fallita: %w", err)
+	}
+
+	return profiles, nil
+}
+
+// Create persiste un nuovo profilo di scansione (custom per tenant o di sistema)
+func (r *ScanProfileRepo) Create(ctx context.Context, profile *domain.ScanProfile) error {
+	if profile.ID == uuid.Nil {
+		profile.ID = uuid.New()
+	}
+	now := time.Now()
+	if profile.CreatedAt.IsZero() {
+		profile.CreatedAt = now
+	}
+	if profile.UpdatedAt.IsZero() {
+		profile.UpdatedAt = now
+	}
+	if profile.Category == "" {
+		profile.Category = domain.ProfileCategoryCustom
+	}
+	if profile.TimeoutSeconds <= 0 {
+		profile.TimeoutSeconds = 3600
+	}
+
+	query := `
+		INSERT INTO scan_profiles (id, name, nmap_args, description, timeout_seconds, category, is_custom, tenant_id, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+	`
+
+	_, err := r.pool.Exec(
+		ctx,
+		query,
+		profile.ID,
+		profile.Name,
+		profile.NmapArgs,
+		profile.Description,
+		profile.TimeoutSeconds,
+		string(profile.Category),
+		profile.IsCustom,
+		profile.TenantID,
+		profile.CreatedAt,
+		profile.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("inserimento nuovo profilo fallito: %w", err)
+	}
+
+	return nil
+}
+
+// Delete elimina un profilo custom verificando l'appartenenza al tenant (i profili di sistema non possono essere eliminati)
+func (r *ScanProfileRepo) Delete(ctx context.Context, tenantID, id uuid.UUID) error {
+	query := `
+		DELETE FROM scan_profiles
+		WHERE id = $1 AND tenant_id = $2 AND is_custom = true
+	`
+
+	tag, err := r.pool.Exec(ctx, query, id, tenantID)
+	if err != nil {
+		return fmt.Errorf("eliminazione profilo custom fallita: %w", err)
+	}
+
+	if tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+
+	return nil
 }

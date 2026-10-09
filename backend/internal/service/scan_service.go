@@ -3,11 +3,13 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
 	"nextgen-cybersec/internal/domain"
+	"nextgen-cybersec/internal/scanner"
 )
 
 // OrchestratorClient astrae l'orchestratore per consentire dependency injection e mocking nei test
@@ -24,7 +26,9 @@ type ScanService interface {
 	StartScan(ctx context.Context, tenantID, targetID, profileID uuid.UUID) (*domain.Scan, error)
 	StartGroupScan(ctx context.Context, tenantID, groupID, profileID uuid.UUID) ([]*domain.Scan, error)
 	GetScanFindings(ctx context.Context, tenantID, scanID uuid.UUID, filter domain.FindingFilter) ([]*domain.Finding, int, error)
-	ListProfiles(ctx context.Context) ([]*domain.ScanProfile, error)
+	ListProfiles(ctx context.Context, tenantID *uuid.UUID, category *domain.ScanProfileCategory) ([]*domain.ScanProfile, error)
+	CreateCustomProfile(ctx context.Context, tenantID uuid.UUID, name, nmapArgs string, description *string, timeoutSeconds int, category domain.ScanProfileCategory) (*domain.ScanProfile, error)
+	DeleteCustomProfile(ctx context.Context, tenantID, id uuid.UUID) error
 }
 
 type scanService struct {
@@ -160,9 +164,78 @@ func (s *scanService) GetScanFindings(ctx context.Context, tenantID, scanID uuid
 	return s.findingRepo.List(ctx, tenantID, filter)
 }
 
-// ListProfiles restituisce l'elenco dei profili di scansione supportati dalla piattaforma
-func (s *scanService) ListProfiles(ctx context.Context) ([]*domain.ScanProfile, error) {
-	return s.profileRepo.List(ctx)
+// ListProfiles restituisce l'elenco dei profili di scansione supportati dalla piattaforma,
+// con eventuale filtro per categoria specialistica e inclusione dei profili custom del tenant
+func (s *scanService) ListProfiles(ctx context.Context, tenantID *uuid.UUID, category *domain.ScanProfileCategory) ([]*domain.ScanProfile, error) {
+	if category != nil && *category != "" {
+		return s.profileRepo.ListByCategory(ctx, tenantID, *category)
+	}
+	return s.profileRepo.List(ctx, tenantID)
+}
+
+// CreateCustomProfile valida gli argomenti Nmap e crea un nuovo profilo custom per il tenant
+func (s *scanService) CreateCustomProfile(
+	ctx context.Context,
+	tenantID uuid.UUID,
+	name string,
+	nmapArgs string,
+	description *string,
+	timeoutSeconds int,
+	category domain.ScanProfileCategory,
+) (*domain.ScanProfile, error) {
+	cleanName := strings.TrimSpace(name)
+	if cleanName == "" {
+		return nil, fmt.Errorf("%w: nome profilo obbligatorio", domain.ErrValidation)
+	}
+
+	cleanArgs := strings.TrimSpace(nmapArgs)
+	if cleanArgs == "" {
+		return nil, fmt.Errorf("%w: argomenti Nmap obbligatori", domain.ErrValidation)
+	}
+
+	// Validazione di sicurezza preventiva contro flag injection (NFR-SEC-01)
+	parsedArgs, err := scanner.ParseProfileArgs(cleanArgs)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", domain.ErrDisallowedScanOption, err)
+	}
+	canonicalArgs := strings.Join(parsedArgs, " ")
+
+	if timeoutSeconds <= 0 {
+		timeoutSeconds = 3600
+	} else if timeoutSeconds > 86400 {
+		timeoutSeconds = 86400 // Max 24 ore
+	}
+
+	if category == "" {
+		category = domain.ProfileCategoryCustom
+	}
+
+	profile := &domain.ScanProfile{
+		ID:             uuid.New(),
+		Name:           cleanName,
+		NmapArgs:       canonicalArgs,
+		Description:    description,
+		TimeoutSeconds: timeoutSeconds,
+		Category:       category,
+		IsCustom:       true,
+		TenantID:       &tenantID,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+	}
+
+	if err := s.profileRepo.Create(ctx, profile); err != nil {
+		return nil, err
+	}
+
+	return profile, nil
+}
+
+// DeleteCustomProfile elimina un profilo personalizzato del tenant
+func (s *scanService) DeleteCustomProfile(ctx context.Context, tenantID, id uuid.UUID) error {
+	if tenantID == uuid.Nil || id == uuid.Nil {
+		return domain.ErrValidation
+	}
+	return s.profileRepo.Delete(ctx, tenantID, id)
 }
 
 // StartGroupScan avvia ricorsivamente una scansione su tutti i target validi appartenenti

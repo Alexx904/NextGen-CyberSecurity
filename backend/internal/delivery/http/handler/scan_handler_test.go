@@ -22,13 +22,15 @@ import (
 )
 
 type mockScanService struct {
-	cancelScanFunc      func(ctx context.Context, tenantID, scanID uuid.UUID) error
-	getScanFunc         func(ctx context.Context, tenantID, scanID uuid.UUID) (*domain.Scan, error)
-	listScansFunc       func(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*domain.Scan, int, error)
-	startScanFunc       func(ctx context.Context, tenantID, targetID, profileID uuid.UUID) (*domain.Scan, error)
-	startGroupScanFunc  func(ctx context.Context, tenantID, groupID, profileID uuid.UUID) ([]*domain.Scan, error)
-	getScanFindingsFunc func(ctx context.Context, tenantID, scanID uuid.UUID, filter domain.FindingFilter) ([]*domain.Finding, int, error)
-	listProfilesFunc    func(ctx context.Context) ([]*domain.ScanProfile, error)
+	cancelScanFunc          func(ctx context.Context, tenantID, scanID uuid.UUID) error
+	getScanFunc             func(ctx context.Context, tenantID, scanID uuid.UUID) (*domain.Scan, error)
+	listScansFunc           func(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*domain.Scan, int, error)
+	startScanFunc           func(ctx context.Context, tenantID, targetID, profileID uuid.UUID) (*domain.Scan, error)
+	startGroupScanFunc      func(ctx context.Context, tenantID, groupID, profileID uuid.UUID) ([]*domain.Scan, error)
+	getScanFindingsFunc     func(ctx context.Context, tenantID, scanID uuid.UUID, filter domain.FindingFilter) ([]*domain.Finding, int, error)
+	listProfilesFunc        func(ctx context.Context, tenantID *uuid.UUID, category *domain.ScanProfileCategory) ([]*domain.ScanProfile, error)
+	createCustomProfileFunc func(ctx context.Context, tenantID uuid.UUID, name, nmapArgs string, description *string, timeoutSeconds int, category domain.ScanProfileCategory) (*domain.ScanProfile, error)
+	deleteCustomProfileFunc func(ctx context.Context, tenantID, id uuid.UUID) error
 }
 
 func (m *mockScanService) CancelScan(ctx context.Context, tenantID, scanID uuid.UUID) error {
@@ -73,11 +75,25 @@ func (m *mockScanService) GetScanFindings(ctx context.Context, tenantID, scanID 
 	return nil, 0, nil
 }
 
-func (m *mockScanService) ListProfiles(ctx context.Context) ([]*domain.ScanProfile, error) {
+func (m *mockScanService) ListProfiles(ctx context.Context, tenantID *uuid.UUID, category *domain.ScanProfileCategory) ([]*domain.ScanProfile, error) {
 	if m.listProfilesFunc != nil {
-		return m.listProfilesFunc(ctx)
+		return m.listProfilesFunc(ctx, tenantID, category)
 	}
 	return nil, nil
+}
+
+func (m *mockScanService) CreateCustomProfile(ctx context.Context, tenantID uuid.UUID, name, nmapArgs string, description *string, timeoutSeconds int, category domain.ScanProfileCategory) (*domain.ScanProfile, error) {
+	if m.createCustomProfileFunc != nil {
+		return m.createCustomProfileFunc(ctx, tenantID, name, nmapArgs, description, timeoutSeconds, category)
+	}
+	return nil, nil
+}
+
+func (m *mockScanService) DeleteCustomProfile(ctx context.Context, tenantID, id uuid.UUID) error {
+	if m.deleteCustomProfileFunc != nil {
+		return m.deleteCustomProfileFunc(ctx, tenantID, id)
+	}
+	return nil
 }
 
 func setupScanRouter(h *handler.ScanHandler) *chi.Mux {
@@ -89,6 +105,8 @@ func setupScanRouter(h *handler.ScanHandler) *chi.Mux {
 	r.Post("/scans", h.Start)
 	r.Post("/scans/{id}/cancel", h.Cancel)
 	r.Get("/scan-profiles", h.ListProfiles)
+	r.Post("/scan-profiles", h.CreateProfile)
+	r.Delete("/scan-profiles/{id}", h.DeleteProfile)
 	return r
 }
 
@@ -367,10 +385,12 @@ func TestScanHandler_GetFindings_Success(t *testing.T) {
 }
 
 func TestScanHandler_ListProfiles_Success(t *testing.T) {
+	tenantID := uuid.New()
 	mockSvc := &mockScanService{
-		listProfilesFunc: func(ctx context.Context) ([]*domain.ScanProfile, error) {
+		listProfilesFunc: func(ctx context.Context, tID *uuid.UUID, cat *domain.ScanProfileCategory) ([]*domain.ScanProfile, error) {
+			catVal := domain.ProfileCategoryPenTest
 			return []*domain.ScanProfile{
-				{ID: uuid.New(), Name: "Fast Discovery", NmapArgs: "-T4 -F", TimeoutSeconds: 900},
+				{ID: uuid.New(), Name: "Stealth SYN", NmapArgs: "-sS -Pn -T2 --open", TimeoutSeconds: 1800, Category: catVal},
 			}, nil
 		},
 	}
@@ -378,13 +398,73 @@ func TestScanHandler_ListProfiles_Success(t *testing.T) {
 	h := handler.NewScanHandler(mockSvc, nil)
 	router := setupScanRouter(h)
 
-	req := httptest.NewRequest(http.MethodGet, "/scan-profiles", nil)
+	req := httptest.NewRequest(http.MethodGet, "/scan-profiles?category=PEN_TEST", nil)
+	req = withSecOpsContext(req, tenantID)
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("atteso status 200 OK, ottenuto %d", rec.Code)
+		t.Fatalf("atteso status 200 OK, ottenuto %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestScanHandler_CreateProfile_Success(t *testing.T) {
+	tenantID := uuid.New()
+	mockSvc := &mockScanService{
+		createCustomProfileFunc: func(ctx context.Context, tID uuid.UUID, name, nmapArgs string, description *string, timeoutSeconds int, category domain.ScanProfileCategory) (*domain.ScanProfile, error) {
+			return &domain.ScanProfile{
+				ID:             uuid.New(),
+				TenantID:       &tID,
+				Name:           name,
+				NmapArgs:       nmapArgs,
+				Category:       category,
+				IsCustom:       true,
+				TimeoutSeconds: timeoutSeconds,
+			}, nil
+		},
+	}
+
+	h := handler.NewScanHandler(mockSvc, nil)
+	router := setupScanRouter(h)
+
+	body := `{"name":"Custom Pentest","nmap_args":"-sS -p 22,80,443 -T3","category":"PEN_TEST","timeout_seconds":600}`
+	req := httptest.NewRequest(http.MethodPost, "/scan-profiles", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = withSecOpsContext(req, tenantID)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("atteso status 201 Created, ottenuto %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestScanHandler_DeleteProfile_Success(t *testing.T) {
+	tenantID := uuid.New()
+	profileID := uuid.New()
+
+	mockSvc := &mockScanService{
+		deleteCustomProfileFunc: func(ctx context.Context, tID, pID uuid.UUID) error {
+			if tID != tenantID || pID != profileID {
+				t.Errorf("parametri errati: tID=%v, pID=%v", tID, pID)
+			}
+			return nil
+		},
+	}
+
+	h := handler.NewScanHandler(mockSvc, nil)
+	router := setupScanRouter(h)
+
+	req := httptest.NewRequest(http.MethodDelete, "/scan-profiles/"+profileID.String(), nil)
+	req = withSecOpsContext(req, tenantID)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("atteso status 200 OK, ottenuto %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
