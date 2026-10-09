@@ -3,9 +3,9 @@
 > Memoria viva dell'agente. Letta a inizio sessione, aggiornata a fine di ogni turno.
 > Non cancellare sezioni: se vuote, scrivi "nessuno".
 
-**Ultimo aggiornamento:** 2026-10-09 22:32  
+**Ultimo aggiornamento:** 2026-10-09 23:25  
 **Modalità progetto:** esistente (onboarded il 2026-10-09, validato dall'utente)  
-**Fase:** Sviluppo Milestone 2 (Attack Path Mapping)  
+**Fase:** Sviluppo Milestone 2 (Attack Path Mapping) & Workstation Multi-Company Workflow  
 
 ## Project Profile
 
@@ -20,7 +20,7 @@ Comando lint/format:     go vet ./... (backend)
 Percorsi per livello:    unit=backend/pkg, backend/internal/domain, backend/internal/scanner; service=backend/internal/service; integration=backend/internal/delivery, backend/internal/repository/postgres; frontend=frontend/src/tests, frontend/src/**/*.test.tsx
 Prerequisiti ambiente:   Docker & Docker Compose (PostgreSQL 16, Nmap su Linux container)
 Come avviare l'app:      docker compose up --build (oppure 'go run ./cmd/server' + 'cd frontend && npm run dev')
-Branch principale:       main (onboarding completato su chore/agent-onboarding)
+Branch principale:       main (sprint attivo su feat/FEAT-IP-ORG-multi-company-workflow)
 Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git push --force, DROP database senza conferma esplicita
 ```
 
@@ -28,11 +28,11 @@ Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git
 
 | Data | Comando | Esito | Fallimenti preesistenti noti |
 |---|---|---|---|
-| 2026-10-09 22:30 | `go test ./...` (backend) | PASS (exit code 0, 14 package, inclusi handler e service attack path) | Nessuno. Tutti i test passano al 100%. |
-| 2026-10-09 22:29 | `go build ./...` (backend) | PASS (exit code 0) | Nessuno. Compilazione pulita. |
-| 2026-10-09 22:29 | `go vet ./...` (backend) | PASS (exit code 0) | Nessuno. Zero anomalie rilevate. |
-| 2026-10-09 22:31 | `npm test` (frontend Vitest) | PASS (exit code 0, 10 file, 65 test) | Nessuno. |
-| 2026-10-09 22:31 | `npm run build` (frontend tsc + Vite) | PASS (exit code 0) | Nessuno. Tutti i chunk ottimizzati. |
+| 2026-10-09 23:22 | `go test ./...` (backend) | PASS (exit code 0, 14 package) | Nessuno. Tutti i test passano al 100%. |
+| 2026-10-09 23:22 | `go build ./...` (backend) | PASS (exit code 0) | Nessuno. Compilazione pulita. |
+| 2026-10-09 23:22 | `go vet ./...` (backend) | PASS (exit code 0) | Nessuno. Zero anomalie rilevate. |
+| 2026-10-09 23:20 | `npm test` (frontend Vitest) | PASS (exit code 0, 13 file, 76 test) | Nessuno. |
+| 2026-10-09 23:21 | `npm run build` (frontend tsc + Vite) | PASS (exit code 0) | Nessuno. Compilazione TypeScript pulita e bundle ottimizzato. |
 
 ## In corso
 
@@ -40,6 +40,11 @@ Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git
 
 ## In attesa di accettazione utente
 
+- **FEAT-IP-ORG-01 .. 04 · Workstation Multi-Company Workflow**:
+  - Riorganizzazione dashboard laterale per flussi operativi ("cosa si deve fare") su desktop e mobile drawer.
+  - Vista raggruppata per cartella scope/azienda cliente con ispezione dettagliata dei singoli IP in Scansioni (`/scans`).
+  - Ispezione gerarchica Cartella -> IP specifico -> Findings CVE in Vulnerabilità (`/findings`).
+  - Vista raggruppata per azienda con card Posture Score & Grade, dettaglio IP e download 1-click (Executive PDF, Tecnico PDF, CSV RFC 4180) in Report White-Label (`/reports`).
 - **FEAT-M2-02 · Motore di Calcolo Lateral Movement & API Grafo (Backend Go)**: Servizio di aggregazione topologica, calcolo dei pivot multi-hop verso reti interne, identificazione chokepoint e registrazione endpoint REST `/api/v1/attack-paths/graph` e `/api/v1/attack-paths/chokepoints`.
 
 ## Bloccati / Domande aperte per l'utente

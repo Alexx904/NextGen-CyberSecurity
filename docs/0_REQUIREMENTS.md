@@ -161,6 +161,27 @@ Piattaforma di CyberSecurity moderna e modulare concepita per trasformare il vul
 - **FR-14.4 (Identificazione Chokepoints di Remediation):** Analisi algoritmica di centralità per individuare il singolo nodo o la singola porta la cui chiusura/remediation interrompe il massimo numero di percorsi di attacco, ottimizzando il ROI di sicurezza.
 - **FR-14.5 (Interfaccia Grafica Interattiva):** Visualizzatore a grafo interattivo (zoom, pan, selezione nodi, filtri di rischio, evidenziazione del Critical Path) nella schermata dedicata `/attack-path`.
 
+### FR-15: Workflow-Categorized Navigation & Hierarchical Multi-Company IP Views (Workstation Multi-Company Workflow)
+- **FR-15.1 (Riorganizzazione Dashboard Laterale per Flussi di Lavoro):** La barra laterale di navigazione (Desktop e Mobile Drawer) deve essere categorizzata logicamente per macro-aree d'azione ("cosa si deve fare"):
+  - **Overview / Dashboard** (sintesi generale)
+  - **Scansione di Rete & Asset:** *Target & Scope Management* (albero cartelle e bersagli censiti), *Network Discovery* (Advanced IP Scanner live LAN).
+  - **Scansione Vulnerabilità & Audit:** *Scansioni Nmap* (engine, esecuzioni live e cron), *Vulnerabilità & CVE* (findings e correlazione), *Attack Path Mapping* (grafo minacce e chokepoints).
+  - **Infrastruttura & Accesso Remoto:** *Server SSH & Firewall GUI* (iptables/nftables e web terminal).
+  - **Reportistica & Amministrazione:** *Hub Report White-Label* (audit PDF/CSV), *Impostazioni Tenant* (branding e multi-tenancy).
+- **FR-15.2 (Raggruppamento per Cartella/Azienda & Dettaglio IP in Scansioni `/scans`):**
+  - Vista raggruppata per Cartella Scope/Azienda (Target Groups) e nodi non assegnati.
+  - Card/Accordion collassabili per ciascuna cartella con metriche riassuntive (totale scansioni, nodi UP, conteggio vulnerabilità critiche/alte, job in esecuzione).
+  - Quando la cartella viene aperta, visualizzazione specifica e gerarchica di ciascun indirizzo IP / Target e dei relativi job di scansione con stati, chip severità, durata e azioni (Dettaglio, download PDF Executive/Tecnico, CSV, cancellazione SIGTERM).
+  - Controlli per "Espandi tutti", "Comprimi tutti" e toggle di switch istantaneo tra vista raggruppata e tabella lineare.
+- **FR-15.3 (Raggruppamento per Cartella/Azienda & Dettaglio IP in Vulnerabilità `/findings`):**
+  - Riorganizzazione dell'hub vulnerabilità per consentire la distinzione immediata tra aziende/clienti diversi.
+  - Selezione e visualizzazione raggruppata per Cartella Scope -> Target/IP specifico -> Findings CVE associati con punteggi CVSS v3.1, porte e raccomandazioni di remediation.
+  - Possibilità di filtrare o cercare vulnerabilità all'interno della specifica azienda o per singolo IP.
+- **FR-15.4 (Raggruppamento per Cartella/Azienda & Dettaglio IP in Report White-Label `/reports`):**
+  - Raggruppamento dei report generati per Cartella/Azienda Scope con card riassuntiva di Security Posture (punteggio medio 0-100 e Grade A-F calcolato per cliente) e totale audit completati.
+  - Apertura/espansione della cartella dell'azienda per ispezionare gli specifici report generati per ciascun IP/target, con download diretto a 1-click (Executive PDF, Tecnico PDF, CSV RFC 4180).
+  - Switch rapido tra vista raggruppata per azienda e archivio cronologico globale.
+
 ---
 
 ## 4. Casi d'Uso (Use Cases - UC)
@@ -216,6 +237,10 @@ Piattaforma di CyberSecurity moderna e modulare concepita per trasformare il vul
 ### UC-13: Esplorazione Visiva Catene di Attacco & Remediation dei Chokepoint (Milestone 2)
 - **Attore:** SecOps Engineer / CISO.
 - **Flusso:** L'utente accede alla schermata `/attack-path`. Il sistema elabora l'inventario dei target attivi, le porte esposte e le vulnerabilità correlate, costruendo la mappa topologica delle minacce. L'utente visualizza visivamente i percorsi d'attacco con il cammino critico (*Critical Path*) evidenziato dal perimetro esterno agli host interni. Cliccando su un percorso o su un asset bersaglio (es. database interno o server sensibile), il pannello laterale evidenzia il *Chokepoint* principale (es. porta o servizio la cui chiusura/remediation interrompe il maggior numero di catene di compromissione), fornendo una raccomandazione di remediation a massimo impatto e ROI di sicurezza.
+
+### UC-14: Audit di Sicurezza Presso Diverse Aziende con lo Stesso Computer (Workstation Multi-Company Workflow)
+- **Attore:** Security Consultant / Auditor / Sysadmin.
+- **Flusso:** L'operatore si reca presso diverse aziende o filiali con il medesimo computer portatile. Utilizza il Network Discovery per scoprire velocemente la LAN locale e importa gli host attivi in una cartella Scope dedicata al cliente (es. "Azienda Alfa", "Azienda Beta"). Nelle sezioni *Scansioni*, *Vulnerabilità* e *Report*, naviga la nuova interfaccia raggruppata per cartella: visualizza i gruppi separati con metriche chiare, apre la cartella dell'azienda desiderata e ispeziona nello specifico ciascun IP con le relative scansioni, vulnerabilità rilevate e report white-label pronti al download, mantenendo il perimetro dei diversi clienti rigorosamente isolato e visivamente ordinato.
 
 ---
 

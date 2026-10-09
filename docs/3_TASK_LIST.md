@@ -35,6 +35,31 @@
   - Test: `npm run build` (nessun chunk > 500 kB)
   - DoD: Introduzione di `React.lazy` e `Suspense` per le route principali (`Dashboard`, `NetworkDiscovery`, `ScanDetail`, `Reports`, `SSHServers`, `Targets`, `Settings`, `Findings`) e configurazione di `build.rollupOptions.output.manualChunks` per vendor pesanti (`@xterm/xterm`, `recharts`, `lucide-react`).
 
+### Sprint Attivo: Workstation Multi-Company Workflow (Navigazione & Organizzazione Gruppi IP)
+- [~] **FEAT-IP-ORG-01 · Sidebar Navigation Workflow Categorization (Desktop & Mobile)**
+  - File: `frontend/src/components/layout/AppLayout.tsx`
+  - Dipende da: Nessuna
+  - Test: `npm test` & verifica interattività menu/drawer
+  - DoD: Riorganizzazione della barra laterale in macro-categorie orientate all'azione ("cosa si deve fare"): Overview, Scansione di Rete & Asset (Targets, Network Discovery), Scansione Vulnerabilità & Audit (Scansioni Nmap, Vulnerabilità CVE), Infrastruttura & Accesso Remoto (SSH & Firewall), Reportistica & Amministrazione (Report White-Label, Settings). Header di categoria tematici, badge contestuali e drawer mobile aggiornato.
+
+- [~] **FEAT-IP-ORG-02 · Vista Raggruppata per Cartella/Azienda & Dettaglio IP in Scansioni (`/scans`)**
+  - File: `frontend/src/pages/Scans.tsx`, `frontend/src/pages/Scans.test.tsx`
+  - Dipende da: FEAT-IP-ORG-01
+  - Test: Vitest UI rendering test su vista raggruppata ed espansione cartelle (4/4 PASS)
+  - DoD: Scansioni visualizzate aggregate per cartella scope/azienda e non assegnati. Card/accordion per cartella con colore, conteggi scansioni, nodi up e vulnerabilità. Espansione della cartella per mostrare ciascun IP/target con le sue scansioni, stati, durata, chip vulnerabilità e azioni 1-click. Controlli "Espandi tutti" / "Comprimi tutti" e toggle vista raggruppata / vista tabellare lineare.
+
+- [~] **FEAT-IP-ORG-03 · Vista Raggruppata per Cartella/Azienda & Dettaglio IP in Vulnerabilità (`/findings`)**
+  - File: `frontend/src/pages/Findings.tsx`, `frontend/src/pages/Findings.test.tsx`
+  - Dipende da: FEAT-IP-ORG-01
+  - Test: Vitest UI rendering test su navigazione Cartella -> IP -> Findings (3/3 PASS)
+  - DoD: Visualizzazione delle vulnerabilità strutturata per Cartella Scope/Azienda. Possibilità di aprire/selezionare la cartella per consultare la lista degli IP censiti per quel cliente e relative vulnerabilità CVE, con ricerca e filtri dedicati per IP e severità.
+
+- [~] **FEAT-IP-ORG-04 · Vista Raggruppata per Cartella/Azienda & Dettaglio IP in Report White-Label (`/reports`)**
+  - File: `frontend/src/pages/Reports.tsx`, `frontend/src/pages/Reports.test.tsx`
+  - Dipende da: FEAT-IP-ORG-01
+  - Test: Vitest UI rendering test su raggruppamento report per azienda e download 1-click (4/4 PASS)
+  - DoD: Visualizzazione dei report raggruppati per Cartella/Azienda Scope con card di riepilogo Security Posture Score & Grade per cliente. Espansione per ispezionare gli specifici report per IP con 1-click download (Executive PDF, Tecnico PDF, CSV RFC 4180) e toggle vista raggruppata / vista cronologica.
+
 ### Milestone 2: Feature Cardine Scelta dal PO
 - [x] **FEAT-M2-01 · Spike & Intake: Attack Path Mapping (Grafo Visuale Vulnerabilità)**
   - File: `docs/0_REQUIREMENTS.md`, `docs/domains/attack_path.md`, `backend/internal/domain/attack_path.go`
