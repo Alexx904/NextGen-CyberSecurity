@@ -264,6 +264,7 @@ Per garantire modularità ed efficienza di contesto, i dettagli tecnici e i cont
 2. **[Remote SSH & iptables Firewall Manager](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/domains/ssh_and_firewall.md)**: Gestione credenziali e cifratura AES-256-GCM, Anti-Lockout Safety Timer, ispezione e modifica regole iptables, WebSocket Web Terminal SSH PTY.
 3. **[Asset Tree Management & Centralized Reports Hub](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/domains/reporting_and_assets.md)**: Albero gerarchico asset (`TargetGroup`), tipi di target e blacklist, archivio storico `/reports` e motori di esportazione PDF White-Label (Executive/Technical) e CSV RFC 4180.
 4. **[Debug & Testing Live Console Drawer](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/domains/debug_console.md)**: In-Memory Ring Buffer (500 log), intercettori Axios/SSE/WS/JS, sanificazione credenziali `[REDACTED]` ed esportatore Markdown preformattato per AI.
+5. **[Attack Path Mapping & Threat Chaining](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/domains/attack_path.md)**: Analisi topologica a grafo, calcolo del Cumulative Path Risk Score, rilevamento catene di compromissione e individuazione algoritmica dei chokepoint.
 
 ---
 
@@ -278,6 +279,7 @@ Tutte le API rispondono sotto `/api/v1` con payload standard `{ "success": true,
 - `GET /api/v1/network-discovery/stream?session_id={id}&token={jwt}` (SSE)
 - `POST /api/v1/scans`, `GET /api/v1/scans`, `GET /api/v1/scans/{id}`, `POST /api/v1/scans/{id}/cancel`
 - `GET /api/v1/scans/{id}/stream?token={jwt}` (SSE)
+- `GET /api/v1/attack-paths/graph`, `GET /api/v1/attack-paths/chokepoints`
 - `GET /api/v1/reports`, `GET /api/v1/reports/{scan_id}/download` (PDF/CSV)
 - `GET`, `POST`, `DELETE /api/v1/ssh/servers`, `POST /api/v1/ssh/servers/{id}/test-connection`
 - `GET`, `POST`, `DELETE /api/v1/ssh/servers/{id}/firewall/rules`

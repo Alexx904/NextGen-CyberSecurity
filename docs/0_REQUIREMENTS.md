@@ -154,6 +154,13 @@ Piattaforma di CyberSecurity moderna e modulare concepita per trasformare il vul
   - Pulsante *"Esporta JSON"*: download del file di diagnostica strutturato completo.
   - Pulsante *"Pulisci Log"*: svuota la cronologia in memoria della sessione.
 
+### FR-14: Motore di Attack Path Mapping & Chaining Analysis (Milestone 2)
+- **FR-14.1 (Modello a Grafo Topologico):** Modellazione del perimetro e dei target scansionati come grafo orientato con nodi (Entrypoint Esterno/Internet, Subnet, Host, Servizi di rete, Vulnerabilità/CVE) ed archi tipizzati (Raggiungibilità di rete, Exploitability remota, Pivot/Lateral movement, Credenziali note).
+- **FR-14.2 (Correlazione Catene di Compromissione):** Rilevamento automatico di cammini multi-hop che consentono a un attaccante esterno di penetrare nella rete interna sfruttando vulnerabilità critiche (es. RCE su DMZ, banner SSH, weak services).
+- **FR-14.3 (Cumulative Path Risk Score):** Algoritmo di scoring per quantificare la probabilità e l'impatto di ciascun percorso di attacco su scala 0-100 basato su metriche CVSS v3.1, vettori di attacco (Network/Local) e profondità di hop.
+- **FR-14.4 (Identificazione Chokepoints di Remediation):** Analisi algoritmica di centralità per individuare il singolo nodo o la singola porta la cui chiusura/remediation interrompe il massimo numero di percorsi di attacco, ottimizzando il ROI di sicurezza.
+- **FR-14.5 (Interfaccia Grafica Interattiva):** Visualizzatore a grafo interattivo (zoom, pan, selezione nodi, filtri di rischio, evidenziazione del Critical Path) nella schermata dedicata `/attack-path`.
+
 ---
 
 ## 4. Casi d'Uso (Use Cases - UC)
@@ -205,6 +212,10 @@ Piattaforma di CyberSecurity moderna e modulare concepita per trasformare il vul
 ### UC-12: Debugging Interattivo, Triage Errori e Feedback Loop con Agente AI
 - **Attore:** Sviluppatore / Tester / Sysadmin.
 - **Flusso:** Durante l'esecuzione di qualsiasi operazione nella piattaforma (scansione, discovery, firewall, login), l'utente nota un'anomalia o un badge rosso di errore. Apre il pannello laterale (click sul pulsante fluttuante o `Ctrl + Shift + D`), seleziona il filtro `ERROR`, ispeziona la richiesta fallita con status code e corpo risposta, clicca "Copia per AI (Markdown)" e incolla il blocco diagnostico nella chat con l'agente. L'agente analizza la causa radice ed emette il fix immediato.
+
+### UC-13: Esplorazione Visiva Catene di Attacco & Remediation dei Chokepoint (Milestone 2)
+- **Attore:** SecOps Engineer / CISO.
+- **Flusso:** L'utente accede alla schermata `/attack-path`. Il sistema elabora l'inventario dei target attivi, le porte esposte e le vulnerabilità correlate, costruendo la mappa topologica delle minacce. L'utente visualizza visivamente i percorsi d'attacco con il cammino critico (*Critical Path*) evidenziato dal perimetro esterno agli host interni. Cliccando su un percorso o su un asset bersaglio (es. database interno o server sensibile), il pannello laterale evidenzia il *Chokepoint* principale (es. porta o servizio la cui chiusura/remediation interrompe il maggior numero di catene di compromissione), fornendo una raccomandazione di remediation a massimo impatto e ROI di sicurezza.
 
 ---
 
