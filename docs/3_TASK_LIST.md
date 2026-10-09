@@ -29,7 +29,7 @@
   - Test: Validazione workflow con test backend `go test ./...`, lint `go vet ./...`, frontend `npm test` e `npm run build`
   - DoD: Pipeline eseguita a ogni push/PR sui branch principali con job paralleli per backend Go (test e build) e frontend React (vitest e typecheck/vite build).
 
-- [~] **ONBOARD-03 · Code-Splitting e Ottimizzazione Bundle Frontend (Vite manualChunks)**
+- [x] **ONBOARD-03 · Code-Splitting e Ottimizzazione Bundle Frontend (Vite manualChunks)**
   - File: `frontend/vite.config.ts`, `frontend/src/App.tsx`
   - Dipende da: Nessuna
   - Test: `npm run build` (nessun chunk > 500 kB)

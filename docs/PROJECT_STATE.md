@@ -40,9 +40,7 @@ Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git
 
 ## In attesa di accettazione utente
 
-| Task | Feature | Come provarla (sintesi) | Consegnata il |
-|---|---|---|---|
-| ONBOARD-03 | Code-Splitting e Ottimizzazione Bundle Frontend | Eseguire `npm run build` in `frontend/`. Verificare che l'index JS scenda da 1.2 MB a ~91 kB e che nessun chunk superi i 500 kB (zero warning). | 2026-10-09 |
+- (nessuno)
 
 ## Bloccati / Domande aperte per l'utente
 
@@ -74,6 +72,7 @@ Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git
 
 ## Log sessioni (ultime 5, la più recente in alto)
 
+- 2026-10-09 · Task ONBOARD-03 accettato dal PO (`[x]`). Ottimizzazione bundle e code-splitting consolidati su main · Test e Build VERDI
 - 2026-10-09 · Esecuzione ONBOARD-03: implementato code-splitting con React.lazy in App.tsx e manualChunks in vite.config.ts. Dimensione chunk principale ridotta da 1.2 MB a 91 kB, 0 warning Vite · Test 65/65 PASS
 - 2026-10-09 · Task ONBOARD-01 accettato dal PO (`[x]`). Pipeline CI/CD GitHub Actions consolidata · Test VERDI
 - 2026-10-09 · Esecuzione ONBOARD-01: creata pipeline GitHub Actions in `.github/workflows/ci.yml` per backend (Go 1.22 test/build/vet) e frontend (Node 20 vitest/build) · Sintassi YAML verificata
