@@ -58,16 +58,97 @@ export const AppLayout: React.FC = () => {
     navigate('/login');
   };
 
-  const navItems = [
-    { name: 'Overview', path: '/', icon: Activity },
-    { name: 'Target & Asset', path: '/targets', icon: Crosshair },
-    { name: 'Network Discovery', path: '/network-discovery', icon: Radar },
-    { name: 'Scansioni Nmap', path: '/scans', icon: Terminal },
-    { name: 'Server SSH & Firewall', path: '/ssh-servers', icon: Server },
-    { name: 'Vulnerabilità (CVE)', path: '/findings', icon: BarChart3 },
-    { name: 'Report White-Label', path: '/reports', icon: FileText },
-    { name: 'Impostazioni Tenant', path: '/settings', icon: Settings },
+  interface NavItem {
+    name: string;
+    path: string;
+    icon: React.ElementType;
+    badge?: string;
+  }
+
+  interface NavSection {
+    category?: string;
+    items: NavItem[];
+  }
+
+  const navSections: NavSection[] = [
+    {
+      items: [
+        { name: 'Dashboard Panoramica', path: '/', icon: Activity },
+      ],
+    },
+    {
+      category: 'Scansione di Rete & Asset',
+      items: [
+        { name: 'Target & Scope', path: '/targets', icon: Crosshair, badge: 'Scope' },
+        { name: 'Network Discovery', path: '/network-discovery', icon: Radar, badge: 'LAN Live' },
+      ],
+    },
+    {
+      category: 'Scansione Vulnerabilità',
+      items: [
+        { name: 'Scansioni Nmap', path: '/scans', icon: Terminal, badge: 'Engine' },
+        { name: 'Vulnerabilità (CVE)', path: '/findings', icon: BarChart3, badge: 'Findings' },
+      ],
+    },
+    {
+      category: 'Infrastruttura & Difesa',
+      items: [
+        { name: 'Server SSH & Firewall', path: '/ssh-servers', icon: Server, badge: 'iptables' },
+      ],
+    },
+    {
+      category: 'Report & Gestione',
+      items: [
+        { name: 'Report White-Label', path: '/reports', icon: FileText, badge: 'Hub' },
+        { name: 'Impostazioni Tenant', path: '/settings', icon: Settings },
+      ],
+    },
   ];
+
+  const renderNavLinks = (onItemClick?: () => void) => (
+    <div className="space-y-4">
+      {navSections.map((section, idx) => (
+        <div key={section.category || `sec-${idx}`} className="space-y-1">
+          {section.category && (
+            <div className="px-3 pb-1 pt-1.5 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400 select-none">
+              <span>{section.category}</span>
+              <span className="w-8 h-[1px] bg-slate-800" />
+            </div>
+          )}
+          <div className="space-y-0.5">
+            {section.items.map((item) => {
+              const Icon = item.icon;
+              return (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  end={item.path === '/'}
+                  onClick={onItemClick}
+                  className={({ isActive }) =>
+                    `group flex items-center justify-between px-3 py-2 rounded-lg font-medium text-xs transition-all border ${
+                      isActive
+                        ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40 shadow-[0_0_12px_rgba(6,182,212,0.15)] font-semibold'
+                        : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/60 border-transparent'
+                    }`
+                  }
+                >
+                  <div className="flex items-center space-x-2.5 truncate">
+                    <Icon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110" />
+                    <span className="truncate">{item.name}</span>
+                  </div>
+                  {item.badge && (
+                    <span className="text-[9px] font-mono font-semibold px-1.5 py-0.2 rounded bg-slate-900 border border-slate-750 text-slate-400 group-hover:text-cyan-400 group-hover:border-cyan-500/30 transition-colors shrink-0 ml-1">
+                      {item.badge}
+                    </span>
+                  )}
+                </NavLink>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <div className="min-h-screen flex flex-col bg-[#0a0d14] text-slate-100">
@@ -136,70 +217,35 @@ export const AppLayout: React.FC = () => {
       {/* Main Workspace Layout */}
       <div className="flex-1 flex">
         {/* Sidebar Nav (Desktop) */}
-        <aside className="w-64 border-r border-cyber-border bg-[#0d121f] p-4 hidden md:flex flex-col justify-between">
+        <aside className="w-64 border-r border-cyber-border bg-[#0d121f] p-3.5 hidden md:flex flex-col justify-between overflow-y-auto">
           <nav className="space-y-1">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  end={item.path === '/'}
-                  className={({ isActive }) =>
-                    `flex items-center space-x-3 px-3 py-2 rounded-lg font-medium text-sm transition-colors border ${
-                      isActive
-                        ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30'
-                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border-transparent'
-                    }`
-                  }
-                >
-                  <Icon className="w-4 h-4" />
-                  <span>{item.name}</span>
-                </NavLink>
-              );
-            })}
+            {renderNavLinks()}
           </nav>
 
-          <div className="p-3 rounded-lg border border-cyber-border bg-slate-900/60 text-xs space-y-1">
-            <div className="text-slate-400">Tenant Context</div>
-            <div className="font-semibold text-white truncate" title={user?.tenant_id}>
-              {user?.tenant_id ? `ID: ${user.tenant_id.slice(0, 8)}...` : 'Default Organization'}
+          <div className="pt-4 mt-auto">
+            <div className="p-3 rounded-lg border border-cyber-border bg-slate-900/60 text-xs space-y-1">
+              <div className="text-slate-400 text-[11px]">Tenant Context</div>
+              <div className="font-semibold text-white truncate text-xs" title={user?.tenant_id}>
+                {user?.tenant_id ? `ID: ${user.tenant_id.slice(0, 8)}...` : 'Default Organization'}
+              </div>
+              <div className="text-[10px] text-cyan-400 font-mono">Multi-Company Ready</div>
             </div>
-            <div className="text-[10px] text-cyan-400">Multi-Tenant Isolation</div>
           </div>
         </aside>
 
         {/* Mobile Navigation Drawer */}
         {mobileMenuOpen && (
           <div className="md:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm flex">
-            <div className="w-64 bg-[#0d121f] border-r border-cyber-border p-4 flex flex-col justify-between">
-              <nav className="space-y-1 mt-14">
-                {navItems.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <NavLink
-                      key={item.path}
-                      to={item.path}
-                      end={item.path === '/'}
-                      onClick={() => setMobileMenuOpen(false)}
-                      className={({ isActive }) =>
-                        `flex items-center space-x-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-colors border ${
-                          isActive
-                            ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30'
-                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border-transparent'
-                        }`
-                      }
-                    >
-                      <Icon className="w-4 h-4" />
-                      <span>{item.name}</span>
-                    </NavLink>
-                  );
-                })}
+            <div className="w-72 bg-[#0d121f] border-r border-cyber-border p-4 flex flex-col justify-between overflow-y-auto">
+              <nav className="mt-14">
+                {renderNavLinks(() => setMobileMenuOpen(false))}
               </nav>
 
-              <div className="p-3 rounded-lg border border-cyber-border bg-slate-900/60 text-xs space-y-1">
-                <div className="text-slate-400">Tenant Context</div>
-                <div className="font-semibold text-white">Multi-Tenant Hybrid Mode</div>
+              <div className="pt-4 mt-auto">
+                <div className="p-3 rounded-lg border border-cyber-border bg-slate-900/60 text-xs space-y-1">
+                  <div className="text-slate-400 text-[11px]">Tenant Context</div>
+                  <div className="font-semibold text-white text-xs">Multi-Tenant Workstation</div>
+                </div>
               </div>
             </div>
             <div className="flex-1" onClick={() => setMobileMenuOpen(false)} />
