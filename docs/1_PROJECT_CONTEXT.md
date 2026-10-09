@@ -3,7 +3,7 @@
 > **Stato:** APPROVATO (Fase 2: System Design - Revisione Milestone 1.1: Real-Time Streaming)  
 > **Ultimo Aggiornamento:** 2026-10-09  
 > **Autore / Ruolo:** TechLead-Engineer-Agent (System Architect & Tech Lead)  
-> **Documento Correlato:** [0_REQUIREMENTS_AND_USE_CASES.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/0_REQUIREMENTS_AND_USE_CASES.md)
+> **Documento Correlato:** [0_REQUIREMENTS.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/0_REQUIREMENTS.md)
 
 ---
 

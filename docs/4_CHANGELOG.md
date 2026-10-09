@@ -3,7 +3,7 @@
 > **Progetto:** NextGen CyberSecurity Platform  
 > **Autore / Ruolo:** TechLead-Engineer-Agent (System Architect & Tech Lead)  
 > **Archiviazione Eseguita:** 2026-10-08  
-> **Riferimento Regole:** [Agent.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/Agent.md) (Token Management & Modular Archiving)
+> **Riferimento Regole:** [AGENTS.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/AGENTS.md) | [_legacy/Agent.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/_legacy/Agent.md) (Token Management & Modular Archiving)
 
 ---
 

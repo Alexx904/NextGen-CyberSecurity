@@ -3,7 +3,7 @@
 > **Stato:** APPROVATO (Fase 1 Conclusa - Aggiornamento Feature 6: Real-Time Scanner Streaming)  
 > **Ultimo Aggiornamento:** 2026-10-09  
 > **Autore / Ruolo:** TechLead-Engineer-Agent (System Architect & Product Owner)  
-> **Documento di Origine:** [Brainstorming_CyberSec_App.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/Brainstorming_CyberSec_App.md)
+> **Documento di Origine:** [_legacy/Brainstorming_CyberSec_App.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/_legacy/Brainstorming_CyberSec_App.md)
 
 ---
 

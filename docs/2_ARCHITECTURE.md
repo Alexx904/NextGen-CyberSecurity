@@ -1,9 +1,9 @@
 # 2. System Architecture & Technical Specifications
 
-> **Stato:** APPROVATO (Fase 2: System Design - Revisione Milestone 1.1: Real-Time Streaming)  
+> **Stato:** APPROVATO (Fase 2: System Design - Struttura Autonoma v6.0)  
 > **Ultimo Aggiornamento:** 2026-10-09  
 > **Autore / Ruolo:** TechLead-Engineer-Agent (System Architect)  
-> **Documenti Correlati:** [0_REQUIREMENTS_AND_USE_CASES.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/0_REQUIREMENTS_AND_USE_CASES.md) | [1_PROJECT_CONTEXT.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/1_PROJECT_CONTEXT.md)
+> **Documenti Correlati:** [0_REQUIREMENTS.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/0_REQUIREMENTS.md) | [1_PROJECT_CONTEXT.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/1_PROJECT_CONTEXT.md)
 
 ---
 
@@ -119,7 +119,7 @@ graph TD
 | **Terminale Web** | **@xterm/xterm** + **@xterm/addon-fit** | Emulatore terminale ANSI ad alte prestazioni nel browser |
 | **Debug & Diagnostics** | **Custom Ring-Buffer Logger + Interceptors** | Cattura trasparente chiamate Axios, eventi SSE, WebSocket ed eccezioni JS con export Markdown |
 | **UI & Styling** | **Tailwind CSS** + **Lucide Icons** | Design system moderno con dark mode nativo e grafici **Recharts** |
-| **Containerization** | **Docker & Docker Compose** | Multi-container: `db`, `backend` (con Nmap), `frontend` (con Nginx) |
+| **Containerization** | **Docker & Docker Compose** | Multi-container: `postgres`, `backend` (con Nmap), `frontend` (con Nginx) |
 
 ---
 
@@ -132,50 +132,16 @@ backend/
 │   └── cve-sync/           # Utility CLI per sincronizzare il database CVE locale
 ├── internal/
 │   ├── domain/             # Entità di business pure, errori di dominio e interfacce
-│   │   ├── tenant.go
-│   │   ├── user.go
-│   │   ├── target.go       # Include TargetGroup con ParentID per struttura ad albero
-│   │   ├── scan.go
-│   │   ├── finding.go
-│   │   ├── cve.go
-│   │   ├── discovery.go    # Modello Device Discovery (IP, MAC, Vendor, Hostname, RTT)
-│   │   ├── event.go        # Modello Eventi SSE (DeviceDiscovered, ScanPhase, ScanProgress, FindingDiscovered)
-│   │   ├── ssh_server.go   # Modello Server SSH remoto con credenziali cifrate
-│   │   └── firewall.go     # Modello Catene e Regole iptables/nftables
 │   ├── repository/         # Implementazione persistenza dati PostgreSQL (SQL/pgx)
-│   │   ├── postgres/
-│   │   │   ├── target_group_repo.go
-│   │   │   ├── ssh_server_repo.go
-│   │   │   └── firewall_backup_repo.go
+│   │   ├── postgres/       # Repository concreti per entità
 │   │   └── migrations/     # File di migrazione .sql versionati
 │   ├── service/            # Casi d'uso e logica di business
-│   │   ├── auth_service.go
-│   │   ├── target_service.go
-│   │   ├── scan_service.go
-│   │   ├── scan_orchestrator.go   # Worker pool con emissione eventi live e scrittura incrementale finding
-│   │   ├── discovery_service.go   # Engine di discovery veloce con live event streaming
-│   │   ├── event_broadcaster.go   # Pub/Sub Hub SSE in-memory con canali sicuri e channel multiplexing
-│   │   ├── cve_service.go
-│   │   ├── report_service.go      # Reports Hub con template Executive & Technical
-│   │   ├── ssh_service.go         # Gestione sessioni SSH sicure e WebSocket PTY
-│   │   └── firewall_service.go    # Parser/Runner iptables con Anti-Lockout Timer
 │   ├── scanner/            # Wrapper Nmap, parser XML e profili (Alive-Only)
-│   │   ├── nmap_runner.go         # Supporto monitoraggio output real-time (--stats-every / live output)
-│   │   ├── nmap_parser.go
-│   │   ├── profiles.go
-│   │   └── oui_database.go        # Database IEEE OUI locale per produttori MAC
-│   └── delivery/           # HTTP Handlers, SSE Handlers, WebSocket Handlers e Middleware
-│       ├── http/handler/
-│       │   ├── target_group_handler.go
-│       │   ├── discovery_handler.go   # Endpoint scansione e SSE stream /network-discovery/stream
-│       │   ├── scan_handler.go        # Endpoint scansioni e SSE stream /scans/{id}/stream
-│       │   ├── report_hub_handler.go
-│       │   └── ssh_firewall_handler.go
-│       └── ws/             # Handler WebSocket per terminale xterm.js
-│           └── ssh_terminal_ws.go
+│   └── delivery/           # Handlers HTTP REST, SSE, WebSocket e Middleware
 └── pkg/
     ├── crypto/             # AES-256-GCM encryption/decryption helper
     ├── auth/               # JWT token & Password Hasher
+    ├── report/             # Generatori PDF e CSV
     └── validator/          # Validatore IP/CIDR/Porte/Firewall rules
 ```
 
@@ -290,232 +256,30 @@ erDiagram
 
 ---
 
-## 5. Contratti API REST & WebSocket (OpenAPI Specifications Summary)
+## 5. Documentazione Dettagliata per Dominio
 
-Tutte le API rispondono sotto `/api/v1` (payload JSON `{ "success": true, "data": ..., "error": null }`) e `/ws/v1` per i WebSocket.
+Per garantire modularità ed efficienza di contesto, i dettagli tecnici e i contratti specifici sono frammentati nei file di dominio:
 
-### 5.1 Struttura ad Albero Cartelle Target (`/api/v1/target-groups`)
-- `GET /api/v1/target-groups` — Restituisce l'albero gerarchico ricorsivo dei gruppi con conteggio target e livello di rischio aggregato.
-- `POST /api/v1/target-groups` — Crea un nuovo gruppo/cartella (`{ name, description, parent_id, color_tag }`).
-- `PUT /api/v1/target-groups/{id}` — Aggiorna nome, descrizione o sposta cartella (`parent_id`).
-- `DELETE /api/v1/target-groups/{id}` — Elimina gruppo (con opzione di riassegnazione o rimozione a cascata).
-
-### 5.2 Network Discovery LAN (Stile Advanced IP Scanner)
-- `POST /api/v1/network-discovery/scan` — Avvia un job rapido di ping/ARP sweep su una subnet (es. `{ "subnet": "192.168.1.0/24", "include_common_ports": true }`).
-- `GET /api/v1/network-discovery/results` — Restituisce i dispositivi attivi rilevati (IP, MAC, Vendor OUI, Hostname, RTT ms, Porte comuni aperte).
-- `POST /api/v1/network-discovery/import-targets` — Importa uno o più dispositivi selezionati come Target ufficiali in una determinata cartella dell'albero.
-
-### 5.3 Hub Centralizzato Reportistica (`/api/v1/reports`)
-- `GET /api/v1/reports` — Elenco storico di tutti i report di audit con filtri per data, target, cartella, severità massima e tipo.
-- `GET /api/v1/reports/{scan_id}/download?type=pdf&template=executive|technical` — Download diretto del report PDF formattato con branding del tenant nel template prescelto.
-- `GET /api/v1/reports/{scan_id}/download?type=csv` — Esportazione tabellare CSV RFC 4180.
-
-### 5.4 Gestione Server SSH Remoti (`/api/v1/ssh/servers`)
-- `GET /api/v1/ssh/servers` — Elenco dei server SSH configurati per il tenant.
-- `POST /api/v1/ssh/servers` — Registrazione nuovo server (salvataggio cifrato AES-256-GCM delle credenziali).
-- `POST /api/v1/ssh/servers/{id}/test-connection` — Test rapido di connettività SSH, verifica latenza e permessi sudo/root.
-- `DELETE /api/v1/ssh/servers/{id}` — Eliminazione server censito e chiavi associate.
-
-### 5.5 Gestione Firewall iptables (`/api/v1/ssh/servers/{id}/firewall`)
-- `GET /api/v1/ssh/servers/{id}/firewall` — Recupera stato del firewall, default policy delle catene (`INPUT`, `OUTPUT`, `FORWARD`) e lista ordinata delle regole.
-- `POST /api/v1/ssh/servers/{id}/firewall/rules` — Aggiunge una nuova regola (azione, protocollo, sorgente, destinazione, porta, commento).
-- `DELETE /api/v1/ssh/servers/{id}/firewall/rules/{rule_num}?chain=INPUT` — Rimuove una regola specifica.
-- `POST /api/v1/ssh/servers/{id}/firewall/apply-with-safety-timer` — Applica le modifiche attivando il **Safety Rollback Timer** (es. 60s). Salva uno snapshot in `FIREWALL_BACKUPS`.
-- `POST /api/v1/ssh/servers/{id}/firewall/confirm` — Conferma la nuova configurazione disattivando il timer di rollback.
-- `POST /api/v1/ssh/servers/{id}/firewall/rollback` — Esegue il ripristino manuale immediato all'ultimo snapshot valido (`iptables-restore`).
-
-### 5.6 WebSocket Web Terminal SSH (`/ws/v1/ssh/servers/{id}/terminal`)
-- `WS /ws/v1/ssh/servers/{id}/terminal?token={jwt}` — Connessione WebSocket bidirezionale.
-  - Client -> Server: payload binari/testuali di input tastiera e messaggi di controllo dimensione finestra (`{ "type": "resize", "cols": 120, "rows": 30 }`).
-  - Server -> Client: stream di output PTY grezzo da inviare all'istanza `xterm.js` del browser.
-
-### 5.7 Streaming in Tempo Reale via Server-Sent Events (SSE)
-Tutti gli endpoint di streaming espongono header standard `Content-Type: text/event-stream`, `Cache-Control: no-cache` e `Connection: keep-alive`. L'autenticazione è supportata via header `Authorization: Bearer <jwt>` o query param `?token=<jwt>` per compatibilità con l'API browser nativa `EventSource`.
-
-#### 5.7.1 LAN Network Discovery Stream (`/api/v1/network-discovery/stream`)
-- `GET /api/v1/network-discovery/stream?session_id={session_id}&token={jwt}`
-  - **Payload Eventi:**
-    - `event: device_discovered`
-      ```json
-      {
-        "session_id": "uuid",
-        "device": {
-          "ip": "192.168.1.45",
-          "mac": "b8:27:eb:12:34:56",
-          "vendor": "Raspberry Pi Foundation",
-          "hostname": "raspberrypi.local",
-          "latency_ms": 1.8,
-          "status": "up",
-          "open_ports": [22, 80],
-          "scanned_at": "2026-10-09T18:00:00Z"
-        }
-      }
-      ```
-    - `event: progress`
-      ```json
-      {
-        "session_id": "uuid",
-        "scanned_hosts": 128,
-        "total_hosts": 254,
-        "percentage": 50.39,
-        "current_ip": "192.168.1.128"
-      }
-      ```
-    - `event: complete`
-      ```json
-      {
-        "session_id": "uuid",
-        "total_discovered": 14,
-        "duration_seconds": 4.12
-      }
-      ```
-    - `event: error`
-      ```json
-      {
-        "session_id": "uuid",
-        "message": "Scansione interrotta per errore di interfaccia"
-      }
-      ```
-
-#### 5.7.2 Vulnerability Scan Live Stream (`/api/v1/scans/{id}/stream`)
-- `GET /api/v1/scans/{id}/stream?token={jwt}`
-  - **Payload Eventi:**
-    - `event: phase`
-      ```json
-      {
-        "scan_id": "uuid",
-        "phase": "PORT_SCAN", // HOST_DISCOVERY, PORT_SCAN, SERVICE_DETECTION, CVE_CORRELATION
-        "message": "Scansione porte SYN in corso sui target attivi",
-        "percentage": 25.0
-      }
-      ```
-    - `event: progress`
-      ```json
-      {
-        "scan_id": "uuid",
-        "percentage": 68.5,
-        "message": "About 68.5% done; ETC: 19:15:20"
-      }
-      ```
-    - `event: finding_discovered` (emesso per ogni porta/servizio/vulnerabilità persistita su DB)
-      ```json
-      {
-        "scan_id": "uuid",
-        "finding": {
-          "id": "uuid",
-          "host_ip": "192.168.1.10",
-          "hostname": "srv-prod.lan",
-          "port": 80,
-          "protocol": "tcp",
-          "service_name": "http",
-          "service_version": "Apache httpd 2.4.49",
-          "severity": "CRITICAL",
-          "cve_id": "CVE-2021-41773",
-          "cvss_score": 7.5
-        }
-      }
-      ```
-    - `event: status_change`
-      ```json
-      {
-        "scan_id": "uuid",
-        "status": "COMPLETED", // RUNNING, COMPLETED, FAILED, CANCELLED
-        "summary_stats": {
-          "total_hosts": 1,
-          "up_hosts": 1,
-          "down_hosts": 0,
-          "open_ports": 3,
-          "critical_cves": 1
-        }
-      }
-    - `event: error`
-      ```json
-      {
-        "scan_id": "uuid",
-        "message": "Errore durante l'esecuzione del processo"
-      }
-      ```
+1. **[Scanning & LAN Network Discovery](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/domains/scanning_and_discovery.md)**: Profili Nmap, filtro host spenti (Alive-Only), scansione LAN ad alta velocità, database IEEE OUI e specifiche stream SSE (`/api/v1/network-discovery/stream`, `/api/v1/scans/{id}/stream`).
+2. **[Remote SSH & iptables Firewall Manager](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/domains/ssh_and_firewall.md)**: Gestione credenziali e cifratura AES-256-GCM, Anti-Lockout Safety Timer, ispezione e modifica regole iptables, WebSocket Web Terminal SSH PTY.
+3. **[Asset Tree Management & Centralized Reports Hub](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/domains/reporting_and_assets.md)**: Albero gerarchico asset (`TargetGroup`), tipi di target e blacklist, archivio storico `/reports` e motori di esportazione PDF White-Label (Executive/Technical) e CSV RFC 4180.
+4. **[Debug & Testing Live Console Drawer](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/domains/debug_console.md)**: In-Memory Ring Buffer (500 log), intercettori Axios/SSE/WS/JS, sanificazione credenziali `[REDACTED]` ed esportatore Markdown preformattato per AI.
 
 ---
 
-## 6. Architettura Client-Side della Console di Debug & Testing (Feature 7)
+## 6. Contratti API REST, SSE e WebSocket (Riepilogo)
 
-La console di debug (`DebugConsoleDrawer`) opera come un sottosistema client-side non intrusivo e a zero impatto sulle performance, fornendo osservabilità completa su tutte le interazioni di rete e gli eventi applicativi.
+Tutte le API rispondono sotto `/api/v1` con payload standard `{ "success": true, "data": ..., "error": null }` e autenticazione Bearer JWT:
 
-```mermaid
-graph TD
-    subgraph Event_Sources ["Sorgenti Eventi Frontend"]
-        Axios["Axios Interceptor (Request / Response / Error)"]
-        SSEListener["SSE Stream Listener (Network Discovery & Scans)"]
-        WSListener["WebSocket Observer (SSH Web Terminal)"]
-        JSRuntime["Window Error & Unhandled Rejection Listeners"]
-        CustomLogs["In-App Custom Logger (Info/Warn/Error)"]
-    end
-
-    subgraph Core_Engine ["Debug Logger Engine (Ring Buffer)"]
-        Sanitizer["Sensitive Data Sanitizer (Redaction Passwords/Tokens)"]
-        RingBuffer["In-Memory Ring Buffer (Max 500 Entries)"]
-        EventBus["Pub/Sub Event Bus (Subscribers & Listeners)"]
-    end
-
-    subgraph Presentation_Layer ["Presentation Layer"]
-        DebugContext["DebugContext & State Provider"]
-        FloatingBtn["Floating Toggle Button (Badge Contatore Errori)"]
-        Drawer["DebugConsoleDrawer (Slide-Over Panel - Ctrl+Shift+D)"]
-        FilterToolbar["Toolbar Filtri (Level, Source, Full-Text Search)"]
-        LogList["Virtual Log List & Detail Viewer"]
-        AIExporter["Markdown & JSON Diagnostics Exporter"]
-    end
-
-    Axios --> Sanitizer
-    SSEListener --> Sanitizer
-    WSListener --> Sanitizer
-    JSRuntime --> Sanitizer
-    CustomLogs --> Sanitizer
-
-    Sanitizer --> RingBuffer
-    RingBuffer --> EventBus
-    EventBus --> DebugContext
-
-    DebugContext --> FloatingBtn
-    DebugContext --> Drawer
-    Drawer --> FilterToolbar
-    Drawer --> LogList
-    Drawer --> AIExporter
-```
-
-### 6.1 Struttura Dati di Dominio Client (`DebugEntry`)
-```typescript
-export type DebugLogLevel = 'info' | 'warn' | 'error';
-export type DebugLogSource = 'api' | 'sse' | 'ws' | 'runtime' | 'app';
-
-export interface DebugEntry {
-  id: string;
-  timestamp: string;
-  level: DebugLogLevel;
-  source: DebugLogSource;
-  title: string;
-  url?: string;
-  method?: string;
-  status?: number;
-  durationMs?: number;
-  requestData?: unknown;
-  responseData?: unknown;
-  error?: string;
-  stack?: string;
-  metadata?: Record<string, unknown>;
-}
-```
-
-### 6.2 Politica di Sanificazione e Sicurezza (`NFR-DEV-01`)
-Tutti i payload in transito vengono analizzati prima di essere archiviati nel buffer:
-- I campi sensibili con chiavi (`password`, `access_token`, `refresh_token`, `secret`, `encrypted_secret`, `Authorization`) vengono sostituiti ricorsivamente con `"[REDACTED]"`.
-- Nessun dato sensibile o segreto crittografico viene esposto nel drawer o copiato negli appunti.
-
-### 6.3 Formato Standard del Report Diagnostico per AI
-Il pulsante *"Copia per AI (Markdown)"* sintetizza lo stato in un blocco strutturato contenente:
-1. Riepilogo Sessione (Timestamp, Rotta attiva, Browser/OS, Conteggio Totale Errori).
-2. Tabella Sinottica degli Errori (Data/Ora, Sorgente, Metodo/URL, Status, Durata).
-3. Schede Dettagliate per ogni Errore con corpo richiesta sanificato, messaggio di errore/risposta del server e stack trace.
-
-
+- `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
+- `GET`, `POST`, `PUT`, `DELETE /api/v1/targets`
+- `GET`, `POST`, `PUT`, `DELETE /api/v1/target-groups`
+- `POST /api/v1/network-discovery/scan`, `GET /api/v1/network-discovery/results`, `POST /api/v1/network-discovery/import-targets`
+- `GET /api/v1/network-discovery/stream?session_id={id}&token={jwt}` (SSE)
+- `POST /api/v1/scans`, `GET /api/v1/scans`, `GET /api/v1/scans/{id}`, `POST /api/v1/scans/{id}/cancel`
+- `GET /api/v1/scans/{id}/stream?token={jwt}` (SSE)
+- `GET /api/v1/reports`, `GET /api/v1/reports/{scan_id}/download` (PDF/CSV)
+- `GET`, `POST`, `DELETE /api/v1/ssh/servers`, `POST /api/v1/ssh/servers/{id}/test-connection`
+- `GET`, `POST`, `DELETE /api/v1/ssh/servers/{id}/firewall/rules`
+- `POST /api/v1/ssh/servers/{id}/firewall/apply-with-safety-timer`, `confirm`, `rollback`
+- `GET /ws/v1/ssh/servers/{id}/terminal?token={jwt}` (WebSocket PTY)
