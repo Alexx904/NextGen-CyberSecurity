@@ -20,8 +20,6 @@ import {
   Radar,
   Server,
 } from 'lucide-react';
-import { DebugFloatingToggle } from '../debug/DebugFloatingToggle';
-import { DebugConsoleDrawer } from '../debug/DebugConsoleDrawer';
 
 interface HealthData {
   status: string;
@@ -213,10 +211,6 @@ export const AppLayout: React.FC = () => {
           <Outlet />
         </main>
       </div>
-
-      {/* Live Debug & Diagnostics Console Drawer & Floating Button */}
-      <DebugFloatingToggle />
-      <DebugConsoleDrawer />
     </div>
   );
 };

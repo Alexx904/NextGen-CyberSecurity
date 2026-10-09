@@ -15,7 +15,7 @@ export const DebugFloatingToggle: React.FC = () => {
       onClick={toggleDrawer}
       aria-label="Apri Console di Debug (Ctrl+Shift+D)"
       title="Debug & Testing Live Console (Ctrl+Shift+D)"
-      className="fixed bottom-5 right-5 z-40 group flex items-center justify-center p-3 rounded-xl bg-slate-900/95 border border-cyan-500/40 text-cyan-400 hover:text-cyan-300 hover:border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.25)] hover:shadow-[0_0_25px_rgba(6,182,212,0.45)] backdrop-blur-md transition-all duration-200 transform hover:scale-105 active:scale-95"
+      className="fixed bottom-5 right-5 z-50 group flex items-center justify-center p-3 rounded-xl bg-slate-900/95 border border-cyan-500/40 text-cyan-400 hover:text-cyan-300 hover:border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.25)] hover:shadow-[0_0_25px_rgba(6,182,212,0.45)] backdrop-blur-md transition-all duration-200 transform hover:scale-105 active:scale-95"
     >
       <div className="relative">
         <Terminal className="w-5 h-5 text-cyan-400 group-hover:text-cyan-300 transition-colors" />

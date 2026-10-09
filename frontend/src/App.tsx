@@ -4,6 +4,8 @@ import { AuthProvider } from './context/AuthContext';
 import { DebugProvider } from './context/DebugContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { AppLayout } from './components/layout/AppLayout';
+import { DebugFloatingToggle } from './components/debug/DebugFloatingToggle';
+import { DebugConsoleDrawer } from './components/debug/DebugConsoleDrawer';
 
 // Code-splitting via React.lazy per ottimizzazione bundle e caricamento su richiesta
 const Login = lazy(() => import('./pages/Login').then(m => ({ default: m.Login })));
@@ -57,6 +59,10 @@ export default function App() {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>
+
+          {/* Console di Debug e Pulsante Fluttuante Globale (attivi su qualsiasi pagina, incluso Login) */}
+          <DebugFloatingToggle />
+          <DebugConsoleDrawer />
         </DebugProvider>
       </AuthProvider>
     </BrowserRouter>
