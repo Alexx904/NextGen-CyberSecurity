@@ -69,4 +69,23 @@ export interface ScanErrorPayload {
   message: string;
 }
 
+export type ScanProfileCategory =
+  | 'PEN_TEST'
+  | 'SYSTEM_FLAWS'
+  | 'WEB_APP'
+  | 'DISCOVERY'
+  | 'COMPLIANCE'
+  | 'CUSTOM';
 
+export interface ScanProfileItem {
+  id: string;
+  name: string;
+  nmap_args: string;
+  description?: string;
+  timeout_seconds: number;
+  category: ScanProfileCategory;
+  is_custom: boolean;
+  tenant_id?: string;
+  created_at?: string;
+  updated_at?: string;
+}
