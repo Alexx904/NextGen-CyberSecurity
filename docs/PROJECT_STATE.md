@@ -3,9 +3,9 @@
 > Memoria viva dell'agente. Letta a inizio sessione, aggiornata a fine di ogni turno.
 > Non cancellare sezioni: se vuote, scrivi "nessuno".
 
-**Ultimo aggiornamento:** 2026-10-09 22:00  
+**Ultimo aggiornamento:** 2026-10-09 22:32  
 **Modalità progetto:** esistente (onboarded il 2026-10-09, validato dall'utente)  
-**Fase:** Manutenzione & Sviluppo Milestone 2  
+**Fase:** Sviluppo Milestone 2 (Attack Path Mapping)  
 
 ## Project Profile
 
@@ -28,11 +28,11 @@ Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git
 
 | Data | Comando | Esito | Fallimenti preesistenti noti |
 |---|---|---|---|
-| 2026-10-09 21:49 | `go test ./...` (backend) | PASS (exit code 0, 14 package) | Nessuno. Tutti i test passano al 100%. |
-| 2026-10-09 21:49 | `go build ./...` (backend) | PASS (exit code 0) | Nessuno. Compilazione pulita. |
-| 2026-10-09 21:49 | `go vet ./...` (backend) | PASS (exit code 0) | Nessuno. Zero anomalie rilevate. |
-| 2026-10-09 21:50 | `npm test` (frontend Vitest) | PASS (exit code 0, 10 file, 65 test) | Nessuno. (Nota: warning informativi su act() in DebugConsole e React Router v7 future flags). |
-| 2026-10-09 21:50 | `npm run build` (frontend tsc + Vite) | PASS (exit code 0) | Nessuno. (Nota: warning chunk size > 500kB su bundle principale, da ottimizzare con code-splitting). |
+| 2026-10-09 22:30 | `go test ./...` (backend) | PASS (exit code 0, 14 package, inclusi handler e service attack path) | Nessuno. Tutti i test passano al 100%. |
+| 2026-10-09 22:29 | `go build ./...` (backend) | PASS (exit code 0) | Nessuno. Compilazione pulita. |
+| 2026-10-09 22:29 | `go vet ./...` (backend) | PASS (exit code 0) | Nessuno. Zero anomalie rilevate. |
+| 2026-10-09 22:31 | `npm test` (frontend Vitest) | PASS (exit code 0, 10 file, 65 test) | Nessuno. |
+| 2026-10-09 22:31 | `npm run build` (frontend tsc + Vite) | PASS (exit code 0) | Nessuno. Tutti i chunk ottimizzati. |
 
 ## In corso
 
@@ -40,7 +40,7 @@ Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git
 
 ## In attesa di accettazione utente
 
-- (nessuno)
+- **FEAT-M2-02 · Motore di Calcolo Lateral Movement & API Grafo (Backend Go)**: Servizio di aggregazione topologica, calcolo dei pivot multi-hop verso reti interne, identificazione chokepoint e registrazione endpoint REST `/api/v1/attack-paths/graph` e `/api/v1/attack-paths/chokepoints`.
 
 ## Bloccati / Domande aperte per l'utente
 
@@ -59,25 +59,19 @@ Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git
 - **PO-01 (2026-10-09):** Approvazione implementazione pipeline CI/CD GitHub Actions per backend e frontend.
 - **PO-02 (2026-10-09):** Approvazione ottimizzazione bundle frontend tramite code-splitting e `React.lazy`.
 - **PO-03 (2026-10-09):** Priorità strategica Milestone 2 assegnata a Attack Path Mapping.
-- **ADR-01:** Modularizzazione di `2_ARCHITECTURE.md` con scomposizione per domini in `docs/domains/` (`scanning_and_discovery.md`, `ssh_and_firewall.md`, `reporting_and_assets.md`, `debug_console.md`).
+- **ADR-01:** Modularizzazione di `2_ARCHITECTURE.md` con scomposizione per domini in `docs/domains/` (`scanning_and_discovery.md`, `ssh_and_firewall.md`, `reporting_and_assets.md`, `debug_console.md`, `attack_path.md`).
 - **ADR-02:** Preservazione della cronologia Git via `git mv` per file storici e tracciamento in `docs/_legacy/MAPPING.md`.
 - **ADR-03:** Creazione del branch dedicato `chore/agent-onboarding` per tutte le modifiche strutturali.
 
 ## Prossimi passi
 
-1. Chiedere all'utente conferma per eseguire il merge di `chore/agent-onboarding` su `main`.
-2. Implementare `ONBOARD-01` (Pipeline CI/CD GitHub Actions in `.github/workflows/ci.yml`).
-3. Implementare `ONBOARD-03` (Code-splitting bundle frontend in `frontend/src/App.tsx` e `frontend/vite.config.ts`).
-4. Avviare intake e system design per `FEAT-M2-01` (Attack Path Mapping).
+1. Attendere feedback / accettazione da parte del PO sul task `FEAT-M2-02`.
+2. Procedere all'implementazione del componente UI Frontend: `FEAT-M2-03 · Componente UI Visual Graph Explorer (Frontend React)`.
 
 ## Log sessioni (ultime 5, la più recente in alto)
 
+- 2026-10-09 · Esecuzione FEAT-M2-02: implementato AttackPathService (correlazione DMZ/RCE -> internal DB/host, mitigazione chokepoints), AttackPathHandler con test unitari completi, cablaggio rotte in main.go · Backend test/vet/build e Frontend vitest/build 100% VERDI
 - 2026-10-09 · Task FEAT-M2-01 accettato e verificato dal PO (`[x]`). Ingegneria dei requisiti e modello di dominio Attack Path consolidati · Test e Build VERDI
 - 2026-10-09 · Esecuzione FEAT-M2-01: formalizzati FR-14 e UC-13 in 0_REQUIREMENTS.md, redatto docs/domains/attack_path.md, implementato modello di dominio Go attack_path.go con algoritmi di Cumulative Risk Scoring e Chokepoints · Test domain PASS 100%
 - 2026-10-09 · Task ONBOARD-03 accettato dal PO (`[x]`). Ottimizzazione bundle e code-splitting consolidati su main · Test e Build VERDI
 - 2026-10-09 · Esecuzione ONBOARD-03: implementato code-splitting con React.lazy in App.tsx e manualChunks in vite.config.ts. Dimensione chunk principale ridotta da 1.2 MB a 91 kB, 0 warning Vite · Test 65/65 PASS
-- 2026-10-09 · Task ONBOARD-01 accettato dal PO (`[x]`). Pipeline CI/CD GitHub Actions consolidata · Test VERDI
-- 2026-10-09 · Esecuzione ONBOARD-01: creata pipeline GitHub Actions in `.github/workflows/ci.yml` per backend (Go 1.22 test/build/vet) e frontend (Node 20 vitest/build) · Sintassi YAML verificata
-- 2026-10-09 · Merge branch `chore/agent-onboarding` su `main` e creazione branch feature `feat/ONBOARD-01-ci-cd` · Baseline VERDE
-- 2026-10-09 · Validazione onboarding da parte del PO. Registrate scelte operative: CI/CD (Sì), Code-Splitting (Sì), Attack Path Mapping (Priorità Milestone 2) · Baseline VERDE
-- 2026-10-09 · Esecuzione `/onboard`: inventario, baseline test 100% verde (Go + Vitest + build), modularizzazione `docs/domains/`, creazione `MAPPING.md` e configurazione memoria viva `PROJECT_STATE.md` · Baseline VERDE (exit code 0)

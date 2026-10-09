@@ -139,6 +139,7 @@ func main() {
 	sshService := service.NewSSHService(sshServerRepo, cfg.SSHMasterKey)
 	terminalWSHandler := ws.NewSSHTerminalHandler(sshService)
 	firewallService := service.NewFirewallService(sshService, sshServerRepo)
+	attackPathService := service.NewAttackPathService(targetRepo, findingRepo, sshServerRepo)
 
 	// 8. Configurazione Router Chi & Middleware Standard
 	r := chi.NewRouter()
@@ -159,6 +160,7 @@ func main() {
 	reportHandler := handler.NewReportHandler(reportService)
 	scheduleHandler := handler.NewScheduleHandler(schedulerService, targetRepo, scanProfileRepo)
 	cveHandler := handler.NewCVEHandler(cveRepo, cveSyncService)
+	attackPathHandler := handler.NewAttackPathHandler(attackPathService)
 
 	r.Get("/healthz", healthHandler.HealthCheck)
 	r.Route("/api/v1", func(api chi.Router) {
@@ -326,6 +328,14 @@ func main() {
 				secOpsRouter.Post("/{id}/firewall/confirm", sshFirewallHandler.ConfirmFirewall)
 				secOpsRouter.Post("/{id}/firewall/rollback", sshFirewallHandler.RollbackFirewall)
 			})
+		})
+
+		api.Route("/attack-paths", func(apRouter chi.Router) {
+			apRouter.Use(appmw.Authenticate(tokenManager))
+			apRouter.Use(appmw.RequireTenant())
+
+			apRouter.Get("/graph", attackPathHandler.GetGraph)
+			apRouter.Get("/chokepoints", attackPathHandler.GetChokepoints)
 		})
 	})
 

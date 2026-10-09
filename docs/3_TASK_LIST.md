@@ -42,11 +42,11 @@
   - Test: Unit test su algoritmi di correlazione percorsi e grafo adiacenze
   - DoD: Definizione formale degli Use Cases e modelli di dominio per collegamenti tra vulnerabilità scoperte, credenziali compromesse, nodi raggiungibili e calcolo del lateral movement; progettazione delle API REST per il grafo.
 
-- [ ] **FEAT-M2-02 · Motore di Calcolo Lateral Movement & API Grafo (Backend Go)**
+- [~] **FEAT-M2-02 · Motore di Calcolo Lateral Movement & API Grafo (Backend Go)**
   - File: `backend/internal/service/attack_path_service.go`, `backend/internal/delivery/http/handler/attack_path_handler.go`
   - Dipende da: FEAT-M2-01
   - Test: Service & HTTP integration tests (happy, sad, edge)
-  - DoD: Servizio Go che aggrega Scans, Findings, Subnet e Server SSH per generare nodi ed archi orientati con punteggio di rischio complessivo del percorso.
+  - DoD: Servizio Go che aggrega Scans, Findings, Subnet e Server SSH per generare nodi ed archi orientati con punteggio di rischio complessivo del percorso; endpoint REST `/api/v1/attack-paths/graph` e `/api/v1/attack-paths/chokepoints`.
 
 - [ ] **FEAT-M2-03 · Componente UI Visual Graph Explorer (Frontend React)**
   - File: `frontend/src/pages/AttackPath.tsx`, `frontend/src/components/graph/AttackPathGraph.tsx`
