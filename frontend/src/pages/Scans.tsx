@@ -19,7 +19,6 @@ import {
   FolderOpen,
   ChevronDown,
   ChevronRight,
-  LayoutGrid,
   List,
   Search,
   Crosshair,
