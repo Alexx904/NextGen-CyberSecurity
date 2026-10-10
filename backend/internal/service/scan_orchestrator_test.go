@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -907,5 +909,299 @@ func TestScanOrchestrator_EventBroadcasting(t *testing.T) {
 		t.Errorf("atteso 1 finding persistito, trovati: %d", len(findingRepo.findings))
 	}
 }
+
+func TestScanOrchestrator_EdgeCase_CorruptedXMLOutput(t *testing.T) {
+	// Simula completamento del processo ma con payload XML corrotto/incompleto (no panic, transizione FAILED elegante)
+	tenantID := uuid.New()
+	targetID := uuid.New()
+	profileID := uuid.New()
+	scanID := uuid.New()
+
+	scanRepo := newMockScanRepo()
+	targetRepo := &mockTargetRepo{
+		targets: map[uuid.UUID]*domain.Target{
+			targetID: {
+				ID:            targetID,
+				TenantID:      tenantID,
+				Type:          domain.TargetTypeIP,
+				Value:         "192.168.1.100",
+				IsBlacklisted: false,
+			},
+		},
+		blacklistedMap: make(map[string]bool),
+	}
+
+	profileRepo := &mockProfileRepo{
+		profiles: map[uuid.UUID]*domain.ScanProfile{
+			profileID: {
+				ID:             profileID,
+				Name:           "Corrupted XML Test",
+				NmapArgs:       "-T4 -F",
+				TimeoutSeconds: 5,
+			},
+		},
+	}
+
+	runner := &mockRunner{
+		runFunc: func(ctx context.Context, target string, profile scanner.ProfileConfig) (*scanner.ScanExecutionResult, error) {
+			return &scanner.ScanExecutionResult{
+				RawXML:   []byte("<incomplete><broken_xml_without_nmaprun>"),
+				Stdout:   "<incomplete>",
+				ExitCode: 0,
+				Duration: 50 * time.Millisecond,
+			}, nil
+		},
+	}
+
+	initialScan := &domain.Scan{
+		ID:          scanID,
+		TenantID:    tenantID,
+		TargetID:    targetID,
+		ProfileID:   profileID,
+		TriggerType: domain.TriggerManual,
+		Status:      domain.ScanStatusQueued,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+	_ = scanRepo.Create(context.Background(), initialScan)
+
+	orchestrator := NewScanOrchestrator(
+		OrchestratorConfig{MaxWorkers: 1, QueueSize: 5},
+		scanRepo,
+		profileRepo,
+		targetRepo,
+		runner,
+		silentLogger(),
+	)
+
+	ctx := context.Background()
+	orchestrator.Start(ctx)
+	defer orchestrator.Stop()
+
+	if err := orchestrator.Enqueue(tenantID, scanID); err != nil {
+		t.Fatalf("Enqueue fallito: %v", err)
+	}
+
+	// Attendi completamento gestione job
+	var finalScan *domain.Scan
+	timeout := time.After(2 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			t.Fatal("timeout in attesa del completamento della scansione con XML corrotto")
+		default:
+			s, _ := scanRepo.GetByID(ctx, tenantID, scanID)
+			if s != nil && s.Status != domain.ScanStatusQueued && s.Status != domain.ScanStatusRunning {
+				finalScan = s
+				break
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		if finalScan != nil {
+			break
+		}
+	}
+
+	if finalScan.Status != domain.ScanStatusFailed {
+		t.Errorf("atteso stato FAILED per XML corrotto, ottenuto: %s", finalScan.Status)
+	}
+
+	if finalScan.ErrorMessage == nil || *finalScan.ErrorMessage == "" {
+		t.Error("ErrorMessage non deve essere vuoto per scansione fallita da XML non valido")
+	}
+}
+
+func TestScanOrchestrator_EdgeCase_SuddenKillOrProcessCrash(t *testing.T) {
+	// Simula crash improvviso o SIGKILL del processo Nmap da parte dell'OS
+	tenantID := uuid.New()
+	targetID := uuid.New()
+	profileID := uuid.New()
+	scanID := uuid.New()
+
+	scanRepo := newMockScanRepo()
+	targetRepo := &mockTargetRepo{
+		targets: map[uuid.UUID]*domain.Target{
+			targetID: {
+				ID:            targetID,
+				TenantID:      tenantID,
+				Type:          domain.TargetTypeIP,
+				Value:         "192.168.1.101",
+				IsBlacklisted: false,
+			},
+		},
+		blacklistedMap: make(map[string]bool),
+	}
+
+	profileRepo := &mockProfileRepo{
+		profiles: map[uuid.UUID]*domain.ScanProfile{
+			profileID: {
+				ID:             profileID,
+				Name:           "Kill Test Profile",
+				NmapArgs:       "-T4",
+				TimeoutSeconds: 5,
+			},
+		},
+	}
+
+	runner := &mockRunner{
+		runFunc: func(ctx context.Context, target string, profile scanner.ProfileConfig) (*scanner.ScanExecutionResult, error) {
+			return nil, fmt.Errorf("%w: exit code 137, killed by SIGKILL (OOM or external stop)", domain.ErrScannerExecFailed)
+		},
+	}
+
+	initialScan := &domain.Scan{
+		ID:          scanID,
+		TenantID:    tenantID,
+		TargetID:    targetID,
+		ProfileID:   profileID,
+		TriggerType: domain.TriggerManual,
+		Status:      domain.ScanStatusQueued,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+	_ = scanRepo.Create(context.Background(), initialScan)
+
+	orchestrator := NewScanOrchestrator(
+		OrchestratorConfig{MaxWorkers: 1, QueueSize: 5},
+		scanRepo,
+		profileRepo,
+		targetRepo,
+		runner,
+		silentLogger(),
+	)
+
+	ctx := context.Background()
+	orchestrator.Start(ctx)
+	defer orchestrator.Stop()
+
+	if err := orchestrator.Enqueue(tenantID, scanID); err != nil {
+		t.Fatalf("Enqueue fallito: %v", err)
+	}
+
+	var finalScan *domain.Scan
+	timeout := time.After(2 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			t.Fatal("timeout in attesa del completamento della scansione terminata da kill")
+		default:
+			s, _ := scanRepo.GetByID(ctx, tenantID, scanID)
+			if s != nil && s.Status != domain.ScanStatusQueued && s.Status != domain.ScanStatusRunning {
+				finalScan = s
+				break
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		if finalScan != nil {
+			break
+		}
+	}
+
+	if finalScan.Status != domain.ScanStatusFailed {
+		t.Errorf("atteso stato FAILED per processo crashato, ottenuto: %s", finalScan.Status)
+	}
+
+	if finalScan.ErrorMessage == nil || !strings.Contains(*finalScan.ErrorMessage, "SIGKILL") {
+		t.Errorf("ErrorMessage deve riportare il segnale o l'errore di kill, trovato: %v", finalScan.ErrorMessage)
+	}
+}
+
+func TestScanOrchestrator_EdgeCase_ContextTimeoutDuringExecution(t *testing.T) {
+	// Simula timeout del contesto durante l'esecuzione bloccante del runner
+	tenantID := uuid.New()
+	targetID := uuid.New()
+	profileID := uuid.New()
+	scanID := uuid.New()
+
+	scanRepo := newMockScanRepo()
+	targetRepo := &mockTargetRepo{
+		targets: map[uuid.UUID]*domain.Target{
+			targetID: {
+				ID:            targetID,
+				TenantID:      tenantID,
+				Type:          domain.TargetTypeIP,
+				Value:         "192.168.1.102",
+				IsBlacklisted: false,
+			},
+		},
+		blacklistedMap: make(map[string]bool),
+	}
+
+	// Timeout molto breve di 1 secondo
+	profileRepo := &mockProfileRepo{
+		profiles: map[uuid.UUID]*domain.ScanProfile{
+			profileID: {
+				ID:             profileID,
+				Name:           "Timeout Short Profile",
+				NmapArgs:       "-T4",
+				TimeoutSeconds: 1,
+			},
+		},
+	}
+
+	runner := &mockRunner{
+		runFunc: func(ctx context.Context, target string, profile scanner.ProfileConfig) (*scanner.ScanExecutionResult, error) {
+			<-ctx.Done()
+			return nil, ctx.Err()
+		},
+	}
+
+	initialScan := &domain.Scan{
+		ID:          scanID,
+		TenantID:    tenantID,
+		TargetID:    targetID,
+		ProfileID:   profileID,
+		TriggerType: domain.TriggerManual,
+		Status:      domain.ScanStatusQueued,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+	_ = scanRepo.Create(context.Background(), initialScan)
+
+	orchestrator := NewScanOrchestrator(
+		OrchestratorConfig{MaxWorkers: 1, QueueSize: 5},
+		scanRepo,
+		profileRepo,
+		targetRepo,
+		runner,
+		silentLogger(),
+	)
+
+	ctx := context.Background()
+	orchestrator.Start(ctx)
+	defer orchestrator.Stop()
+
+	if err := orchestrator.Enqueue(tenantID, scanID); err != nil {
+		t.Fatalf("Enqueue fallito: %v", err)
+	}
+
+	var finalScan *domain.Scan
+	timeout := time.After(3 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			t.Fatal("timeout nell'attesa dell'interruzione per superamento timeout profilo")
+		default:
+			s, _ := scanRepo.GetByID(ctx, tenantID, scanID)
+			if s != nil && s.Status != domain.ScanStatusQueued && s.Status != domain.ScanStatusRunning {
+				finalScan = s
+				break
+			}
+			time.Sleep(30 * time.Millisecond)
+		}
+		if finalScan != nil {
+			break
+		}
+	}
+
+	if finalScan.Status != domain.ScanStatusFailed {
+		t.Errorf("atteso stato FAILED per timeout superato, ottenuto: %s", finalScan.Status)
+	}
+
+	if finalScan.ErrorMessage == nil || !strings.Contains(*finalScan.ErrorMessage, "timeout") {
+		t.Errorf("ErrorMessage deve indicare il superamento del timeout, trovato: %v", finalScan.ErrorMessage)
+	}
+}
+
 
 

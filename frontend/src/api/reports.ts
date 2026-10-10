@@ -36,5 +36,27 @@ export const reportsApi = {
       onError: callbacks?.onError,
     });
   },
+
+  /**
+   * Esegue il download del report consolidato per Azienda nel formato (pdf|csv) e template (executive|technical)
+   */
+  downloadCompany: async (
+    groupId: string,
+    companyName: string,
+    format: ReportFormat = 'pdf',
+    template: ReportTemplate = 'executive',
+    callbacks?: { onStart?: () => void; onSuccess?: () => void; onError?: (err: Error) => void }
+  ): Promise<void> => {
+    const ext = format === 'pdf' ? 'pdf' : 'csv';
+    const safeName = companyName.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    const defaultFilename = `report_azienda_${safeName}_${template}.${ext}`;
+    return downloadReportFile({
+      url: `/reports/company/${groupId}/download?type=${format}&template=${template}`,
+      defaultFilename,
+      onStart: callbacks?.onStart,
+      onSuccess: callbacks?.onSuccess,
+      onError: callbacks?.onError,
+    });
+  },
 };
 

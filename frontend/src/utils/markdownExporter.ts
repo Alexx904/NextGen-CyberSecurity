@@ -14,11 +14,16 @@ export function generateAiMarkdownReport(
   stats: DebugLoggerStats,
   currentUrl?: string
 ): string {
-  const activeRoute =
+  const rawRoute =
     currentUrl ||
     (typeof window !== 'undefined' && window.location
       ? window.location.pathname + window.location.search
       : 'N/A');
+
+  const activeRoute = rawRoute.replace(
+    /([?&](?:token|ticket|access_token|refresh_token|passphrase|password|secret|api[_-]?key)=)[^& \t\r\n]+/gi,
+    '$1[REDACTED]'
+  );
 
   const userAgent =
     typeof navigator !== 'undefined' && navigator.userAgent
@@ -111,7 +116,13 @@ export function generateAiMarkdownReport(
     md += `\n`;
   }
 
-  return md;
+  // Redazione globale di sicurezza preventiva per credenziali o token residui (NFR-DEV-01)
+  const sanitizedMd = md
+    .replace(/([?&](?:token|ticket|access_token|refresh_token|passphrase|password|secret|api[_-]?key)=)[^& \t\r\n`'"]+/gi, '$1[REDACTED]')
+    .replace(/Bearer\s+[A-Za-z0-9\-_.~+/]+=*/gi, 'Bearer [REDACTED]')
+    .replace(/[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/g, '[REDACTED_JWT]');
+
+  return sanitizedMd;
 }
 
 /**

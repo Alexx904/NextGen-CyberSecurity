@@ -29,6 +29,20 @@ func TestHelperProcess(t *testing.T) {
 	case "error":
 		fmt.Fprint(os.Stderr, "QUITTING! Failed to resolve target host")
 		os.Exit(2)
+	case "sigkill":
+		fmt.Fprint(os.Stderr, "Killed by signal 9 (SIGKILL)")
+		os.Exit(137)
+	case "truncated_xml":
+		fmt.Print(`<?xml version="1.0" encoding="UTF-8"?><nmaprun scanner="nmap" args="nmap -oX - 192.168.1.1"><host><status state="up"/><address addr="192.168.1.1" addrtype="ipv4"/><ports><port protocol="tcp" portid="80"><state state="open"/>`)
+		os.Exit(0)
+	case "corrupted_xml":
+		fmt.Print("\x00\x01\x02\xFF\xFE\xFD<not-an-xml-doc><<<>>>")
+		os.Exit(0)
+	case "large_stderr":
+		for i := 0; i < 500; i++ {
+			fmt.Fprintln(os.Stderr, "Nmap warning: dropped probe packet detected on interface eth0")
+		}
+		os.Exit(1)
 	case "sleep":
 		// Rimane in attesa per testare context cancellation o timeout
 		time.Sleep(10 * time.Second)
@@ -187,8 +201,8 @@ func TestBuildSafeArguments_Rejections(t *testing.T) {
 			targetErr:   true,
 		},
 		{
-			name:        "Flag vietato --script",
-			profileArgs: []string{"-T4", "--script", "vuln"},
+			name:        "Flag vietato --script arbitrario",
+			profileArgs: []string{"-T4", "--script", "malicious.nse"},
 			target:      "192.168.1.1",
 			wantErr:     true,
 			targetErr:   false,
@@ -382,3 +396,121 @@ func TestNmapRunner_RunScan_InvalidTargetBeforeExec(t *testing.T) {
 		t.Error("il comando di sistema non doveva essere istanziato per un target non valido")
 	}
 }
+
+func TestNmapRunner_SuddenTermination_SIGKILL(t *testing.T) {
+	// Simula la terminazione forzata del processo (es. OOM killer, kill -9 / SIGKILL esterno)
+	factory := createMockCommandFactory("sigkill")
+	runner := NewNmapRunner("nmap", testLogger(), WithCommandFactory(factory))
+
+	profile := ProfileConfig{
+		Name:    "Abrupt Kill Profile",
+		Args:    []string{"-T4"},
+		Timeout: 5 * time.Second,
+	}
+
+	result, err := runner.RunScan(context.Background(), "192.168.1.50", profile)
+
+	if err == nil {
+		t.Fatal("atteso errore di terminazione processo, ma err è nil")
+	}
+
+	if !errors.Is(err, domain.ErrScannerExecFailed) {
+		t.Errorf("atteso ErrScannerExecFailed, ottenuto: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("il risultato non deve essere nil anche in caso di kill violento")
+	}
+
+	if result.ExitCode != 137 {
+		t.Errorf("atteso exit code 137 (SIGKILL), ottenuto %d", result.ExitCode)
+	}
+
+	if !strings.Contains(result.Stderr, "SIGKILL") {
+		t.Errorf("stderr atteso non trovato: %s", result.Stderr)
+	}
+}
+
+func TestNmapRunner_TruncatedXMLOutput_GracefulFallback(t *testing.T) {
+	// Simula output XML troncato a metà a causa di crash o interruzione improvvisa
+	factory := createMockCommandFactory("truncated_xml")
+	runner := NewNmapRunner("nmap", testLogger(), WithCommandFactory(factory))
+
+	profile := ProfileConfig{
+		Name:    "Truncated XML Profile",
+		Args:    []string{"-T4"},
+		Timeout: 5 * time.Second,
+	}
+
+	result, err := runner.RunScan(context.Background(), "192.168.1.1", profile)
+	if err != nil {
+		t.Fatalf("RunScan del processo terminato con exit 0 non dovrebbe dare runErr, ottenuto: %v", err)
+	}
+
+	if len(result.RawXML) == 0 {
+		t.Fatal("RawXML non deve essere vuoto")
+	}
+
+	// Verifica che il parser gestisca elegantemente l'XML troncato restituendo errore senza andare in panic
+	report, parseErr := ParseNmapXMLBytes(result.RawXML)
+	if parseErr == nil {
+		t.Errorf("atteso errore di parsing per XML troncato, ottenuto report: %+v", report)
+	}
+}
+
+func TestNmapRunner_CorruptedXMLOutput_GracefulFallback(t *testing.T) {
+	// Simula output binario/corrotto non XML
+	factory := createMockCommandFactory("corrupted_xml")
+	runner := NewNmapRunner("nmap", testLogger(), WithCommandFactory(factory))
+
+	profile := ProfileConfig{
+		Name:    "Corrupted XML Profile",
+		Args:    []string{"-T4"},
+		Timeout: 5 * time.Second,
+	}
+
+	result, err := runner.RunScan(context.Background(), "192.168.1.1", profile)
+	if err != nil {
+		t.Fatalf("RunScan non dovrebbe dare runErr su exit 0, ottenuto: %v", err)
+	}
+
+	// Verifica che ParseNmapXMLBytes fallisca in modo pulito e sicuro
+	_, parseErr := ParseNmapXMLBytes(result.RawXML)
+	if parseErr == nil {
+		t.Fatal("atteso parseErr per XML corrotto, ottenuto nil")
+	}
+}
+
+func TestNmapRunner_LargeStderrBuffer_NoDeadlock(t *testing.T) {
+	// Verifica che un volume ingente di stderr non causi stallo/deadlock sui buffer di pipe
+	factory := createMockCommandFactory("large_stderr")
+	runner := NewNmapRunner("nmap", testLogger(), WithCommandFactory(factory))
+
+	profile := ProfileConfig{
+		Name:    "Large Stderr Profile",
+		Args:    []string{"-T4"},
+		Timeout: 5 * time.Second,
+	}
+
+	done := make(chan struct{})
+	var result *ScanExecutionResult
+	var err error
+
+	go func() {
+		result, err = runner.RunScan(context.Background(), "192.168.1.1", profile)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		if err == nil {
+			t.Fatal("atteso errore di exit code, ottenuto nil")
+		}
+		if result == nil || len(result.Stderr) < 1000 {
+			t.Errorf("atteso buffer stderr completo, lunghezza: %d", len(result.Stderr))
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timeout: deadlock rilevato nella lettura del buffer stderr di Nmap")
+	}
+}
+

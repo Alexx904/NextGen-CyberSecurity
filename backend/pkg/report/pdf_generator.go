@@ -7,6 +7,7 @@ import (
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -174,18 +175,12 @@ func (g *DefaultPDFGenerator) generateExecutive(data PDFReportData) ([]byte, err
 	pdf.SetTextColor(100, 110, 120)
 	pdf.CellFormat(0, 6, tr("NextGen CyberSecurity Platform - Automated Black-Box Engine"), "", 1, "L", false, 0, "")
 
-	pdf.Ln(15)
+	pdf.Ln(12)
 	boxY := pdf.GetY()
 	pdf.SetFillColor(248, 250, 252)
 	pdf.SetDrawColor(226, 232, 240)
-	pdf.RoundedRect(15, boxY, 180, 88, 3, "1234", "FD")
 
-	pdf.SetXY(22, boxY+7)
-	pdf.SetFont("Helvetica", "B", 11)
-	pdf.SetTextColor(prR, prG, prB)
-	pdf.CellFormat(0, 6, tr("METADATI DELL'EXECUTIVE BRIEFING"), "", 1, "L", false, 0, "")
-
-	metaFields := []struct {
+	rawMetaFields := []struct {
 		label string
 		value string
 	}{
@@ -200,34 +195,52 @@ func (g *DefaultPDFGenerator) generateExecutive(data PDFReportData) ([]byte, err
 		{"Data Generazione:", data.GeneratedAt.UTC().Format("2006-01-02 15:04:05 UTC")},
 	}
 
-	pdf.SetFont("Helvetica", "", 9)
+	var metaFields []struct{ label, value string }
+	for _, m := range rawMetaFields {
+		if m.value != "" && m.value != "N/A" {
+			metaFields = append(metaFields, m)
+		}
+	}
+
+	boxH := float64(len(metaFields))*5.8 + 10.0
+	pdf.RoundedRect(15, boxY, 180, boxH, 2.5, "1234", "FD")
+
+	pdf.SetXY(22, boxY+6)
+	pdf.SetFont("Helvetica", "B", 10.5)
+	pdf.SetTextColor(prR, prG, prB)
+	pdf.CellFormat(0, 5, tr("METADATI DELL'EXECUTIVE BRIEFING"), "", 1, "L", false, 0, "")
+
+	pdf.SetFont("Helvetica", "", 8.5)
 	for _, m := range metaFields {
 		pdf.SetX(22)
 		pdf.SetTextColor(100, 116, 139)
-		pdf.CellFormat(45, 6, tr(m.label), "", 0, "L", false, 0, "")
+		pdf.CellFormat(45, 5.8, tr(m.label), "", 0, "L", false, 0, "")
 		pdf.SetTextColor(15, 23, 42)
-		pdf.CellFormat(0, 6, tr(m.value), "", 1, "L", false, 0, "")
+		pdf.CellFormat(0, 5.8, tr(m.value), "", 1, "L", false, 0, "")
 	}
 
-	pdf.SetY(245)
+	classY := boxY + boxH + 22.0
+	if classY < 235 {
+		classY = 235
+	}
 	pdf.SetFillColor(254, 242, 242)
 	pdf.SetDrawColor(254, 202, 202)
-	pdf.RoundedRect(15, 245, 180, 15, 2, "1234", "FD")
-	pdf.SetXY(15, 248)
-	pdf.SetFont("Helvetica", "B", 9)
+	pdf.RoundedRect(15, classY, 180, 13, 2, "1234", "FD")
+	pdf.SetXY(15, classY+3)
+	pdf.SetFont("Helvetica", "B", 8.5)
 	pdf.SetTextColor(185, 28, 28)
-	pdf.CellFormat(180, 8, tr("CLASSIFICAZIONE: STRETTAMENTE CONFIDENZIALE / EXECUTIVE BRIEFING"), "", 0, "C", false, 0, "")
+	pdf.CellFormat(180, 7, tr("CLASSIFICAZIONE: STRETTAMENTE CONFIDENZIALE / EXECUTIVE BRIEFING"), "", 0, "C", false, 0, "")
 
 	// -------------------------------------------------------------------------
-	// PAGINA 2: SECURITY POSTURE INDEX & KEY RISK INDICATORS
+	// PAGINA 2: EXECUTIVE SECURITY BRIEF (2 PAGINE TOTALI)
 	// -------------------------------------------------------------------------
 	pdf.AddPage()
-	drawHeader(pdf, tr, tenantName, prR, prG, prB, accR, accG, accB)
+	drawHeader(pdf, tr, tenantName, "Executive Security Summary", prR, prG, prB, accR, accG, accB)
 
-	pdf.SetY(26)
-	pdf.SetFont("Helvetica", "B", 14)
+	pdf.SetY(22)
+	pdf.SetFont("Helvetica", "B", 13)
 	pdf.SetTextColor(prR, prG, prB)
-	pdf.CellFormat(0, 8, tr("1. Security Posture Index & Strategic Overview"), "", 1, "L", false, 0, "")
+	pdf.CellFormat(0, 7, tr("1. Security Posture Index & Strategic Overview"), "", 1, "L", false, 0, "")
 
 	critCount, highCount, medCount, lowCount, infoCount, maxCVSS, _ := calculateStats(data.Findings)
 	totalFindings := len(data.Findings)
@@ -247,20 +260,20 @@ func (g *DefaultPDFGenerator) generateExecutive(data PDFReportData) ([]byte, err
 	}
 	postureScore, postureGrade := domain.CalculatePostureScore(stats)
 
-	// Card Ingrandita Posture Score & Grade
+	// Card Posture Score & Grade
 	postureCardY := pdf.GetY() + 1
 	pdf.SetFillColor(248, 250, 252)
 	pdf.SetDrawColor(226, 232, 240)
-	pdf.RoundedRect(15, postureCardY, 180, 32, 2.5, "1234", "FD")
+	pdf.RoundedRect(15, postureCardY, 180, 25, 2, "1234", "FD")
 
 	// Punteggio numerico e grado a sinistra
-	pdf.SetXY(20, postureCardY+3)
-	pdf.SetFont("Helvetica", "B", 8)
+	pdf.SetXY(20, postureCardY+2.5)
+	pdf.SetFont("Helvetica", "B", 7.5)
 	pdf.SetTextColor(100, 116, 139)
-	pdf.CellFormat(40, 5, tr("SECURITY POSTURE SCORE"), "", 1, "L", false, 0, "")
+	pdf.CellFormat(45, 4, tr("SECURITY POSTURE SCORE"), "", 1, "L", false, 0, "")
 
 	pdf.SetX(20)
-	pdf.SetFont("Helvetica", "B", 18)
+	pdf.SetFont("Helvetica", "B", 16)
 	scoreR, scoreG, scoreB := 22, 163, 74 // Verde standard
 	if postureScore < 50 {
 		scoreR, scoreG, scoreB = 220, 38, 38 // Rosso
@@ -270,45 +283,42 @@ func (g *DefaultPDFGenerator) generateExecutive(data PDFReportData) ([]byte, err
 		scoreR, scoreG, scoreB = 37, 99, 235 // Blu
 	}
 	pdf.SetTextColor(scoreR, scoreG, scoreB)
-	pdf.CellFormat(40, 8, tr(fmt.Sprintf("%d / 100", postureScore)), "", 1, "L", false, 0, "")
+	pdf.CellFormat(45, 7, tr(fmt.Sprintf("%d / 100", postureScore)), "", 1, "L", false, 0, "")
 
 	pdf.SetX(20)
-	pdf.SetFont("Helvetica", "B", 9)
+	pdf.SetFont("Helvetica", "B", 8.5)
 	pdf.SetTextColor(prR, prG, prB)
-	pdf.CellFormat(40, 5, tr(fmt.Sprintf("GRADE %s", postureGrade)), "", 0, "L", false, 0, "")
+	pdf.CellFormat(45, 4.5, tr(fmt.Sprintf("GRADE %s", postureGrade)), "", 0, "L", false, 0, "")
 
 	// Separatore verticale
 	pdf.SetDrawColor(226, 232, 240)
-	pdf.Line(68, postureCardY+4, 68, postureCardY+28)
+	pdf.Line(68, postureCardY+3, 68, postureCardY+22)
 
-	// Valutazione qualitativa a destra
-	pdf.SetXY(73, postureCardY+4)
-	pdf.SetFont("Helvetica", "B", 9.5)
+	// Valutazione qualitativa a destra (aderente al 100% ai dati reali)
+	pdf.SetXY(73, postureCardY+2.5)
+	pdf.SetFont("Helvetica", "B", 8.5)
 	pdf.SetTextColor(prR, prG, prB)
-	pdf.CellFormat(115, 5, tr("Valutazione del Profilo di Rischio Aziendale"), "", 1, "L", false, 0, "")
+	pdf.CellFormat(115, 4, tr("Valutazione del Profilo di Rischio Aziendale"), "", 1, "L", false, 0, "")
 
-	pdf.SetX(73)
-	pdf.SetFont("Helvetica", "", 8.5)
+	pdf.SetXY(73, postureCardY+7)
+	pdf.SetFont("Helvetica", "", 7.8)
 	pdf.SetTextColor(71, 85, 105)
 	var postureText string
-	switch postureGrade {
-	case "A":
-		postureText = "Postura di sicurezza ottimale. Il perimetro analizzato non presenta vulnerabilità critiche o ad elevato impatto. Si raccomanda il mantenimento della cadenza di scansione ordinaria."
-	case "B":
-		postureText = "Postura di sicurezza soddisfacente con anomalie marginali. Sono state identificate vulnerabilità a severità media/bassa che richiedono una revisione programmata."
-	case "C":
-		postureText = "Postura di sicurezza con rischio moderato. La presenza di vulnerabilità significative impone l'adozione di misure correttive prima che possano costituire vettori di exploit."
-	case "D":
-		postureText = "Postura di sicurezza degradata con elevata esposizione. Rilevate molteplici criticità che richiedono l'avvio immediato del piano di remediation per evitare violazioni."
-	default:
-		postureText = "Postura di sicurezza critica. Il perimetro target presenta vulnerabilità severe (CVSS >= 9.0) attivamente sfruttabili. Richiesto intervento d'emergenza immediato del team SecOps."
+	if critCount > 0 {
+		postureText = fmt.Sprintf("Postura di sicurezza critica. Rilevate %d vulnerabilità critiche (CVSS >= 9.0) attivamente sfruttabili sul perimetro. Richiesto intervento d'emergenza immediato del team SecOps.", critCount)
+	} else if highCount > 0 {
+		postureText = fmt.Sprintf("Postura di sicurezza ad attenzione prioritaria. Nessuna vulnerabilità critica (CVSS >= 9.0) riscontrata; rilevate %d vulnerabilità ad alto impatto (CVSS 7.0-8.9) che richiedono bonifica e segmentazione dei servizi esposti.", highCount)
+	} else if medCount > 0 {
+		postureText = fmt.Sprintf("Postura di sicurezza con rischio moderato. Rilevate %d vulnerabilità a severità media. Si raccomanda la pianificazione ordinaria delle patch di sicurezza sui componenti identificati.", medCount)
+	} else if lowCount > 0 {
+		postureText = fmt.Sprintf("Postura di sicurezza soddisfacente. Rilevate solo %d anomalie minori a basso impatto, gestibili nei cicli standard di manutenzione.", lowCount)
+	} else {
+		postureText = "Postura di sicurezza ottimale. Il perimetro analizzato non presenta anomalie o vulnerabilità note nei servizi esposti."
 	}
-	pdf.MultiCell(118, 4.5, tr(postureText), "", "L", false)
+	pdf.MultiCell(118, 3.8, tr(postureText), "", "L", false)
 
-	pdf.SetY(postureCardY + 37)
-
-	// 4 Box KPI sintetici
-	kpiY := pdf.GetY()
+	// 4 Box KPI sintetici con colori semantici coerenti
+	kpiY := postureCardY + 28.0
 	boxW := 42.0
 	spacing := 4.0
 
@@ -317,18 +327,30 @@ func (g *DefaultPDFGenerator) generateExecutive(data PDFReportData) ([]byte, err
 		activeHostsStr = fmt.Sprintf("%d", data.Scan.SummaryStats.UpHosts)
 	}
 
-	drawKPIBox(pdf, tr, 15+0*(boxW+spacing), kpiY, boxW, 20, "FINDINGS TOTALI", fmt.Sprintf("%d", totalFindings), prR, prG, prB)
-	drawKPIBox(pdf, tr, 15+1*(boxW+spacing), kpiY, boxW, 20, "CRITICAL & HIGH", fmt.Sprintf("%d", critCount+highCount), 220, 38, 38)
-	drawKPIBox(pdf, tr, 15+2*(boxW+spacing), kpiY, boxW, 20, "MAX CVSS SCORE", fmt.Sprintf("%.1f", maxCVSS), secR, secG, secB)
-	drawKPIBox(pdf, tr, 15+3*(boxW+spacing), kpiY, boxW, 20, "HOST ATTIVI", activeHostsStr, 16, 185, 129)
+	// Colore semantico per MAX CVSS SCORE in base alla severità effettiva
+	cvssSev := domain.SeverityFromCVSS(maxCVSS)
+	cvssR, cvssG, cvssB := SeverityRGB(cvssSev)
+	if maxCVSS == 0 {
+		cvssR, cvssG, cvssB = 100, 116, 139
+	}
 
-	pdf.SetY(kpiY + 26)
+	critHighR, critHighG, critHighB := 100, 116, 139
+	if critCount+highCount > 0 {
+		critHighR, critHighG, critHighB = 220, 38, 38
+	}
 
-	// Distribuzione Severità
-	pdf.SetFont("Helvetica", "B", 11)
+	drawKPIBox(pdf, tr, 15+0*(boxW+spacing), kpiY, boxW, 14, "FINDINGS TOTALI", fmt.Sprintf("%d", totalFindings), prR, prG, prB)
+	drawKPIBox(pdf, tr, 15+1*(boxW+spacing), kpiY, boxW, 14, "CRITICAL & HIGH", fmt.Sprintf("%d", critCount+highCount), critHighR, critHighG, critHighB)
+	drawKPIBox(pdf, tr, 15+2*(boxW+spacing), kpiY, boxW, 14, "MAX CVSS SCORE", fmt.Sprintf("%.1f", maxCVSS), cvssR, cvssG, cvssB)
+	drawKPIBox(pdf, tr, 15+3*(boxW+spacing), kpiY, boxW, 14, "HOST ATTIVI", activeHostsStr, 30, 41, 59)
+
+	// Distribuzione Severità compatta
+	distY := kpiY + 17.0
+	pdf.SetY(distY)
+	pdf.SetFont("Helvetica", "B", 9.5)
 	pdf.SetTextColor(prR, prG, prB)
-	pdf.CellFormat(0, 6, tr("DISTRIBUZIONE VULNERABILITÀ PER LIVELLO DI SEVERITÀ"), "", 1, "L", false, 0, "")
-	pdf.Ln(2)
+	pdf.CellFormat(0, 5, tr("DISTRIBUZIONE VULNERABILITÀ PER LIVELLO DI SEVERITÀ"), "", 1, "L", false, 0, "")
+	pdf.Ln(1)
 
 	sevRows := []struct {
 		name  domain.SeverityLevel
@@ -348,13 +370,13 @@ func (g *DefaultPDFGenerator) generateExecutive(data PDFReportData) ([]byte, err
 			pct = (float64(sr.count) / float64(totalFindings)) * 100.0
 		}
 
-		pdf.SetFont("Helvetica", "B", 9)
+		pdf.SetFont("Helvetica", "B", 8)
 		pdf.SetTextColor(r, g, b)
-		pdf.CellFormat(25, 6, tr(string(sr.name)), "", 0, "L", false, 0, "")
+		pdf.CellFormat(24, 4.5, tr(string(sr.name)), "", 0, "L", false, 0, "")
 
-		pdf.SetFont("Helvetica", "", 9)
+		pdf.SetFont("Helvetica", "", 8)
 		pdf.SetTextColor(15, 23, 42)
-		pdf.CellFormat(18, 6, tr(fmt.Sprintf("%d (%.0f%%)", sr.count, pct)), "", 0, "L", false, 0, "")
+		pdf.CellFormat(18, 4.5, tr(fmt.Sprintf("%d (%.0f%%)", sr.count, pct)), "", 0, "L", false, 0, "")
 
 		barStartX := 60.0
 		barMaxW := 120.0
@@ -365,30 +387,27 @@ func (g *DefaultPDFGenerator) generateExecutive(data PDFReportData) ([]byte, err
 
 		currY := pdf.GetY()
 		pdf.SetFillColor(241, 245, 249)
-		pdf.Rect(barStartX, currY+1.5, barMaxW, 3.5, "F")
+		pdf.Rect(barStartX, currY+1.0, barMaxW, 2.8, "F")
 		if barW > 0 {
 			pdf.SetFillColor(r, g, b)
-			pdf.Rect(barStartX, currY+1.5, barW, 3.5, "F")
+			pdf.Rect(barStartX, currY+1.0, barW, 2.8, "F")
 		}
 
-		pdf.Ln(7)
+		pdf.Ln(4.8)
 	}
 
 	// -------------------------------------------------------------------------
-	// PAGINA 3: PRIORITÀ STRATEGICHE DI REMEDIATION & GOVERNANCE ROADMAP
+	// SEZIONE 2: PRIORITÀ STRATEGICHE DI REMEDIATION (DI SEGUITO NELLA PAGINA 2)
 	// -------------------------------------------------------------------------
-	pdf.AddPage()
-	drawHeader(pdf, tr, tenantName, prR, prG, prB, accR, accG, accB)
-
-	pdf.SetY(26)
-	pdf.SetFont("Helvetica", "B", 14)
+	pdf.Ln(2)
+	pdf.SetFont("Helvetica", "B", 11.5)
 	pdf.SetTextColor(prR, prG, prB)
-	pdf.CellFormat(0, 8, tr("2. Priorità Strategiche di Bonifica (Top Priorities)"), "", 1, "L", false, 0, "")
+	pdf.CellFormat(0, 6, tr("2. Priorità Strategiche di Bonifica (Top Priorities)"), "", 1, "L", false, 0, "")
 
-	pdf.SetFont("Helvetica", "", 9)
+	pdf.SetFont("Helvetica", "", 7.8)
 	pdf.SetTextColor(71, 85, 105)
-	pdf.MultiCell(0, 5, tr("La seguente selezione isola le anomalie a maggiore magnitudo di rischio per gli asset censiti. Gli interventi elencati consentono la massima riduzione dell'esposizione con il minimo overhead operativo."), "", "L", false)
-	pdf.Ln(4)
+	pdf.MultiCell(0, 3.8, tr("La seguente selezione isola le anomalie a maggiore magnitudo di rischio per gli asset censiti. Gli interventi prioritari consentono la massima riduzione dell'esposizione con il minimo overhead operativo."), "", "L", false)
+	pdf.Ln(2)
 
 	// Selezione dei Top Findings ordinati per severità e punteggio CVSS decrescente
 	sortedFindings := make([]*domain.Finding, len(data.Findings))
@@ -430,59 +449,66 @@ func (g *DefaultPDFGenerator) generateExecutive(data PDFReportData) ([]byte, err
 	if maxTop == 0 {
 		pdf.SetFillColor(240, 253, 244)
 		pdf.SetDrawColor(187, 247, 208)
-		pdf.RoundedRect(15, pdf.GetY(), 180, 20, 2, "1234", "FD")
-		pdf.SetXY(20, pdf.GetY()+5)
-		pdf.SetFont("Helvetica", "B", 10)
+		pdf.RoundedRect(15, pdf.GetY(), 180, 16, 2, "1234", "FD")
+		pdf.SetXY(20, pdf.GetY()+3)
+		pdf.SetFont("Helvetica", "B", 9)
 		pdf.SetTextColor(22, 101, 52)
-		pdf.CellFormat(0, 5, tr("Nessuna vulnerabilità identificata"), "", 1, "L", false, 0, "")
+		pdf.CellFormat(0, 4.5, tr("Nessuna vulnerabilità identificata"), "", 1, "L", false, 0, "")
 		pdf.SetX(20)
-		pdf.SetFont("Helvetica", "", 8.5)
+		pdf.SetFont("Helvetica", "", 8)
 		pdf.SetTextColor(21, 128, 61)
-		pdf.CellFormat(0, 5, tr("Il perimetro analizzato non presenta servizi vulnerabili noti o falle di sicurezza registrate."), "", 1, "L", false, 0, "")
-		pdf.Ln(12)
+		pdf.CellFormat(0, 4.5, tr("Il perimetro analizzato non presenta servizi vulnerabili noti o falle di sicurezza registrate."), "", 1, "L", false, 0, "")
+		pdf.Ln(8)
 	} else {
 		for i := 0; i < maxTop; i++ {
 			f := sortedFindings[i]
+			cardEstH := estimateExecutiveCardHeight(f)
+			if pdf.GetY()+cardEstH > 268 {
+				pdf.AddPage()
+				drawHeader(pdf, tr, tenantName, "Executive Security Summary", prR, prG, prB, accR, accG, accB)
+				pdf.SetY(24)
+			}
 			drawExecutivePriorityCard(pdf, tr, i+1, f, prR, prG, prB)
-			pdf.Ln(3)
 		}
 	}
 
-	// Governance & Raccomandazioni Strategiche in chiusura
-	if pdf.GetY() > 215 {
+	// -------------------------------------------------------------------------
+	// SEZIONE 3: GOVERNANCE & RACCOMANDAZIONI STRATEGICHE
+	// -------------------------------------------------------------------------
+	if pdf.GetY() > 228 {
 		pdf.AddPage()
-		drawHeader(pdf, tr, tenantName, prR, prG, prB, accR, accG, accB)
-		pdf.SetY(26)
+		drawHeader(pdf, tr, tenantName, "Executive Security Summary", prR, prG, prB, accR, accG, accB)
+		pdf.SetY(24)
 	} else {
-		pdf.Ln(4)
+		pdf.Ln(1)
 	}
 
-	pdf.SetFont("Helvetica", "B", 13)
+	pdf.SetFont("Helvetica", "B", 10.5)
 	pdf.SetTextColor(prR, prG, prB)
-	pdf.CellFormat(0, 7, tr("3. Governance & Raccomandazioni Strategiche"), "", 1, "L", false, 0, "")
+	pdf.CellFormat(0, 5.5, tr("3. Governance & Raccomandazioni Strategiche"), "", 1, "L", false, 0, "")
 	pdf.Ln(1)
 
 	govBoxY := pdf.GetY()
 	pdf.SetFillColor(248, 250, 252)
 	pdf.SetDrawColor(226, 232, 240)
-	pdf.RoundedRect(15, govBoxY, 180, 36, 2, "1234", "FD")
+	pdf.RoundedRect(15, govBoxY, 180, 24, 2, "1234", "FD")
 
 	recommendations := []string{
-		"Patch Management SLA: Attivare finestre di manutenzione straordinaria per aggiornare i componenti affetti da CVE critiche.",
-		"Riduzione Attack Surface: Rivedere le policy di firewall (iptables/nftables) restringendo l'accesso ai soli host fidati.",
-		"Continuous Security Validation: Mantenere pianificata la scansione periodica settimanale per intercettare nuove CVE.",
+		"Patch Management SLA: Attivare finestre di manutenzione straordinaria per aggiornare tempestivamente i componenti esposti.",
+		"Riduzione Attack Surface: Rivedere le policy di firewall restringendo l'accesso perimetrale ai soli host e subnet autorizzati.",
+		"Continuous Security Validation: Mantenere pianificata la scansione periodica automatica per rilevare tempestivamente nuove CVE.",
 	}
 
-	pdf.SetY(govBoxY + 3)
-	pdf.SetFont("Helvetica", "", 8)
-	pdf.SetTextColor(30, 41, 59)
+	pdf.SetY(govBoxY + 2.5)
 	for idx, rec := range recommendations {
 		pdf.SetX(20)
-		pdf.SetFont("Helvetica", "B", 8)
-		pdf.CellFormat(5, 5, tr(fmt.Sprintf("%d.", idx+1)), "", 0, "L", false, 0, "")
-		pdf.SetFont("Helvetica", "", 8)
-		pdf.MultiCell(165, 4.5, tr(rec), "", "L", false)
-		pdf.Ln(1)
+		pdf.SetFont("Helvetica", "B", 7.5)
+		pdf.SetTextColor(prR, prG, prB)
+		pdf.CellFormat(5, 4.2, tr(fmt.Sprintf("%d.", idx+1)), "", 0, "L", false, 0, "")
+		pdf.SetFont("Helvetica", "", 7.5)
+		pdf.SetTextColor(30, 41, 59)
+		pdf.MultiCell(165, 4.2, tr(rec), "", "L", false)
+		pdf.Ln(0.5)
 	}
 
 	var buf bytes.Buffer
@@ -493,66 +519,93 @@ func (g *DefaultPDFGenerator) generateExecutive(data PDFReportData) ([]byte, err
 	return buf.Bytes(), nil
 }
 
+// estimateExecutiveCardHeight calcola l'altezza prevista per la card Executive
+func estimateExecutiveCardHeight(f *domain.Finding) float64 {
+	remText := "Verificare l'integrità del componente ed applicare le patch del fornitore."
+	if f.Remediation != nil && strings.TrimSpace(*f.Remediation) != "" {
+		remText = *f.Remediation
+	}
+	remLines := int(math.Ceil(float64(len(remText)) / 85.0))
+	if remLines < 1 {
+		remLines = 1
+	}
+	return 12.0 + float64(remLines)*4.0 + 2.5
+}
+
 // drawExecutivePriorityCard disegna una card compatta focalizzata su CVE, severità e remediation
 func drawExecutivePriorityCard(pdf *gofpdf.Fpdf, tr func(string) string, index int, f *domain.Finding, prR, prG, prB int) {
 	cardY := pdf.GetY()
 	cardW := 180.0
 	sevR, sevG, sevB := SeverityRGB(f.Severity)
 
-	pdf.SetFillColor(248, 250, 252)
-	pdf.SetDrawColor(226, 232, 240)
-	pdf.RoundedRect(15, cardY, cardW, 23, 1.5, "1234", "FD")
-
-	// Barra colorata sinistra
-	pdf.SetFillColor(sevR, sevG, sevB)
-	pdf.Rect(15, cardY, 3, 23, "F")
-
-	// Titolo card
-	pdf.SetXY(21, cardY+2)
-	pdf.SetFont("Helvetica", "B", 8.5)
-	pdf.SetTextColor(sevR, sevG, sevB)
 	scoreStr := "N/A"
 	if f.CVSSScore != nil {
 		scoreStr = fmt.Sprintf("%.1f", *f.CVSSScore)
 	}
-	pdf.CellFormat(40, 5, tr(fmt.Sprintf("#%d [%s - CVSS %s]", index, f.Severity, scoreStr)), "", 0, "L", false, 0, "")
+	badgeStr := fmt.Sprintf("#%d [%s - CVSS %s]", index, f.Severity, scoreStr)
+	badgeW := pdf.GetStringWidth(badgeStr) + 3.0
 
-	pdf.SetFont("Helvetica", "B", 8.5)
-	pdf.SetTextColor(prR, prG, prB)
-	svcName := "Unknown Service"
-	if f.ServiceName != nil && *f.ServiceName != "" {
-		svcName = *f.ServiceName
-		if f.ServiceVersion != nil && *f.ServiceVersion != "" {
-			svcName += " " + *f.ServiceVersion
-		}
-	}
-	pdf.CellFormat(0, 5, tr(fmt.Sprintf("%s:%d/%s - %s", f.HostIP, f.Port, f.Protocol, svcName)), "", 1, "L", false, 0, "")
+	svcName := CleanServiceName(f)
+	targetStr := fmt.Sprintf("%s:%d/%s  -  %s", f.HostIP, f.Port, f.Protocol, svcName)
 
-	// Dettaglio CVE e Azione di Remediation
-	pdf.SetX(21)
-	pdf.SetFont("Helvetica", "B", 7.5)
-	pdf.SetTextColor(100, 116, 139)
 	cveText := "N/A"
 	if f.CVEID != nil && *f.CVEID != "" {
 		cveText = *f.CVEID
 	}
-	pdf.CellFormat(20, 4.5, tr(fmt.Sprintf("CVE: %s", cveText)), "", 0, "L", false, 0, "")
 
-	pdf.SetFont("Helvetica", "B", 7.5)
-	pdf.SetTextColor(100, 116, 139)
-	pdf.CellFormat(20, 4.5, tr("Azione:"), "", 0, "L", false, 0, "")
-
-	pdf.SetFont("Helvetica", "", 7.5)
-	pdf.SetTextColor(30, 41, 59)
 	remText := "Verificare l'integrità del componente ed applicare le patch del fornitore."
 	if f.Remediation != nil && *f.Remediation != "" {
 		remText = *f.Remediation
-		if len(remText) > 130 {
-			remText = remText[:127] + "..."
-		}
 	}
-	pdf.CellFormat(0, 4.5, tr(remText), "", 1, "L", false, 0, "")
-	pdf.SetY(cardY + 23)
+
+	remLines := int(math.Ceil(float64(len(remText)) / 85.0))
+	if remLines < 1 {
+		remLines = 1
+	}
+	cardH := 12.0 + float64(remLines)*4.0 + 2.0
+
+	// Sfondo card e bordo
+	pdf.SetFillColor(248, 250, 252)
+	pdf.SetDrawColor(226, 232, 240)
+	pdf.RoundedRect(15, cardY, cardW, cardH, 1.5, "1234", "FD")
+
+	// Barra colorata laterale sinistra a tutta altezza
+	pdf.SetFillColor(sevR, sevG, sevB)
+	pdf.Rect(15, cardY, 3.5, cardH, "F")
+
+	// Riga 1: Badge + Target
+	pdf.SetXY(22, cardY+2)
+	pdf.SetFont("Helvetica", "B", 8.5)
+	pdf.SetTextColor(sevR, sevG, sevB)
+	pdf.CellFormat(badgeW, 4.5, tr(badgeStr), "", 0, "L", false, 0, "")
+
+	pdf.SetXY(22+badgeW+2.5, cardY+2)
+	pdf.SetFont("Helvetica", "B", 8.5)
+	pdf.SetTextColor(prR, prG, prB)
+	pdf.CellFormat(0, 4.5, tr(targetStr), "", 1, "L", false, 0, "")
+
+	// Riga 2: CVE ID su riga dedicata
+	pdf.SetXY(22, cardY+7)
+	pdf.SetFont("Helvetica", "B", 8)
+	pdf.SetTextColor(100, 116, 139)
+	pdf.CellFormat(16, 4.0, tr("CVE ID:"), "", 0, "L", false, 0, "")
+
+	pdf.SetFont("Helvetica", "B", 8)
+	pdf.SetTextColor(220, 38, 38)
+	pdf.CellFormat(0, 4.0, tr(cveText), "", 1, "L", false, 0, "")
+
+	// Riga 3: Azione con wrapping MultiCell
+	pdf.SetXY(22, cardY+11.5)
+	pdf.SetFont("Helvetica", "B", 8)
+	pdf.SetTextColor(100, 116, 139)
+	pdf.CellFormat(16, 4.0, tr("Azione:"), "", 0, "L", false, 0, "")
+
+	pdf.SetXY(38, cardY+11.5)
+	pdf.SetFont("Helvetica", "", 8)
+	pdf.SetTextColor(30, 41, 59)
+	pdf.MultiCell(154, 4.0, tr(remText), "", "L", false)
+
+	pdf.SetY(cardY + cardH + 2.0)
 }
 
 // =============================================================================
@@ -634,18 +687,12 @@ func (g *DefaultPDFGenerator) generateTechnical(data PDFReportData) ([]byte, err
 	pdf.SetTextColor(100, 110, 120)
 	pdf.CellFormat(0, 6, tr("NextGen CyberSecurity Platform - Automated Black-Box Engine"), "", 1, "L", false, 0, "")
 
-	pdf.Ln(15)
+	pdf.Ln(12)
 	boxY := pdf.GetY()
 	pdf.SetFillColor(248, 250, 252)
 	pdf.SetDrawColor(226, 232, 240)
-	pdf.RoundedRect(15, boxY, 180, 88, 3, "1234", "FD")
 
-	pdf.SetXY(22, boxY+7)
-	pdf.SetFont("Helvetica", "B", 11)
-	pdf.SetTextColor(prR, prG, prB)
-	pdf.CellFormat(0, 6, tr("METADATI DEL REPORT & SCANSIONE"), "", 1, "L", false, 0, "")
-
-	metaFields := []struct {
+	rawMetaFields := []struct {
 		label string
 		value string
 	}{
@@ -660,40 +707,58 @@ func (g *DefaultPDFGenerator) generateTechnical(data PDFReportData) ([]byte, err
 		{"Data Generazione:", data.GeneratedAt.UTC().Format("2006-01-02 15:04:05 UTC")},
 	}
 
-	pdf.SetFont("Helvetica", "", 9)
+	var metaFields []struct{ label, value string }
+	for _, m := range rawMetaFields {
+		if m.value != "" && m.value != "N/A" {
+			metaFields = append(metaFields, m)
+		}
+	}
+
+	boxH := float64(len(metaFields))*5.8 + 10.0
+	pdf.RoundedRect(15, boxY, 180, boxH, 2.5, "1234", "FD")
+
+	pdf.SetXY(22, boxY+6)
+	pdf.SetFont("Helvetica", "B", 10.5)
+	pdf.SetTextColor(prR, prG, prB)
+	pdf.CellFormat(0, 5, tr("METADATI DEL REPORT & SCANSIONE"), "", 1, "L", false, 0, "")
+
+	pdf.SetFont("Helvetica", "", 8.5)
 	for _, m := range metaFields {
 		pdf.SetX(22)
 		pdf.SetTextColor(100, 116, 139)
-		pdf.CellFormat(45, 6, tr(m.label), "", 0, "L", false, 0, "")
+		pdf.CellFormat(45, 5.8, tr(m.label), "", 0, "L", false, 0, "")
 		pdf.SetTextColor(15, 23, 42)
-		pdf.CellFormat(0, 6, tr(m.value), "", 1, "L", false, 0, "")
+		pdf.CellFormat(0, 5.8, tr(m.value), "", 1, "L", false, 0, "")
 	}
 
-	pdf.SetY(245)
+	classY := boxY + boxH + 22.0
+	if classY < 235 {
+		classY = 235
+	}
 	pdf.SetFillColor(254, 242, 242)
 	pdf.SetDrawColor(254, 202, 202)
-	pdf.RoundedRect(15, 245, 180, 15, 2, "1234", "FD")
-	pdf.SetXY(15, 248)
-	pdf.SetFont("Helvetica", "B", 9)
+	pdf.RoundedRect(15, classY, 180, 13, 2, "1234", "FD")
+	pdf.SetXY(15, classY+3)
+	pdf.SetFont("Helvetica", "B", 8.5)
 	pdf.SetTextColor(185, 28, 28)
-	pdf.CellFormat(180, 8, tr("CLASSIFICAZIONE: STRETTAMENTE CONFIDENZIALE / USO INTERNO"), "", 0, "C", false, 0, "")
+	pdf.CellFormat(180, 7, tr("CLASSIFICAZIONE: STRETTAMENTE CONFIDENZIALE / USO INTERNO"), "", 0, "C", false, 0, "")
 
 	// -------------------------------------------------------------------------
 	// PAGINA 2: EXECUTIVE SUMMARY & METRICHE DI RISCHIO
 	// -------------------------------------------------------------------------
 	pdf.AddPage()
-	drawHeader(pdf, tr, tenantName, prR, prG, prB, accR, accG, accB)
+	drawHeader(pdf, tr, tenantName, "Technical Assessment Report", prR, prG, prB, accR, accG, accB)
 
-	pdf.SetY(26)
-	pdf.SetFont("Helvetica", "B", 14)
+	pdf.SetY(22)
+	pdf.SetFont("Helvetica", "B", 13)
 	pdf.SetTextColor(prR, prG, prB)
-	pdf.CellFormat(0, 8, tr("1. Executive Summary & Metriche di Rischio"), "", 1, "L", false, 0, "")
+	pdf.CellFormat(0, 7, tr("1. Executive Summary & Metriche di Rischio"), "", 1, "L", false, 0, "")
 
-	pdf.SetFont("Helvetica", "", 9.5)
+	pdf.SetFont("Helvetica", "", 8.5)
 	pdf.SetTextColor(51, 65, 85)
 	introText := "Il presente rapporto riassume i risultati della scansione di sicurezza e dell'analisi delle vulnerabilità condotta sul perimetro target specificato. Le vulnerabilità rilevate sono state correlate con il database locale CVE/CVSS e classificate secondo il Common Vulnerability Scoring System (CVSS v3.1)."
-	pdf.MultiCell(0, 5, tr(introText), "", "L", false)
-	pdf.Ln(6)
+	pdf.MultiCell(0, 4.5, tr(introText), "", "L", false)
+	pdf.Ln(4)
 
 	critCount, highCount, medCount, lowCount, infoCount, maxCVSS, avgCVSS := calculateStats(data.Findings)
 	totalFindings := len(data.Findings)
@@ -702,17 +767,29 @@ func (g *DefaultPDFGenerator) generateTechnical(data PDFReportData) ([]byte, err
 	boxW := 42.0
 	spacing := 4.0
 
-	drawKPIBox(pdf, tr, 15+0*(boxW+spacing), kpiY, boxW, 20, "FINDINGS TOTALI", fmt.Sprintf("%d", totalFindings), prR, prG, prB)
-	drawKPIBox(pdf, tr, 15+1*(boxW+spacing), kpiY, boxW, 20, "CRITICAL & HIGH", fmt.Sprintf("%d", critCount+highCount), 220, 38, 38)
-	drawKPIBox(pdf, tr, 15+2*(boxW+spacing), kpiY, boxW, 20, "MAX CVSS SCORE", fmt.Sprintf("%.1f", maxCVSS), secR, secG, secB)
-	drawKPIBox(pdf, tr, 15+3*(boxW+spacing), kpiY, boxW, 20, "MEDIA CVSS", fmt.Sprintf("%.1f", avgCVSS), 100, 116, 139)
+	// Colore semantico rigoroso: CVSS Score secondo la gravità effettiva (Arancione se High, Rosso se Critico)
+	cvssSev := domain.SeverityFromCVSS(maxCVSS)
+	cvssR, cvssG, cvssB := SeverityRGB(cvssSev)
+	if maxCVSS == 0 {
+		cvssR, cvssG, cvssB = 100, 116, 139
+	}
 
-	pdf.SetY(kpiY + 26)
+	critHighR, critHighG, critHighB := 100, 116, 139
+	if critCount+highCount > 0 {
+		critHighR, critHighG, critHighB = 220, 38, 38
+	}
 
-	pdf.SetFont("Helvetica", "B", 11)
+	drawKPIBox(pdf, tr, 15+0*(boxW+spacing), kpiY, boxW, 14, "FINDINGS TOTALI", fmt.Sprintf("%d", totalFindings), prR, prG, prB)
+	drawKPIBox(pdf, tr, 15+1*(boxW+spacing), kpiY, boxW, 14, "CRITICAL & HIGH", fmt.Sprintf("%d", critCount+highCount), critHighR, critHighG, critHighB)
+	drawKPIBox(pdf, tr, 15+2*(boxW+spacing), kpiY, boxW, 14, "MAX CVSS SCORE", fmt.Sprintf("%.1f", maxCVSS), cvssR, cvssG, cvssB)
+	drawKPIBox(pdf, tr, 15+3*(boxW+spacing), kpiY, boxW, 14, "MEDIA CVSS", fmt.Sprintf("%.1f", avgCVSS), 100, 116, 139)
+
+	distY := kpiY + 17.0
+	pdf.SetY(distY)
+	pdf.SetFont("Helvetica", "B", 9.5)
 	pdf.SetTextColor(prR, prG, prB)
-	pdf.CellFormat(0, 6, tr("DISTRIBUZIONE VULNERABILITÀ PER LIVELLO DI SEVERITÀ"), "", 1, "L", false, 0, "")
-	pdf.Ln(2)
+	pdf.CellFormat(0, 5, tr("DISTRIBUZIONE VULNERABILITÀ PER LIVELLO DI SEVERITÀ"), "", 1, "L", false, 0, "")
+	pdf.Ln(1)
 
 	sevRows := []struct {
 		name  domain.SeverityLevel
@@ -732,13 +809,13 @@ func (g *DefaultPDFGenerator) generateTechnical(data PDFReportData) ([]byte, err
 			pct = (float64(sr.count) / float64(totalFindings)) * 100.0
 		}
 
-		pdf.SetFont("Helvetica", "B", 9)
+		pdf.SetFont("Helvetica", "B", 8)
 		pdf.SetTextColor(r, g, b)
-		pdf.CellFormat(25, 6, tr(string(sr.name)), "", 0, "L", false, 0, "")
+		pdf.CellFormat(24, 4.5, tr(string(sr.name)), "", 0, "L", false, 0, "")
 
-		pdf.SetFont("Helvetica", "", 9)
+		pdf.SetFont("Helvetica", "", 8)
 		pdf.SetTextColor(15, 23, 42)
-		pdf.CellFormat(18, 6, tr(fmt.Sprintf("%d (%.0f%%)", sr.count, pct)), "", 0, "L", false, 0, "")
+		pdf.CellFormat(18, 4.5, tr(fmt.Sprintf("%d (%.0f%%)", sr.count, pct)), "", 0, "L", false, 0, "")
 
 		barStartX := 60.0
 		barMaxW := 120.0
@@ -749,104 +826,119 @@ func (g *DefaultPDFGenerator) generateTechnical(data PDFReportData) ([]byte, err
 
 		currY := pdf.GetY()
 		pdf.SetFillColor(241, 245, 249)
-		pdf.Rect(barStartX, currY+1.5, barMaxW, 3.5, "F")
+		pdf.Rect(barStartX, currY+1.0, barMaxW, 2.8, "F")
 		if barW > 0 {
 			pdf.SetFillColor(r, g, b)
-			pdf.Rect(barStartX, currY+1.5, barW, 3.5, "F")
+			pdf.Rect(barStartX, currY+1.0, barW, 2.8, "F")
 		}
 
-		pdf.Ln(7)
+		pdf.Ln(4.8)
 	}
 
 	// -------------------------------------------------------------------------
-	// SEZIONE 2: TARGET SCOPE & OPZIONI DI SCANSIONE
+	// SEZIONE 2: TARGET SCOPE & OPZIONI DI SCANSIONE (ALTEZZA ADERENTE, ZERO GHOST GAP)
 	// -------------------------------------------------------------------------
-	pdf.Ln(4)
-	pdf.SetFont("Helvetica", "B", 14)
+	pdf.Ln(3)
+	pdf.SetFont("Helvetica", "B", 12)
 	pdf.SetTextColor(prR, prG, prB)
-	pdf.CellFormat(0, 8, tr("2. Perimetro di Scansione & Specifiche Tecniche"), "", 1, "L", false, 0, "")
+	pdf.CellFormat(0, 6, tr("2. Perimetro di Scansione & Specifiche Tecniche"), "", 1, "L", false, 0, "")
 
 	pdf.SetFillColor(248, 250, 252)
 	pdf.SetDrawColor(226, 232, 240)
 	scopeY := pdf.GetY()
-	pdf.RoundedRect(15, scopeY, 180, 42, 2, "1234", "FD")
+	pdf.RoundedRect(15, scopeY, 180, 26, 2, "1234", "FD")
 
-	pdf.SetXY(20, scopeY+4)
-	pdf.SetFont("Helvetica", "B", 8.5)
+	col1X := 20.0
+	col2X := 110.0
+	col1LabelW := 33.0
+	col1ValW := 51.0
+	col2LabelW := 30.0
+	col2ValW := 52.0
+	rowH := 5.2
+
+	// Riga 1
+	pdf.SetXY(col1X, scopeY+2.5)
+	pdf.SetFont("Helvetica", "B", 8)
 	pdf.SetTextColor(100, 116, 139)
-	pdf.CellFormat(35, 5.5, tr("Bersaglio / Valore:"), "", 0, "L", false, 0, "")
-	pdf.SetFont("Helvetica", "", 8.5)
+	pdf.CellFormat(col1LabelW, rowH, tr("Bersaglio / Valore:"), "", 0, "L", false, 0, "")
+	pdf.SetFont("Helvetica", "", 8)
 	pdf.SetTextColor(15, 23, 42)
-	pdf.CellFormat(55, 5.5, tr(getTargetValue(data.Target)), "", 0, "L", false, 0, "")
+	pdf.CellFormat(col1ValW, rowH, tr(TruncateString(getTargetValue(data.Target), 28)), "", 0, "L", false, 0, "")
 
-	pdf.SetFont("Helvetica", "B", 8.5)
+	pdf.SetXY(col2X, scopeY+2.5)
+	pdf.SetFont("Helvetica", "B", 8)
 	pdf.SetTextColor(100, 116, 139)
-	pdf.CellFormat(35, 5.5, tr("Tipologia Target:"), "", 0, "L", false, 0, "")
-	pdf.SetFont("Helvetica", "", 8.5)
+	pdf.CellFormat(col2LabelW, rowH, tr("Tipologia Target:"), "", 0, "L", false, 0, "")
+	pdf.SetFont("Helvetica", "", 8)
 	pdf.SetTextColor(15, 23, 42)
-	pdf.CellFormat(0, 5.5, tr(getTargetType(data.Target)), "", 1, "L", false, 0, "")
+	pdf.CellFormat(col2ValW, rowH, tr(getTargetType(data.Target)), "", 1, "L", false, 0, "")
 
-	pdf.SetX(20)
-	pdf.SetFont("Helvetica", "B", 8.5)
+	// Riga 2
+	pdf.SetXY(col1X, scopeY+2.5+rowH)
+	pdf.SetFont("Helvetica", "B", 8)
 	pdf.SetTextColor(100, 116, 139)
-	pdf.CellFormat(35, 5.5, tr("Profilo di Scansione:"), "", 0, "L", false, 0, "")
-	pdf.SetFont("Helvetica", "", 8.5)
+	pdf.CellFormat(col1LabelW, rowH, tr("Profilo di Scansione:"), "", 0, "L", false, 0, "")
+	pdf.SetFont("Helvetica", "", 8)
 	pdf.SetTextColor(15, 23, 42)
-	pdf.CellFormat(55, 5.5, tr(getProfileName(data.Profile)), "", 0, "L", false, 0, "")
+	pdf.CellFormat(col1ValW, rowH, tr(TruncateString(getProfileName(data.Profile), 26)), "", 0, "L", false, 0, "")
 
-	pdf.SetFont("Helvetica", "B", 8.5)
+	pdf.SetXY(col2X, scopeY+2.5+rowH)
+	pdf.SetFont("Helvetica", "B", 8)
 	pdf.SetTextColor(100, 116, 139)
-	pdf.CellFormat(35, 5.5, tr("Argomenti Nmap:"), "", 0, "L", false, 0, "")
-	pdf.SetFont("Helvetica", "I", 8.5)
+	pdf.CellFormat(col2LabelW, rowH, tr("Argomenti Nmap:"), "", 0, "L", false, 0, "")
+	pdf.SetFont("Helvetica", "I", 7.8)
 	pdf.SetTextColor(15, 23, 42)
-	pdf.CellFormat(0, 5.5, tr(getProfileArgs(data.Profile)), "", 1, "L", false, 0, "")
+	pdf.CellFormat(col2ValW, rowH, tr(TruncateString(getProfileArgs(data.Profile), 30)), "", 1, "L", false, 0, "")
 
-	pdf.SetX(20)
-	pdf.SetFont("Helvetica", "B", 8.5)
+	// Riga 3
+	pdf.SetXY(col1X, scopeY+2.5+rowH*2)
+	pdf.SetFont("Helvetica", "B", 8)
 	pdf.SetTextColor(100, 116, 139)
-	pdf.CellFormat(35, 5.5, tr("Modalità Trigger:"), "", 0, "L", false, 0, "")
-	pdf.SetFont("Helvetica", "", 8.5)
+	pdf.CellFormat(col1LabelW, rowH, tr("Modalità Trigger:"), "", 0, "L", false, 0, "")
+	pdf.SetFont("Helvetica", "", 8)
 	pdf.SetTextColor(15, 23, 42)
-	pdf.CellFormat(55, 5.5, tr(getTriggerType(data.Scan)), "", 0, "L", false, 0, "")
+	pdf.CellFormat(col1ValW, rowH, tr(getTriggerType(data.Scan)), "", 0, "L", false, 0, "")
 
-	pdf.SetFont("Helvetica", "B", 8.5)
+	pdf.SetXY(col2X, scopeY+2.5+rowH*2)
+	pdf.SetFont("Helvetica", "B", 8)
 	pdf.SetTextColor(100, 116, 139)
-	pdf.CellFormat(35, 5.5, tr("Durata Totale:"), "", 0, "L", false, 0, "")
-	pdf.SetFont("Helvetica", "", 8.5)
+	pdf.CellFormat(col2LabelW, rowH, tr("Durata Totale:"), "", 0, "L", false, 0, "")
+	pdf.SetFont("Helvetica", "", 8)
 	pdf.SetTextColor(15, 23, 42)
-	pdf.CellFormat(0, 5.5, tr(calculateDuration(data.Scan)), "", 1, "L", false, 0, "")
+	pdf.CellFormat(col2ValW, rowH, tr(calculateDuration(data.Scan)), "", 1, "L", false, 0, "")
 
-	pdf.SetX(20)
-	pdf.SetFont("Helvetica", "B", 8.5)
+	// Riga 4
+	pdf.SetXY(col1X, scopeY+2.5+rowH*3)
+	pdf.SetFont("Helvetica", "B", 8)
 	pdf.SetTextColor(100, 116, 139)
-	pdf.CellFormat(35, 5.5, tr("Host Censiti:"), "", 0, "L", false, 0, "")
-	pdf.SetFont("Helvetica", "", 8.5)
+	pdf.CellFormat(col1LabelW, rowH, tr("Host Censiti:"), "", 0, "L", false, 0, "")
+	pdf.SetFont("Helvetica", "", 8)
 	pdf.SetTextColor(15, 23, 42)
-	pdf.CellFormat(0, 5.5, tr(getHostScopeSummary(data.Scan)), "", 1, "L", false, 0, "")
+	pdf.CellFormat(col1ValW, rowH, tr(getHostScopeSummary(data.Scan)), "", 1, "L", false, 0, "")
 
-	pdf.SetY(scopeY + 47)
+	pdf.SetY(scopeY + 29)
 
 	// -------------------------------------------------------------------------
-	// SEZIONE 3: SCHEDE TECNICHE DEI FINDINGS (DEEP-DIVE COMPLETO)
+	// SEZIONE 3: SCHEDE TECNICHE DEI FINDINGS (DISTRIBUZIONE OMOGENEA E NATURALE)
 	// -------------------------------------------------------------------------
-	pdf.SetFont("Helvetica", "B", 14)
+	pdf.SetFont("Helvetica", "B", 12)
 	pdf.SetTextColor(prR, prG, prB)
-	pdf.CellFormat(0, 8, tr("3. Schede Tecniche dei Findings"), "", 1, "L", false, 0, "")
+	pdf.CellFormat(0, 6, tr("3. Schede Tecniche dei Findings"), "", 1, "L", false, 0, "")
 
 	if len(data.Findings) == 0 {
-		pdf.SetFont("Helvetica", "I", 10)
+		pdf.SetFont("Helvetica", "I", 9.5)
 		pdf.SetTextColor(100, 116, 139)
-		pdf.CellFormat(0, 10, tr("Nessuna vulnerabilità o servizio anomalo identificato durante la sessione di scansione."), "", 1, "L", false, 0, "")
+		pdf.CellFormat(0, 8, tr("Nessuna vulnerabilità o servizio anomalo identificato durante la sessione di scansione."), "", 1, "L", false, 0, "")
 	} else {
 		for i, f := range data.Findings {
-			if pdf.GetY() > 225 {
+			cardH := EstimateFindingCardHeight(f)
+			if pdf.GetY()+cardH > 270 {
 				pdf.AddPage()
-				drawHeader(pdf, tr, tenantName, prR, prG, prB, accR, accG, accB)
-				pdf.SetY(25)
+				drawHeader(pdf, tr, tenantName, "Technical Assessment Report", prR, prG, prB, accR, accG, accB)
+				pdf.SetY(24)
 			}
 
 			drawFindingCard(pdf, tr, i+1, f, prR, prG, prB)
-			pdf.Ln(4)
 		}
 	}
 
@@ -862,8 +954,8 @@ func (g *DefaultPDFGenerator) generateTechnical(data PDFReportData) ([]byte, err
 // FUNZIONI AUSILIARIE GRAFICHE
 // =============================================================================
 
-// drawHeader disegna l'intestazione standard per le pagine interne
-func drawHeader(pdf *gofpdf.Fpdf, tr func(string) string, tenantName string, prR, prG, prB, accR, accG, accB int) {
+// drawHeader disegna l'intestazione standard per le pagine interne con titolo documento dedicato
+func drawHeader(pdf *gofpdf.Fpdf, tr func(string) string, tenantName, reportTitle string, prR, prG, prB, accR, accG, accB int) {
 	pdf.SetY(10)
 	pdf.SetFont("Helvetica", "B", 8)
 	pdf.SetTextColor(prR, prG, prB)
@@ -871,7 +963,7 @@ func drawHeader(pdf *gofpdf.Fpdf, tr func(string) string, tenantName string, prR
 
 	pdf.SetFont("Helvetica", "", 8)
 	pdf.SetTextColor(100, 116, 139)
-	pdf.CellFormat(90, 5, tr("Vulnerability Assessment Report"), "", 1, "R", false, 0, "")
+	pdf.CellFormat(90, 5, tr(reportTitle), "", 1, "R", false, 0, "")
 
 	pdf.SetDrawColor(accR, accG, accB)
 	pdf.SetLineWidth(0.4)
@@ -885,92 +977,119 @@ func drawKPIBox(pdf *gofpdf.Fpdf, tr func(string) string, x, y, w, h float64, la
 	pdf.SetDrawColor(226, 232, 240)
 	pdf.RoundedRect(x, y, w, h, 2, "1234", "FD")
 
-	pdf.SetXY(x, y+3)
-	pdf.SetFont("Helvetica", "B", 7)
+	pdf.SetXY(x, y+2.5)
+	pdf.SetFont("Helvetica", "B", 6.8)
 	pdf.SetTextColor(100, 116, 139)
-	pdf.CellFormat(w, 4, tr(label), "", 2, "C", false, 0, "")
+	pdf.CellFormat(w, 3.5, tr(label), "", 2, "C", false, 0, "")
 
-	pdf.SetFont("Helvetica", "B", 13)
+	pdf.SetFont("Helvetica", "B", 12.5)
 	pdf.SetTextColor(r, g, b)
-	pdf.CellFormat(w, 7, tr(value), "", 0, "C", false, 0, "")
+	pdf.CellFormat(w, 6.5, tr(value), "", 0, "C", false, 0, "")
 }
 
-// drawFindingCard disegna una scheda tecnica completa per un finding
+// drawFindingCard disegna una scheda tecnica completa per un finding con allineamento millimetrico uniforme
 func drawFindingCard(pdf *gofpdf.Fpdf, tr func(string) string, index int, f *domain.Finding, prR, prG, prB int) {
 	cardY := pdf.GetY()
 	cardW := 180.0
 	sevR, sevG, sevB := SeverityRGB(f.Severity)
 
-	pdf.SetFillColor(248, 250, 252)
-	pdf.SetDrawColor(226, 232, 240)
-	pdf.RoundedRect(15, cardY, cardW, 8, 1.5, "12", "FD")
-
-	// Barra colorata verticale sul lato sinistro
-	pdf.SetFillColor(sevR, sevG, sevB)
-	pdf.Rect(15, cardY, 3, 8, "F")
-
-	// Badge Severità e CVSS
-	pdf.SetXY(21, cardY+1.5)
-	pdf.SetFont("Helvetica", "B", 8.5)
-	pdf.SetTextColor(sevR, sevG, sevB)
 	scoreStr := "N/A"
 	if f.CVSSScore != nil {
 		scoreStr = fmt.Sprintf("%.1f", *f.CVSSScore)
 	}
-	pdf.CellFormat(35, 5, tr(fmt.Sprintf("#%d [%s - CVSS %s]", index, f.Severity, scoreStr)), "", 0, "L", false, 0, "")
+	badgeStr := fmt.Sprintf("#%d [%s - CVSS %s]", index, f.Severity, scoreStr)
+	badgeW := pdf.GetStringWidth(badgeStr) + 3.0
 
-	// Host e Porta
+	svcName := CleanServiceName(f)
+	targetStr := fmt.Sprintf("%s:%d/%s  -  %s", f.HostIP, f.Port, f.Protocol, svcName)
+
+	hasCVE := f.CVEID != nil && strings.TrimSpace(*f.CVEID) != ""
+	hasBanner := f.RawBanner != nil && strings.TrimSpace(*f.RawBanner) != ""
+	hasRem := f.Remediation != nil && strings.TrimSpace(*f.Remediation) != ""
+
+	remLines := 0
+	remText := ""
+	if hasRem {
+		remText = *f.Remediation
+		remLines = int(math.Ceil(float64(len(remText)) / 85.0))
+		if remLines < 1 {
+			remLines = 1
+		}
+	}
+
+	// Calcolo dinamico altezza scheda
+	cardH := 8.0
+	if hasCVE {
+		cardH += 4.5
+	}
+	if hasBanner {
+		cardH += 4.5
+	}
+	if hasRem {
+		cardH += float64(remLines)*4.0 + 1.0
+	}
+	cardH += 2.0 // padding inferiore
+
+	// Riquadro esterno completo
+	pdf.SetFillColor(248, 250, 252)
+	pdf.SetDrawColor(226, 232, 240)
+	pdf.RoundedRect(15, cardY, cardW, cardH, 1.5, "1234", "FD")
+
+	// Barra colorata laterale sinistra a tutta altezza (senza sporgenze)
+	pdf.SetFillColor(sevR, sevG, sevB)
+	pdf.Rect(15, cardY, 3.5, cardH, "F")
+
+	// Riga di testata (Badge + Host/Porta/Servizio distanziato)
+	pdf.SetXY(22, cardY+2)
+	pdf.SetFont("Helvetica", "B", 8.5)
+	pdf.SetTextColor(sevR, sevG, sevB)
+	pdf.CellFormat(badgeW, 4.5, tr(badgeStr), "", 0, "L", false, 0, "")
+
+	pdf.SetXY(22+badgeW+2.5, cardY+2)
 	pdf.SetFont("Helvetica", "B", 8.5)
 	pdf.SetTextColor(prR, prG, prB)
-	svcName := "Unknown Service"
-	if f.ServiceName != nil && *f.ServiceName != "" {
-		svcName = *f.ServiceName
-		if f.ServiceVersion != nil && *f.ServiceVersion != "" {
-			svcName += " " + *f.ServiceVersion
-		}
-	}
-	targetStr := fmt.Sprintf("%s:%d/%s  -  %s", f.HostIP, f.Port, f.Protocol, svcName)
-	pdf.CellFormat(0, 5, tr(targetStr), "", 1, "L", false, 0, "")
+	pdf.CellFormat(0, 4.5, tr(targetStr), "", 1, "L", false, 0, "")
 
-	// Corpo card
-	pdf.SetX(20)
-	pdf.SetFont("Helvetica", "", 8)
+	currY := cardY + 7.2
 
-	if f.CVEID != nil && *f.CVEID != "" {
+	if hasCVE {
+		pdf.SetXY(22, currY)
+		pdf.SetFont("Helvetica", "B", 8)
 		pdf.SetTextColor(100, 116, 139)
-		pdf.CellFormat(20, 5, tr("CVE ID:"), "", 0, "L", false, 0, "")
+		pdf.CellFormat(20, 4.2, tr("CVE ID:"), "", 0, "L", false, 0, "")
 		pdf.SetFont("Helvetica", "B", 8)
 		pdf.SetTextColor(220, 38, 38)
-		pdf.CellFormat(0, 5, tr(*f.CVEID), "", 1, "L", false, 0, "")
+		pdf.CellFormat(0, 4.2, tr(*f.CVEID), "", 1, "L", false, 0, "")
+		currY += 4.5
 	}
 
-	if f.RawBanner != nil && *f.RawBanner != "" {
-		pdf.SetX(20)
-		pdf.SetFont("Helvetica", "", 8)
-		pdf.SetTextColor(100, 116, 139)
-		pdf.CellFormat(20, 5, tr("Banner:"), "", 0, "L", false, 0, "")
-		pdf.SetFont("Helvetica", "I", 8)
-		pdf.SetTextColor(15, 23, 42)
+	if hasBanner {
 		bannerText := *f.RawBanner
-		if len(bannerText) > 120 {
-			bannerText = bannerText[:117] + "..."
+		if len(bannerText) > 110 {
+			bannerText = bannerText[:107] + "..."
 		}
-		pdf.CellFormat(0, 5, tr(bannerText), "", 1, "L", false, 0, "")
-	}
-
-	if f.Remediation != nil && *f.Remediation != "" {
-		pdf.SetX(20)
+		pdf.SetXY(22, currY)
 		pdf.SetFont("Helvetica", "B", 8)
 		pdf.SetTextColor(100, 116, 139)
-		pdf.CellFormat(20, 5, tr("Remediation:"), "", 0, "L", false, 0, "")
-		pdf.SetFont("Helvetica", "", 8)
-		pdf.SetTextColor(30, 41, 59)
-		pdf.MultiCell(150, 4.5, tr(*f.Remediation), "", "L", false)
+		pdf.CellFormat(20, 4.2, tr("Banner:"), "", 0, "L", false, 0, "")
+		pdf.SetFont("Helvetica", "I", 8)
+		pdf.SetTextColor(15, 23, 42)
+		pdf.CellFormat(0, 4.2, tr(bannerText), "", 1, "L", false, 0, "")
+		currY += 4.5
 	}
 
-	pdf.Ln(2)
-	pdf.SetDrawColor(241, 245, 249)
-	pdf.Line(15, pdf.GetY(), 195, pdf.GetY())
+	if hasRem {
+		pdf.SetXY(22, currY)
+		pdf.SetFont("Helvetica", "B", 8)
+		pdf.SetTextColor(100, 116, 139)
+		pdf.CellFormat(20, 4.2, tr("Remediation:"), "", 0, "L", false, 0, "")
+		pdf.SetXY(42, currY)
+		pdf.SetFont("Helvetica", "", 8)
+		pdf.SetTextColor(30, 41, 59)
+		pdf.MultiCell(150, 4.0, tr(remText), "", "L", false)
+	}
+
+	pdf.SetY(cardY + cardH + 2.5)
 }
 
 // registerAndDrawLogo gestisce la decodifica base64 del logo e il posizionamento nel PDF
@@ -1119,17 +1238,34 @@ func getTriggerType(s *domain.Scan) string {
 
 func formatTimestamp(t *time.Time) string {
 	if t == nil || t.IsZero() {
-		return "N/A"
+		return ""
 	}
 	return t.UTC().Format("2006-01-02 15:04:05 UTC")
 }
 
 func calculateDuration(s *domain.Scan) string {
-	if s == nil || s.StartedAt == nil || s.CompletedAt == nil {
-		return "N/A"
+	if s == nil {
+		return "Consolidata"
 	}
-	dur := s.CompletedAt.Sub(*s.StartedAt).Round(time.Second)
-	return dur.String()
+	if s.SummaryStats.DurationSeconds > 0 {
+		dur := time.Duration(s.SummaryStats.DurationSeconds) * time.Second
+		if dur >= time.Minute {
+			mins := int(dur.Minutes())
+			secs := int(dur.Seconds()) % 60
+			return fmt.Sprintf("%dm %ds", mins, secs)
+		}
+		return fmt.Sprintf("%ds", int(dur.Seconds()))
+	}
+	if s.StartedAt != nil && s.CompletedAt != nil {
+		dur := s.CompletedAt.Sub(*s.StartedAt).Round(time.Second)
+		if dur >= time.Minute {
+			mins := int(dur.Minutes())
+			secs := int(dur.Seconds()) % 60
+			return fmt.Sprintf("%dm %ds", mins, secs)
+		}
+		return dur.String()
+	}
+	return "Consolidata"
 }
 
 func getHostScopeSummary(s *domain.Scan) string {
@@ -1140,4 +1276,75 @@ func getHostScopeSummary(s *domain.Scan) string {
 		return fmt.Sprintf("%d Totali (%d UP, %d Down)", s.SummaryStats.TotalHosts, s.SummaryStats.UpHosts, s.SummaryStats.DownHosts)
 	}
 	return fmt.Sprintf("%d Totali (%d UP)", s.SummaryStats.TotalHosts, s.SummaryStats.UpHosts)
+}
+
+// CleanServiceName restituisce una denominazione pulita e leggibile per il software/servizio
+func CleanServiceName(f *domain.Finding) string {
+	if f == nil {
+		return "Unknown Service"
+	}
+
+	name := ""
+	if f.ServiceName != nil && *f.ServiceName != "" {
+		name = strings.TrimSpace(*f.ServiceName)
+	}
+	ver := ""
+	if f.ServiceVersion != nil && *f.ServiceVersion != "" {
+		ver = strings.TrimSpace(*f.ServiceVersion)
+	}
+
+	// Se il nome è un servizio generico di porta nmap (domain, ftp, ssh, http, etc.)
+	// ma disponiamo del RawBanner arricchito con il prodotto reale, usiamo il banner
+	if f.RawBanner != nil && strings.TrimSpace(*f.RawBanner) != "" {
+		banner := strings.TrimSpace(*f.RawBanner)
+		if IsGenericService(name) || name == "" {
+			return banner
+		}
+	}
+
+	if name != "" && ver != "" {
+		return fmt.Sprintf("%s %s", name, ver)
+	}
+	if name != "" {
+		return name
+	}
+	if f.RawBanner != nil && strings.TrimSpace(*f.RawBanner) != "" {
+		return strings.TrimSpace(*f.RawBanner)
+	}
+	return "Unknown Service"
+}
+
+func IsGenericService(name string) bool {
+	lower := strings.ToLower(name)
+	switch lower {
+	case "domain", "ftp", "ssh", "http", "https", "msrpc", "netbios-ssn", "microsoft-ds", "telnet":
+		return true
+	default:
+		return false
+	}
+}
+
+func TruncateString(s string, maxLen int) string {
+	if len(s) > maxLen {
+		return s[:maxLen-3] + "..."
+	}
+	return s
+}
+
+func EstimateFindingCardHeight(f *domain.Finding) float64 {
+	h := 9.0 // padding base + title bar
+	if f.CVEID != nil && strings.TrimSpace(*f.CVEID) != "" {
+		h += 4.5
+	}
+	if f.RawBanner != nil && strings.TrimSpace(*f.RawBanner) != "" {
+		h += 4.5
+	}
+	if f.Remediation != nil && strings.TrimSpace(*f.Remediation) != "" {
+		remLines := int(math.Ceil(float64(len(*f.Remediation)) / 85.0))
+		if remLines < 1 {
+			remLines = 1
+		}
+		h += float64(remLines)*4.0 + 1.0
+	}
+	return h
 }

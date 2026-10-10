@@ -227,3 +227,46 @@ func TestIsTargetBlacklisted(t *testing.T) {
 	}
 }
 
+func TestCheckTargetScope(t *testing.T) {
+	tests := []struct {
+		name      string
+		target    string
+		wantErr   error
+		shouldErr bool
+	}{
+		{"IPv4 Loopback 127.0.0.1", "127.0.0.1", domain.ErrTargetInternalRestricted, true},
+		{"IPv6 Loopback ::1", "::1", domain.ErrTargetInternalRestricted, true},
+		{"Cloud Metadata IP 169.254.169.254", "169.254.169.254", domain.ErrTargetInternalRestricted, true},
+		{"Link-Local Subnet 169.254.0.0/16", "169.254.0.0/16", domain.ErrTargetInternalRestricted, true},
+		{"Docker Bridge Subnet 172.17.0.5", "172.17.0.5", domain.ErrTargetInternalRestricted, true},
+		{"Hostname localhost", "localhost", domain.ErrTargetInternalRestricted, true},
+		{"Platform Service postgres", "postgres", domain.ErrTargetInternalRestricted, true},
+		{"Platform Service backend", "backend", domain.ErrTargetInternalRestricted, true},
+		{"Dominio interno .internal", "db.company.internal", domain.ErrTargetInternalRestricted, true},
+		{"CIDR troppo ampio /8", "10.0.0.0/8", domain.ErrTargetScopeTooBroad, true},
+		{"Target pubblico lecito", "scanme.nmap.org", nil, false},
+		{"Target IP autorizzato", "192.168.1.100", nil, false},
+		{"Subnet /24 autorizzata", "192.168.1.0/24", nil, false},
+		{"Subnet /16 al limite massimo consentito", "10.200.0.0/16", nil, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validator.CheckTargetScope(tt.target, false)
+			if tt.shouldErr {
+				if err == nil {
+					t.Fatalf("atteso errore per '%s', ma ottenuto nil", tt.target)
+				}
+				if tt.wantErr != nil && !errors.Is(err, tt.wantErr) {
+					t.Errorf("atteso errore %v, ottenuto: %v", tt.wantErr, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("nessun errore atteso per '%s', ottenuto: %v", tt.target, err)
+				}
+			}
+		})
+	}
+}
+
+

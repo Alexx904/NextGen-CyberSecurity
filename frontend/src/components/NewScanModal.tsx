@@ -9,24 +9,35 @@ import {
   ShieldAlert,
   Crosshair,
   Globe,
-  Radio,
   FileCheck2,
   Sliders,
   Sparkles,
   Save,
   Trash2,
+  Compass,
+  HelpCircle,
+  Info,
+  ChevronDown,
+  ChevronUp,
+  Layers,
+  Server,
+  Cpu,
+  Folder,
+  Bug,
 } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { ApiResponse } from '../types/auth';
-import { TargetItem, TargetListResponseData } from '../types/target';
+import { TargetItem, TargetListResponseData, TargetGroupNode } from '../types/target';
 import { ScanItem, ScanProfileItem, ScanProfileCategory } from '../types/scan';
 import { ScheduleItem } from '../types/schedule';
+import { getGroupAndDescendantIds } from './TreeExplorer';
 
 interface NewScanModalProps {
   isOpen: boolean;
   onClose: () => void;
   onScanLaunched: () => void;
   onScheduleCreated?: () => void;
+  defaultGroupId?: string;
 }
 
 const CRON_PRESETS = [
@@ -45,6 +56,14 @@ const CATEGORIES: {
   description: string;
   color: string;
 }[] = [
+  {
+    id: 'ALL_IN_ONE',
+    name: 'Tutto in Uno (360°)',
+    badge: 'Consigliato · Completo',
+    icon: Compass,
+    description: 'Audit generalista a 360°: host vivi, porte, versioni demoni e rilevamento OS',
+    color: 'from-blue-600/30 to-indigo-600/20 border-blue-500/50 text-blue-300 ring-1 ring-blue-500/40',
+  },
   {
     id: 'PEN_TEST',
     name: 'Penetration Testing',
@@ -70,14 +89,6 @@ const CATEGORIES: {
     color: 'from-emerald-500/20 to-teal-600/10 border-emerald-500/40 text-emerald-400',
   },
   {
-    id: 'DISCOVERY',
-    name: 'Network Discovery',
-    badge: 'Host Sweep & Fast',
-    icon: Radio,
-    description: 'Sweep ICMP/TCP ping veloce e mappatura host vivi senza rumore',
-    color: 'from-cyan-500/20 to-blue-600/10 border-cyan-500/40 text-cyan-400',
-  },
-  {
     id: 'COMPLIANCE',
     name: 'Compliance & Hardening',
     badge: 'Baseline Security',
@@ -92,6 +103,149 @@ const CATEGORIES: {
     icon: Sliders,
     description: 'Profili personalizzati configurati e salvati dal tuo team',
     color: 'from-slate-500/20 to-slate-700/10 border-slate-500/40 text-slate-300',
+  },
+];
+
+const CATEGORY_HELP_GUIDE: Record<
+  ScanProfileCategory,
+  {
+    simpleExplanation: string;
+    whenToUse: string;
+    estimatedDuration: string;
+    networkImpact: string;
+    whatItDetects: string;
+  }
+> = {
+  ALL_IN_ONE: {
+    simpleExplanation:
+      'Controllo a 360° globale: trova tutti gli host accesi, tutte le porte principali, le versioni precise dei servizi e il sistema operativo.',
+    whenToUse:
+      'Consigliato se vuoi un quadro completo e affidabile su un server o dispositivo senza tralasciare nulla.',
+    estimatedDuration: '15 - 45 minuti',
+    networkImpact: 'Bilanciato e sicuro (nessun disturbo ai servizi di produzione)',
+    whatItDetects: 'OS (Linux/Windows), porte aperte, versioni demoni, vulnerabilità di superficie',
+  },
+  PEN_TEST: {
+    simpleExplanation:
+      'Simula un attaccante esterno: invia pacchetti discreti (SYN stealth) per mappare la rete eludendo o testando i firewall perimetrali.',
+    whenToUse:
+      'Per verificare se i tuoi sistemi di difesa (firewall/IDS) bloccano accessi indesiderati.',
+    estimatedDuration: '30 - 60 minuti',
+    networkImpact: 'Basso rumore, pacchetti half-open senza handshake completo',
+    whatItDetects: 'Filtri firewall permissivi, porte fantasma, apparati esposti',
+  },
+  SYSTEM_FLAWS: {
+    simpleExplanation:
+      'Scava nei demoni di gestione di sistema (Windows RDP, Linux SSH, database MySQL/Postgres, cartelle SMB).',
+    whenToUse:
+      'Se vuoi identificare software obsoleto o falle critiche sfruttabili per esecuzione di codice remoto (RCE).',
+    estimatedDuration: '20 - 40 minuti',
+    networkImpact: 'Mirato sui servizi applicativi di sistema',
+    whatItDetects: 'Versioni software vulnerabili a CVE note, protocolli di gestione aperti',
+  },
+  WEB_APP: {
+    simpleExplanation:
+      'Controlla solo le porte dedicate al web (HTTP, HTTPS, API REST, reverse proxy e microservizi).',
+    whenToUse:
+      'Se gestisci un sito web aziendale, un e-commerce o API e vuoi verificare i server web prima o dopo il deploy.',
+    estimatedDuration: '10 - 20 minuti',
+    networkImpact: 'Molto leggero, solo traffico web standard',
+    whatItDetects: 'Versioni web server (Nginx/Apache), intestazioni TLS, endpoint API esposti',
+  },
+  DISCOVERY: {
+    simpleExplanation:
+      'Mappatura lampo: invia ping rapidi per dirti chi è acceso nella rete locale senza fare scansioni di porte pesanti.',
+    whenToUse:
+      'Per inventariare rapidamente gli apparati (PC, stampanti, server) in pochi secondi.',
+    estimatedDuration: '1 - 3 minuti',
+    networkImpact: 'Minimo assoluto, traffico trascurabile',
+    whatItDetects: 'Elenco indirizzi IP attivi e host vivi nella LAN',
+  },
+  COMPLIANCE: {
+    simpleExplanation:
+      'Verifica di conformità e sicurezza standard: cerca vecchi protocolli insicuri che trasmettono dati in chiaro.',
+    whenToUse:
+      'Per audit periodici di conformità aziendale (ISO 27001, NIS2) per eliminare software deprecato.',
+    estimatedDuration: '5 - 15 minuti',
+    networkImpact: 'Molto leggero',
+    whatItDetects: 'Protocolli obsoleti (Telnet, FTP, TFTP, condivisioni legacy)',
+  },
+  CUSTOM: {
+    simpleExplanation:
+      'I profili personalizzati creati e salvati dal tuo team con parametri specifici su misura.',
+    whenToUse:
+      'Per riapplicare una configurazione frequente con un solo clic.',
+    estimatedDuration: 'In base al timeout configurato',
+    networkImpact: 'Dipende dai parametri scelti',
+    whatItDetects: 'Definito dalla configurazione personalizzata',
+  },
+};
+
+interface ObjectiveOption {
+  id: string;
+  label: string;
+  simpleDesc: string;
+  ports?: string[];
+  flags?: string[];
+  icon: React.ComponentType<{ className?: string }>;
+}
+
+const OBJECTIVE_OPTIONS: ObjectiveOption[] = [
+  {
+    id: 'OBJ_WEB',
+    label: 'Siti Web, Portali & API',
+    simpleDesc: 'Ispeziona server HTTP/HTTPS, proxy e API (porte 80, 443, 8000, 8080, 8443, 9000)',
+    ports: ['80', '443', '8000', '8080', '8443', '8888', '3000', '5000', '9000'],
+    icon: Globe,
+  },
+  {
+    id: 'OBJ_SERVICES',
+    label: 'Servizi Critici & Accesso Remoto',
+    simpleDesc: 'Controlla database (MySQL, Postgres, MSSQL), desktop remoto (RDP), SSH e cartelle SMB',
+    ports: ['21', '22', '23', '25', '53', '110', '135', '139', '143', '445', '1433', '1521', '3306', '3389', '5432', '5900', '6379'],
+    icon: Server,
+  },
+  {
+    id: 'OBJ_VERSIONS',
+    label: 'Identifica Versioni Servizi (-sV)',
+    simpleDesc: 'Interroga i banner dei programmi per identificare la versione esatta e scovare vulnerabilità CVE',
+    flags: ['-sV'],
+    icon: ShieldAlert,
+  },
+  {
+    id: 'OBJ_OS',
+    label: 'Riconosci Sistema Operativo (-O)',
+    simpleDesc: 'Identifica se il dispositivo monta Windows, Linux, macOS o router/firewall di rete',
+    flags: ['-O'],
+    icon: Cpu,
+  },
+  {
+    id: 'OBJ_STEALTH',
+    label: 'Modalità Silenziosa Stealth (-sS)',
+    simpleDesc: 'Invia pacchetti SYN senza completare la connessione per eludere o non intasare i log dei firewall',
+    flags: ['-sS'],
+    icon: Crosshair,
+  },
+  {
+    id: 'OBJ_LEGACY',
+    label: 'Controllo Protocolli Legacy Insicuri',
+    simpleDesc: 'Scova servizi non crittografati che trasmettono credenziali in chiaro (Telnet, FTP, TFTP)',
+    ports: ['21', '23', '69', '79', '110', '143', '512', '513', '514'],
+    icon: FileCheck2,
+  },
+  {
+    id: 'OBJ_NO_PING',
+    label: 'Bypass Filtro Ping (-Pn)',
+    simpleDesc: 'Forza la scansione anche se l’host blocca i pacchetti ping ICMP o ha firewall attivi',
+    flags: ['-Pn'],
+    icon: Terminal,
+  },
+  {
+    id: 'OBJ_VULN_SCRIPTS',
+    label: 'Script Vulnerabilità Nmap (--script=vuln)',
+    simpleDesc: 'Esegue script attivi Nmap per scovare CVE note (EternalBlue, SSL, RCE, default credentials)',
+    flags: ['--script=vuln'],
+    icon: Bug,
   },
 ];
 
@@ -117,17 +271,29 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
   onClose,
   onScanLaunched,
   onScheduleCreated,
+  defaultGroupId,
 }) => {
   const [activeTab, setActiveTab] = useState<'ON_DEMAND' | 'SCHEDULED'>('ON_DEMAND');
-  const [configMode, setConfigMode] = useState<'GUIDED' | 'PROFESSIONAL'>('GUIDED');
+  const [configMode, setConfigMode] = useState<'GUIDED' | 'MULTI_OBJECTIVE' | 'PROFESSIONAL'>('GUIDED');
+  const [showHelpGuide, setShowHelpGuide] = useState<boolean>(false);
 
+  const [targetGroups, setTargetGroups] = useState<TargetGroupNode[]>([]);
   const [targets, setTargets] = useState<TargetItem[]>([]);
   const [profiles, setProfiles] = useState<ScanProfileItem[]>([]);
   const [loadingData, setLoadingData] = useState<boolean>(false);
 
-  const [selectedTargetId, setSelectedTargetId] = useState<string>('');
+  const [selectedGroupId, setSelectedGroupId] = useState<string>(defaultGroupId || '');
   const [selectedProfileId, setSelectedProfileId] = useState<string>('');
-  const [selectedCategory, setSelectedCategory] = useState<ScanProfileCategory>('PEN_TEST');
+  const [selectedCategory, setSelectedCategory] = useState<ScanProfileCategory>('ALL_IN_ONE');
+
+  // Campi Modalità Multi-Obiettivo
+  const [selectedObjectiveIds, setSelectedObjectiveIds] = useState<string[]>([
+    'OBJ_WEB',
+    'OBJ_SERVICES',
+    'OBJ_VERSIONS',
+    'OBJ_OS',
+    'OBJ_VULN_SCRIPTS',
+  ]);
 
   // Campi Configuratore Professionale (Avanzato)
   const [selectedPortPreset, setSelectedPortPreset] = useState<string>('FAST');
@@ -138,6 +304,7 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
   const [flagServiceVersion, setFlagServiceVersion] = useState<boolean>(true);
   const [flagDeepVersion, setFlagDeepVersion] = useState<boolean>(false);
   const [flagOsDetection, setFlagOsDetection] = useState<boolean>(false);
+  const [flagVulnScripts, setFlagVulnScripts] = useState<boolean>(true);
   const [flagOnlyOpen, setFlagOnlyOpen] = useState<boolean>(true);
   const [flagNoPing, setFlagNoPing] = useState<boolean>(false);
 
@@ -173,15 +340,25 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
       setLoadingData(true);
 
       Promise.all([
-        apiClient.get<ApiResponse<TargetListResponseData>>('/targets?limit=100'),
+        apiClient.get<ApiResponse<TargetGroupNode[]>>('/target-groups'),
+        apiClient.get<ApiResponse<TargetListResponseData>>('/targets?limit=200'),
         apiClient.get<ApiResponse<{ items: ScanProfileItem[]; total: number }>>('/scan-profiles'),
       ])
-        .then(([targetsRes, profilesRes]) => {
+        .then(([groupsRes, targetsRes, profilesRes]) => {
+          let loadedGroups: TargetGroupNode[] = [];
+          if (groupsRes.data?.data) {
+            loadedGroups = groupsRes.data.data;
+            setTargetGroups(loadedGroups);
+          }
+
           if (targetsRes.data?.data?.items) {
-            const targetList = targetsRes.data.data.items;
-            setTargets(targetList);
-            const firstValid = targetList.find((t) => !t.is_blacklisted);
-            if (firstValid) setSelectedTargetId(firstValid.id);
+            setTargets(targetsRes.data.data.items);
+          }
+
+          if (defaultGroupId) {
+            setSelectedGroupId(defaultGroupId);
+          } else if (loadedGroups.length > 0) {
+            setSelectedGroupId((prev) => (prev ? prev : loadedGroups[0].id));
           }
 
           if (profilesRes.data?.data?.items) {
@@ -195,13 +372,13 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
           }
         })
         .catch((err) => {
-          setError(err.response?.data?.error?.message || 'Impossibile recuperare target o profili');
+          setError(err.response?.data?.error?.message || 'Impossibile recuperare cartelle o profili');
         })
         .finally(() => {
           setLoadingData(false);
         });
     }
-  }, [isOpen]);
+  }, [isOpen, defaultGroupId]);
 
   // Filtra profili per categoria nella modalità guidata
   const filteredProfiles = useMemo(() => {
@@ -212,6 +389,43 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
       return p.category === selectedCategory;
     });
   }, [profiles, selectedCategory]);
+
+  // Helper per appiattire l'albero dei gruppi con profondità e bersagli associati
+  const flattenedGroups = useMemo(() => {
+    const list: {
+      id: string;
+      name: string;
+      depth: number;
+      color_tag?: string;
+      targetCount: number;
+      targets: TargetItem[];
+    }[] = [];
+
+    const recurse = (nodes: TargetGroupNode[], depth = 0) => {
+      for (const node of nodes) {
+        const descendantIds = new Set(getGroupAndDescendantIds(node));
+        const matchingTargets = targets.filter((t) => t.group_id && descendantIds.has(t.group_id));
+        list.push({
+          id: node.id,
+          name: node.name,
+          depth,
+          color_tag: node.color_tag || undefined,
+          targetCount: matchingTargets.length,
+          targets: matchingTargets,
+        });
+        if (node.children && node.children.length > 0) {
+          recurse(node.children, depth + 1);
+        }
+      }
+    };
+
+    recurse(targetGroups);
+    return list;
+  }, [targetGroups, targets]);
+
+  const selectedGroupInfo = useMemo(() => {
+    return flattenedGroups.find((g) => g.id === selectedGroupId) || null;
+  }, [flattenedGroups, selectedGroupId]);
 
   // Seleziona il primo profilo disponibile quando cambia la categoria
   useEffect(() => {
@@ -266,6 +480,7 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
     }
 
     // Flags opzionali
+    if (flagVulnScripts) parts.push('--script=vuln');
     if (flagNoPing) parts.push('-Pn');
     if (flagOnlyOpen) parts.push('--open');
 
@@ -276,6 +491,7 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
     flagServiceVersion,
     flagDeepVersion,
     flagOsDetection,
+    flagVulnScripts,
     timingTemplate,
     selectedPortPreset,
     customPortInput,
@@ -283,10 +499,71 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
     flagOnlyOpen,
   ]);
 
+  // Costruzione dinamica del comando Nmap per la modalità Multi-Obiettivo
+  const generatedMultiObjectiveArgs = useMemo(() => {
+    const selectedObjs = OBJECTIVE_OPTIONS.filter((o) => selectedObjectiveIds.includes(o.id));
+
+    const parts: string[] = [];
+
+    // Stealth SYN
+    if (selectedObjectiveIds.includes('OBJ_STEALTH')) {
+      parts.push('-sS');
+    }
+
+    // Version Detection
+    if (selectedObjectiveIds.includes('OBJ_VERSIONS')) {
+      parts.push('-sV');
+    }
+
+    // OS Detection
+    if (selectedObjectiveIds.includes('OBJ_OS')) {
+      parts.push('-O');
+    }
+
+    // Timing
+    parts.push('-T4');
+
+    // Porte da unire
+    const allPortsSet = new Set<number>();
+    selectedObjs.forEach((o) => {
+      if (o.ports) {
+        o.ports.forEach((p) => {
+          const num = parseInt(p, 10);
+          if (!isNaN(num)) allPortsSet.add(num);
+        });
+      }
+    });
+
+    if (allPortsSet.size > 0) {
+      const sortedPorts = Array.from(allPortsSet).sort((a, b) => a - b);
+      parts.push(`-p ${sortedPorts.join(',')}`);
+    }
+
+    // Script di vulnerabilità Nmap
+    if (selectedObjectiveIds.includes('OBJ_VULN_SCRIPTS')) {
+      parts.push('--script=vuln');
+    }
+
+    // No ping se richiesto
+    if (selectedObjectiveIds.includes('OBJ_NO_PING')) {
+      parts.push('-Pn');
+    }
+
+    parts.push('--open');
+
+    return parts.join(' ');
+  }, [selectedObjectiveIds]);
+
   const targetIpPreview = useMemo(() => {
-    const t = targets.find((item) => item.id === selectedTargetId);
-    return t ? t.value : '<TARGET_IP>';
-  }, [targets, selectedTargetId]);
+    if (selectedGroupInfo) {
+      if (selectedGroupInfo.targets.length > 0) {
+        const preview = selectedGroupInfo.targets.map((t) => t.value).slice(0, 3).join(', ');
+        return `${selectedGroupInfo.name} [${selectedGroupInfo.targets.length} IP: ${preview}${selectedGroupInfo.targets.length > 3 ? '...' : ''}]`;
+      }
+      return `${selectedGroupInfo.name} [0 IP censiti]`;
+    }
+    return '<CARTELLA_AZIENDA>';
+  }, [selectedGroupInfo]);
 
   if (!isOpen) return null;
 
@@ -307,14 +584,13 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
     e.preventDefault();
     setError(null);
 
-    if (!selectedTargetId) {
-      setError('Seleziona un bersaglio valido da scansionare');
+    if (!selectedGroupId) {
+      setError('Seleziona un\'azienda o cartella valida da scansionare');
       return;
     }
 
-    const selectedTarget = targets.find((t) => t.id === selectedTargetId);
-    if (selectedTarget?.is_blacklisted) {
-      setError('Impossibile scansionare un bersaglio contrassegnato come Blacklist');
+    if (!selectedGroupInfo || selectedGroupInfo.targets.length === 0) {
+      setError('La cartella o azienda selezionata non contiene alcun indirizzo IP. Aggiungi target prima di avviare la scansione.');
       return;
     }
 
@@ -322,8 +598,34 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
     try {
       let finalProfileId = selectedProfileId;
 
-      // In modalità Professionale: creiamo prima un profilo custom se richiesto o un profilo al volo
-      if (configMode === 'PROFESSIONAL') {
+      // In modalità Multi-Obiettivo: creiamo automaticamente un profilo con la combinazione selezionata
+      if (configMode === 'MULTI_OBJECTIVE') {
+        if (selectedObjectiveIds.length === 0) {
+          setError('Seleziona almeno un obiettivo di scansione per continuare');
+          setSubmitting(false);
+          return;
+        }
+
+        const selectedObjs = OBJECTIVE_OPTIONS.filter((o) => selectedObjectiveIds.includes(o.id));
+        const objNames = selectedObjs.map((o) => o.label).join(', ');
+        const profileName = `Multi-Audit ${new Date().toISOString().slice(11, 19)} (${selectedObjectiveIds.length} Obiettivi)`;
+        const profileDesc = `Scansione multi-obiettivo combinata: ${objNames}`;
+
+        const createRes = await apiClient.post<ApiResponse<ScanProfileItem>>('/scan-profiles', {
+          name: profileName,
+          nmap_args: generatedMultiObjectiveArgs,
+          description: profileDesc,
+          timeout_seconds: 3600,
+          category: 'CUSTOM',
+        });
+
+        if (!createRes.data || !createRes.data.success || !createRes.data.data) {
+          throw new Error(createRes.data?.error?.message || 'Errore nella creazione del profilo multi-obiettivo');
+        }
+
+        finalProfileId = createRes.data.data.id;
+        fetchProfiles();
+      } else if (configMode === 'PROFESSIONAL') {
         const profileName = saveAsCustomProfile && customProfileName.trim()
           ? customProfileName.trim()
           : `Custom PenTest ${new Date().toISOString().slice(11, 19)}`;
@@ -356,8 +658,8 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
 
       // Esecuzione lancio On-Demand o Creazione Scheduler
       if (activeTab === 'ON_DEMAND') {
-        const response = await apiClient.post<ApiResponse<ScanItem>>('/scans', {
-          target_id: selectedTargetId,
+        const response = await apiClient.post<ApiResponse<ScanItem[] | ScanItem>>('/scans', {
+          group_id: selectedGroupId,
           profile_id: finalProfileId,
         });
 
@@ -376,19 +678,26 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
           return;
         }
 
-        const response = await apiClient.post<ApiResponse<ScheduleItem>>('/schedules', {
-          target_id: selectedTargetId,
-          profile_id: finalProfileId,
-          cron_expression: cronExpr,
-          is_active: true,
-        });
-
-        if (response.data && response.data.success) {
-          if (onScheduleCreated) onScheduleCreated();
-          onClose();
-        } else {
-          setError(response.data?.error?.message || 'Errore durante la creazione della pianificazione');
+        const validTargets = selectedGroupInfo.targets.filter((t) => !t.is_blacklisted);
+        if (validTargets.length === 0) {
+          setError('Nessun target valido (non in blacklist) nella cartella da pianificare');
+          setSubmitting(false);
+          return;
         }
+
+        await Promise.all(
+          validTargets.map((t) =>
+            apiClient.post<ApiResponse<ScheduleItem>>('/schedules', {
+              target_id: t.id,
+              profile_id: finalProfileId,
+              cron_expression: cronExpr,
+              is_active: true,
+            })
+          )
+        );
+
+        if (onScheduleCreated) onScheduleCreated();
+        onClose();
       }
     } catch (err: any) {
       setError(
@@ -400,6 +709,7 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
       setSubmitting(false);
     }
   };
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
@@ -461,31 +771,60 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
             </button>
           </div>
 
-          {/* Toggle Semplice / Professionale */}
-          <div className="pb-2 flex items-center space-x-1 bg-slate-950/60 p-1 rounded-lg border border-cyber-border">
+          {/* Mode Selector: Guidata vs Multi-Obiettivo vs Professionale & Guida Semplice */}
+          <div className="pb-2 flex flex-wrap items-center gap-1.5">
+            <div className="flex items-center space-x-1 bg-slate-950/60 p-1 rounded-lg border border-cyber-border">
+              <button
+                type="button"
+                onClick={() => setConfigMode('GUIDED')}
+                className={`px-2.5 py-1 rounded text-xs font-medium flex items-center space-x-1.5 transition-all ${
+                  configMode === 'GUIDED'
+                    ? 'bg-cyan-500 text-slate-950 font-semibold shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Sparkles className="w-3 h-3" />
+                <span>Guidata (1-Click)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfigMode('MULTI_OBJECTIVE')}
+                className={`px-2.5 py-1 rounded text-xs font-medium flex items-center space-x-1.5 transition-all ${
+                  configMode === 'MULTI_OBJECTIVE'
+                    ? 'bg-cyan-500 text-slate-950 font-semibold shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Layers className="w-3 h-3" />
+                <span>Componi Multi-Obiettivo</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfigMode('PROFESSIONAL')}
+                className={`px-2.5 py-1 rounded text-xs font-medium flex items-center space-x-1.5 transition-all ${
+                  configMode === 'PROFESSIONAL'
+                    ? 'bg-cyan-500 text-slate-950 font-semibold shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Sliders className="w-3 h-3" />
+                <span>Professionale (Pro)</span>
+              </button>
+            </div>
+
             <button
               type="button"
-              onClick={() => setConfigMode('GUIDED')}
-              className={`px-2.5 py-1 rounded text-xs font-medium flex items-center space-x-1.5 transition-all ${
-                configMode === 'GUIDED'
-                  ? 'bg-cyan-500 text-slate-950 font-semibold shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+              onClick={() => setShowHelpGuide(!showHelpGuide)}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center space-x-1.5 transition-all ${
+                showHelpGuide
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                  : 'bg-slate-950/60 text-slate-400 hover:text-amber-300 border border-cyber-border hover:border-amber-500/30'
               }`}
+              title="Mostra spiegazione semplice su ogni categoria e obiettivo"
             >
-              <Sparkles className="w-3 h-3" />
-              <span>Modalità Guidata</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfigMode('PROFESSIONAL')}
-              className={`px-2.5 py-1 rounded text-xs font-medium flex items-center space-x-1.5 transition-all ${
-                configMode === 'PROFESSIONAL'
-                  ? 'bg-cyan-500 text-slate-950 font-semibold shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Sliders className="w-3 h-3" />
-              <span>Modalità Professionale</span>
+              <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Guida Semplice</span>
+              {showHelpGuide ? <ChevronUp className="w-3 h-3 ml-0.5" /> : <ChevronDown className="w-3 h-3 ml-0.5" />}
             </button>
           </div>
         </div>
@@ -499,6 +838,46 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
             </div>
           )}
 
+          {/* Pannello Espandibile: Guida Semplice alla Scelta */}
+          {showHelpGuide && (
+            <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-950/20 text-xs space-y-3 animate-in fade-in">
+              <div className="flex items-center justify-between pb-2 border-b border-amber-500/20">
+                <div className="flex items-center space-x-2 text-amber-300 font-semibold">
+                  <HelpCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>💡 Guida Semplice: Come Scegliere la Scansione Ideale per la Tua Rete</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowHelpGuide(false)}
+                  className="text-amber-400 hover:text-amber-200 p-1"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-300 leading-relaxed">
+                Non sai quale scegliere? Consulta la guida rapida qui sotto per capire quale obiettivo fa al caso tuo:
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-60 overflow-y-auto pr-1">
+                {CATEGORIES.map((cat) => {
+                  const guide = CATEGORY_HELP_GUIDE[cat.id];
+                  if (!guide) return null;
+                  return (
+                    <div key={cat.id} className="p-2.5 rounded-lg border border-slate-800 bg-slate-900/90 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-white">{cat.name}</span>
+                        <span className="text-[10px] text-cyan-400 font-mono">{guide.estimatedDuration}</span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 leading-snug">{guide.simpleExplanation}</p>
+                      <div className="text-[10px] text-slate-400 pt-1 border-t border-slate-800">
+                        <strong className="text-amber-300">Quando usarlo:</strong> {guide.whenToUse}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {loadingData ? (
             <div className="py-12 text-center text-xs text-slate-400">
               <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-cyan-500 border-t-transparent mb-2"></div>
@@ -506,34 +885,70 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
             </div>
           ) : (
             <>
-              {/* Selezione Target */}
+              {/* Selezione Azienda / Cartella Target */}
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                  Bersaglio / Asset da Scansionare <span className="text-red-400">*</span>
-                </label>
-                {targets.length === 0 ? (
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-medium text-slate-300">
+                    Azienda / Cartella Target da Scansionare <span className="text-red-400">*</span>
+                  </label>
+                  <span className="text-[11px] text-slate-400">
+                    Audit consolidato per tutti gli IP della cartella
+                  </span>
+                </div>
+
+                {flattenedGroups.length === 0 ? (
                   <div className="p-3 rounded-lg border border-cyber-border bg-slate-900 text-xs text-amber-400">
-                    Nessun target configurato. Aggiungi prima un target nella sezione Target & Asset.
+                    Nessuna cartella o azienda configurata. Crea prima una cartella nella sezione Target & Scope.
                   </div>
                 ) : (
                   <select
-                    value={selectedTargetId}
-                    onChange={(e) => setSelectedTargetId(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-900 border border-cyber-border rounded-lg text-xs text-slate-200 focus:outline-none focus:border-cyan-500 font-mono"
+                    value={selectedGroupId}
+                    onChange={(e) => setSelectedGroupId(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-900 border border-cyber-border rounded-lg text-xs text-slate-200 focus:outline-none focus:border-cyan-500 font-sans"
                     required
                   >
-                    {targets.map((t) => (
-                      <option
-                        key={t.id}
-                        value={t.id}
-                        disabled={t.is_blacklisted}
-                        className={t.is_blacklisted ? 'text-slate-500' : 'text-slate-100'}
-                      >
-                        {t.value} ({t.type}) {t.description ? `- ${t.description}` : ''}{' '}
-                        {t.is_blacklisted ? '[BLACKLIST - ESCLUSO]' : ''}
+                    <option value="" disabled>Seleziona un'azienda o cartella...</option>
+                    {flattenedGroups.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {'\u00A0'.repeat(g.depth * 3) + (g.depth > 0 ? '↳ 📁 ' : '🏢 ') + g.name} ({g.targetCount} IP censiti)
                       </option>
                     ))}
                   </select>
+                )}
+
+                {/* Card preview dell'azienda / cartella selezionata */}
+                {selectedGroupInfo && (
+                  <div className="mt-2.5 p-3 rounded-xl border border-cyan-500/30 bg-cyan-950/20 text-xs">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <Folder className="w-4 h-4 text-cyan-400 shrink-0" />
+                        <span className="font-bold text-white">{selectedGroupInfo.name}</span>
+                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-900 border border-cyber-border text-cyan-300 font-mono">
+                          {selectedGroupInfo.targetCount} IP inclusi
+                        </span>
+                      </div>
+                    </div>
+                    {selectedGroupInfo.targets.length > 0 ? (
+                      <div className="mt-2 flex flex-wrap gap-1.5 max-h-20 overflow-y-auto pr-1">
+                        {selectedGroupInfo.targets.map((t) => (
+                          <span
+                            key={t.id}
+                            className={`px-2 py-0.5 rounded text-[11px] font-mono border ${
+                              t.is_blacklisted
+                                ? 'bg-rose-950/30 text-rose-400 border-rose-800/40 line-through'
+                                : 'bg-slate-900 text-slate-300 border-cyber-border'
+                            }`}
+                          >
+                            {t.value}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-1.5 text-[11px] text-amber-400/90">
+                        ⚠️ Questa cartella non ha ancora alcun indirizzo IP assegnato. Aggiungi prima dei bersagli per avviare la scansione.
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -584,6 +999,28 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
                       })}
                     </div>
                   </div>
+
+                  {/* Spiegazione semplice per la Categoria Selezionata */}
+                  {CATEGORY_HELP_GUIDE[selectedCategory] && (
+                    <div className="p-3 rounded-xl border border-cyan-500/20 bg-slate-900/60 text-xs space-y-1.5 animate-in fade-in">
+                      <div className="flex items-center justify-between text-slate-300">
+                        <span className="flex items-center space-x-1.5 text-cyan-400 font-semibold">
+                          <Info className="w-3.5 h-3.5" />
+                          <span>Obiettivo Categoria: {CATEGORIES.find((c) => c.id === selectedCategory)?.name}</span>
+                        </span>
+                        <span className="text-[10px] font-mono text-cyan-300 bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-800/40">
+                          {CATEGORY_HELP_GUIDE[selectedCategory].estimatedDuration}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 leading-relaxed">
+                        {CATEGORY_HELP_GUIDE[selectedCategory].simpleExplanation}
+                      </p>
+                      <div className="text-[10px] text-slate-400 pt-1 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-1">
+                        <span><strong className="text-amber-400">Consigliato quando:</strong> {CATEGORY_HELP_GUIDE[selectedCategory].whenToUse}</span>
+                        <span className="text-slate-500 font-mono hidden sm:inline">{CATEGORY_HELP_GUIDE[selectedCategory].networkImpact}</span>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Lista Profili per la Categoria Selezionata */}
                   <div>
@@ -664,7 +1101,113 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
                 </div>
               )}
 
-              {/* SEZIONE 2: MODALITÀ PROFESSIONALE (CONFIGURATORE AVANZATO) */}
+              {/* SEZIONE 2: MODALITÀ MULTI-OBIETTIVO (COMPOSIZIONE LIBERA) */}
+              {configMode === 'MULTI_OBJECTIVE' && (
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <label className="text-xs font-medium text-slate-300">
+                        Seleziona uno o più Obiettivi di Scansione
+                      </label>
+                      <p className="text-[11px] text-slate-400">
+                        Scegli gli audit desiderati: il motore unisce le porte e attiva i flag Nmap sicuri.
+                      </p>
+                    </div>
+                    <div className="flex space-x-2 text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedObjectiveIds(OBJECTIVE_OPTIONS.map((o) => o.id))}
+                        className="text-cyan-400 hover:underline"
+                      >
+                        Seleziona tutti
+                      </button>
+                      <span className="text-slate-600">|</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSelectedObjectiveIds([
+                            'OBJ_WEB',
+                            'OBJ_SERVICES',
+                            'OBJ_VERSIONS',
+                            'OBJ_OS',
+                          ])
+                        }
+                        className="text-slate-400 hover:text-white"
+                      >
+                        Standard 360°
+                      </button>
+                      <span className="text-slate-600">|</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedObjectiveIds([])}
+                        className="text-rose-400 hover:underline"
+                      >
+                        Deseleziona
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {OBJECTIVE_OPTIONS.map((obj) => {
+                      const Icon = obj.icon;
+                      const isChecked = selectedObjectiveIds.includes(obj.id);
+                      return (
+                        <label
+                          key={obj.id}
+                          className={`flex items-start space-x-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                            isChecked
+                              ? 'border-cyan-500 bg-cyan-500/10 shadow-[0_0_12px_rgba(6,182,212,0.15)] ring-1 ring-cyan-500/40'
+                              : 'border-cyber-border bg-slate-900/60 hover:border-slate-700'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedObjectiveIds((prev) => [...prev, obj.id]);
+                              } else {
+                                setSelectedObjectiveIds((prev) => prev.filter((id) => id !== obj.id));
+                              }
+                            }}
+                            className="mt-1 rounded border-slate-700 text-cyan-500 focus:ring-0"
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-1.5">
+                              <Icon className={`w-3.5 h-3.5 ${isChecked ? 'text-cyan-400' : 'text-slate-400'}`} />
+                              <span className="text-xs font-semibold text-white">{obj.label}</span>
+                            </div>
+                            <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                              {obj.simpleDesc}
+                            </p>
+                            {obj.ports && (
+                              <div className="mt-1 text-[10px] text-slate-500 font-mono">
+                                Porte: {obj.ports.slice(0, 6).join(', ')}
+                                {obj.ports.length > 6 ? ` (+altre ${obj.ports.length - 6})` : ''}
+                              </div>
+                            )}
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  <div className="p-3 rounded-xl border border-slate-800 bg-slate-900/60 flex items-center justify-between text-xs text-slate-300">
+                    <div className="flex items-center space-x-2">
+                      <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                      <span>
+                        Obiettivi attivi: <strong className="text-white font-mono">{selectedObjectiveIds.length}</strong> su{' '}
+                        {OBJECTIVE_OPTIONS.length}
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-cyan-300 font-mono bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-800/40">
+                      Unione porte & flag automatica
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* SEZIONE 3: MODALITÀ PROFESSIONALE (CONFIGURATORE AVANZATO) */}
               {configMode === 'PROFESSIONAL' && (
                 <div className="space-y-4">
                   {/* Selettore Scope Porte */}
@@ -847,6 +1390,20 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
                         </div>
                       </label>
 
+                      {/* Script Vulnerabilità Nmap */}
+                      <label className="flex items-center space-x-2 p-2 rounded-lg border border-cyber-border bg-slate-900/50 cursor-pointer hover:border-slate-700 sm:col-span-2">
+                        <input
+                          type="checkbox"
+                          checked={flagVulnScripts}
+                          onChange={(e) => setFlagVulnScripts(e.target.checked)}
+                          className="rounded border-slate-700 text-cyan-500 focus:ring-0"
+                        />
+                        <div className="flex-1">
+                          <span className="text-white font-medium">Script Vulnerabilità Nmap (--script=vuln)</span>
+                          <p className="text-[10px] text-slate-500">Esegue script attivi di rilevamento vulnerabilità e falle critiche CVE note</p>
+                        </div>
+                      </label>
+
                       {/* Only Open */}
                       <label className="flex items-center space-x-2 p-2 rounded-lg border border-cyber-border bg-slate-900/50 cursor-pointer hover:border-slate-700 sm:col-span-2">
                         <input
@@ -906,7 +1463,6 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
                             <option value="PEN_TEST">Penetration Testing</option>
                             <option value="SYSTEM_FLAWS">Falle di Sistema</option>
                             <option value="WEB_APP">Web App & API</option>
-                            <option value="DISCOVERY">Network Discovery</option>
                             <option value="COMPLIANCE">Compliance</option>
                           </select>
                         </div>
@@ -958,7 +1514,9 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
                   <span className="text-cyan-400 font-bold">$ nmap </span>
                   <span className="text-amber-300">
                     {configMode === 'GUIDED'
-                      ? profiles.find((p) => p.id === selectedProfileId)?.nmap_args || '-T4 -F'
+                      ? profiles.find((p) => p.id === selectedProfileId)?.nmap_args || '-sS -sV -O -T4 --open'
+                      : configMode === 'MULTI_OBJECTIVE'
+                      ? generatedMultiObjectiveArgs
                       : generatedNmapArgs}
                   </span>{' '}
                   <span className="text-emerald-300 font-semibold">{targetIpPreview}</span>
@@ -1024,7 +1582,7 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={submitting || targets.length === 0}
+              disabled={Boolean(submitting || !selectedGroupId || (selectedGroupInfo && selectedGroupInfo.targets.length === 0))}
               className="px-5 py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-semibold transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1.5"
             >
               {activeTab === 'ON_DEMAND' ? (

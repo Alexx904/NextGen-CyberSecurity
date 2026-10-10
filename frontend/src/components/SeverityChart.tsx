@@ -86,7 +86,7 @@ export const SeverityChart: React.FC<SeverityChartProps> = ({
     <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
       {/* Donut Chart */}
       <div className="md:col-span-6 h-64 relative flex items-center justify-center">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
           <PieChart>
             <Tooltip content={<CustomTooltip />} />
             <Pie

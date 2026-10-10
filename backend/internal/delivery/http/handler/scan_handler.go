@@ -274,6 +274,14 @@ func (h *ScanHandler) Start(w http.ResponseWriter, r *http.Request) {
 			response.Error(w, http.StatusNotFound, "NOT_FOUND", "Target o profilo di scansione non trovato")
 			return
 		}
+		if errors.Is(err, domain.ErrTargetInternalRestricted) {
+			response.Error(w, http.StatusBadRequest, "TARGET_RESTRICTED", domain.ErrTargetInternalRestricted.Error())
+			return
+		}
+		if errors.Is(err, domain.ErrTargetScopeTooBroad) {
+			response.Error(w, http.StatusBadRequest, "SCOPE_TOO_BROAD", domain.ErrTargetScopeTooBroad.Error())
+			return
+		}
 		if errors.Is(err, domain.ErrTargetBlacklisted) {
 			response.Error(w, http.StatusForbidden, "FORBIDDEN", domain.ErrTargetBlacklisted.Error())
 			return

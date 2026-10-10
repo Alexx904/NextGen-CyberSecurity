@@ -19,6 +19,7 @@ import {
   X,
   Radar,
   Server,
+  Network,
 } from 'lucide-react';
 
 interface HealthData {
@@ -77,17 +78,13 @@ export const AppLayout: React.FC = () => {
       ],
     },
     {
-      category: 'Scansione di Rete & Asset',
+      category: 'Flusso Operativo',
       items: [
-        { name: 'Target & Scope', path: '/targets', icon: Crosshair, badge: 'Scope' },
-        { name: 'Network Discovery', path: '/network-discovery', icon: Radar, badge: 'LAN Live' },
-      ],
-    },
-    {
-      category: 'Scansione Vulnerabilità',
-      items: [
-        { name: 'Scansioni Nmap', path: '/scans', icon: Terminal, badge: 'Engine' },
-        { name: 'Vulnerabilità (CVE)', path: '/findings', icon: BarChart3, badge: 'Findings' },
+        { name: '1. Network Discovery', path: '/network-discovery', icon: Radar, badge: 'Passo 1' },
+        { name: '2. Target & Cartelle', path: '/targets', icon: Crosshair, badge: 'Passo 2' },
+        { name: '3. Scansioni Nmap', path: '/scans', icon: Terminal, badge: 'Passo 3' },
+        { name: '4. Vulnerabilità (CVE)', path: '/findings', icon: BarChart3, badge: 'Passo 4' },
+        { name: '5. Report Aziendali', path: '/reports', icon: FileText, badge: 'Passo 5' },
       ],
     },
     {
@@ -97,9 +94,14 @@ export const AppLayout: React.FC = () => {
       ],
     },
     {
-      category: 'Report & Gestione',
+      category: 'Analisi Minacce',
       items: [
-        { name: 'Report White-Label', path: '/reports', icon: FileText, badge: 'Hub' },
+        { name: 'Attack Path Graph', path: '/attack-path', icon: Network, badge: 'Grafo' },
+      ],
+    },
+    {
+      category: 'Configurazione',
+      items: [
         { name: 'Impostazioni Tenant', path: '/settings', icon: Settings },
       ],
     },

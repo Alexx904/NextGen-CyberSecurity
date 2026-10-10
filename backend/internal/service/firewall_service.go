@@ -235,8 +235,8 @@ func (s *firewallService) startSafetyTimer(ctx context.Context, tenantID, server
 		return fmt.Errorf("scrittura file snapshot remoto fallita: %s %v", stderr, err)
 	}
 
-	// Remote self-revert watchdog distaccato con nohup
-	watchdogCmd := fmt.Sprintf("nohup sh -c 'sleep %d && iptables-restore < %s && rm -f %s' >/dev/null 2>&1 & echo $!", timeoutSec, backupFile, backupFile)
+	// Remote self-revert watchdog distaccato con nohup (garantisce revert anche con disconnessione o restart backend)
+	watchdogCmd := fmt.Sprintf("nohup sh -c 'sleep %d && sudo iptables-restore < %s && rm -f %s' >/dev/null 2>&1 & echo $!", timeoutSec, backupFile, backupFile)
 	pidOut, stderr, exitCode, err := s.executor.ExecuteCommand(ctx, tenantID, serverID, watchdogCmd)
 	if err != nil || exitCode != 0 {
 		return fmt.Errorf("avvio watchdog remoto fallito: %s %v", stderr, err)

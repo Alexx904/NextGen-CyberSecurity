@@ -20,12 +20,13 @@ Segui le regole di `AGENTS.md`. Input: il messaggio dell'utente sull'esito di un
    - Riporta il task in `[ ]` e registra il bug in `docs/3_TASK_LIST.md`.
    - Riproduci il problema con un test che fallisce, individua la causa radice, correggi, riesegui test mirati e suite completa (failure loop, max 3 tentativi).
    - Verifica che il comportamento rifiutato non dipenda da un requisito mal interpretato: se sì, correggi anche `0_REQUIREMENTS.md`.
+   - Esegui il Doc Sync (`AGENTS.md` sez. 5) anche per il fix.
    - Consegna un nuovo Pacchetto di Accettazione, con il task in `[~]`.
 
    **Modifica (cambia/aggiungi/togli):**
    - Se la modifica è piccola e locale: trattala come mini-feature (intake breve, piano, test, verifica).
    - Se modifica requisiti o architettura già accettati: esegui l'analisi d'impatto sui task `[x]` e sui test esistenti, aggiorna docs e task list, poi segui la pipeline di `/feature`.
-   - Segnala all'utente cosa cambia di ciò che aveva già accettato.
+   - Esegui il Doc Sync (`AGENTS.md` sez. 5) e segnala all'utente cosa cambia di ciò che aveva già accettato.
 
    **Indicazione generica (preferenza, vincolo, priorità):**
    - Registrala in `PROJECT_STATE.md` o nel documento pertinente (ADR se è una decisione tecnica) e applicala da ora in poi.

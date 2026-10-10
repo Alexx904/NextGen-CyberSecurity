@@ -14,7 +14,7 @@ import {
   WifiOff,
 } from 'lucide-react';
 import { SSHServerItem } from '../types/ssh';
-import { getStoredAccessToken } from '../api/client';
+import { getStoredAccessToken, getStreamTicket } from '../api/client';
 
 interface WebTerminalModalProps {
   server: SSHServerItem;
@@ -37,7 +37,7 @@ export const WebTerminalModal: React.FC<WebTerminalModalProps> = ({
   const wsRef = useRef<WebSocket | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
-  const initTerminalSession = useCallback(() => {
+  const initTerminalSession = useCallback(async () => {
     if (!terminalContainerRef.current) return;
 
     // Teardown precedente se presente
@@ -104,11 +104,17 @@ export const WebTerminalModal: React.FC<WebTerminalModalProps> = ({
 
     term.write(`\x1b[36mConnecting to ${server.username}@${server.host}:${server.port} via NextGen SSH Gateway...\x1b[0m\r\n`);
 
-    // Apertura WebSocket
-    const token = getStoredAccessToken() || '';
+    // Apertura WebSocket tramite StreamTicket monouso (NFR-SEC-04)
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/ws/v1/ssh/servers/${server.id}/terminal?token=${encodeURIComponent(token)}`;
+    let wsUrl = '';
+    try {
+      const ticket = await getStreamTicket();
+      wsUrl = `${protocol}//${host}/ws/v1/ssh/servers/${server.id}/terminal?ticket=${encodeURIComponent(ticket)}`;
+    } catch {
+      const token = getStoredAccessToken() || '';
+      wsUrl = `${protocol}//${host}/ws/v1/ssh/servers/${server.id}/terminal?token=${encodeURIComponent(token)}`;
+    }
 
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
@@ -153,14 +159,14 @@ export const WebTerminalModal: React.FC<WebTerminalModalProps> = ({
     };
 
     // Inoltro input tastiera da xterm a WebSocket
-    const onDataDisposable = term.onData((data: string) => {
+    term.onData((data: string) => {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(data);
       }
     });
 
     // Inoltro eventi resize da xterm a WebSocket
-    const onResizeDisposable = term.onResize(({ cols, rows }) => {
+    term.onResize(({ cols, rows }) => {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(
           JSON.stringify({
@@ -195,18 +201,12 @@ export const WebTerminalModal: React.FC<WebTerminalModalProps> = ({
       resizeObserver.observe(terminalContainerRef.current);
       resizeObserverRef.current = resizeObserver;
     }
-
-    return () => {
-      onDataDisposable.dispose();
-      onResizeDisposable.dispose();
-    };
   }, [server.id, server.host, server.port, server.username]);
 
   useEffect(() => {
-    const cleanup = initTerminalSession();
+    void initTerminalSession();
 
     return () => {
-      if (cleanup) cleanup();
       if (resizeObserverRef.current) {
         resizeObserverRef.current.disconnect();
         resizeObserverRef.current = null;

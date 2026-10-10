@@ -489,5 +489,164 @@ func TestPDFGenerator_Generate_TechnicalTemplate(t *testing.T) {
 	}
 }
 
+func TestCleanServiceName(t *testing.T) {
+	svcDomain := "domain"
+	verDomain := "2.89"
+	bannerDnsmasq := "dnsmasq 2.89"
+
+	f1 := &domain.Finding{
+		ServiceName:    &svcDomain,
+		ServiceVersion: &verDomain,
+		RawBanner:      &bannerDnsmasq,
+	}
+	if got := report.CleanServiceName(f1); got != "dnsmasq 2.89" {
+		t.Errorf("CleanServiceName(f1) = %q, atteso %q", got, "dnsmasq 2.89")
+	}
+
+	svcFtp := "ftp"
+	verFtp := "2.0.8 or later"
+	bannerVsftpd := "vsftpd 2.0.8 or later"
+	f2 := &domain.Finding{
+		ServiceName:    &svcFtp,
+		ServiceVersion: &verFtp,
+		RawBanner:      &bannerVsftpd,
+	}
+	if got := report.CleanServiceName(f2); got != "vsftpd 2.0.8 or later" {
+		t.Errorf("CleanServiceName(f2) = %q, atteso %q", got, "vsftpd 2.0.8 or later")
+	}
+
+	prodApache := "Apache httpd"
+	verApache := "2.4.49"
+	f3 := &domain.Finding{
+		ServiceName:    &prodApache,
+		ServiceVersion: &verApache,
+	}
+	if got := report.CleanServiceName(f3); got != "Apache httpd 2.4.49" {
+		t.Errorf("CleanServiceName(f3) = %q, atteso %q", got, "Apache httpd 2.4.49")
+	}
+}
+
+func TestTruncateString(t *testing.T) {
+	if got := report.TruncateString("Corto", 10); got != "Corto" {
+		t.Errorf("TruncateString short = %q, atteso %q", got, "Corto")
+	}
+	if got := report.TruncateString("Audit Consolidato Perimetrale Aziendale", 20); got != "Audit Consolidato..." {
+		t.Errorf("TruncateString long = %q, atteso %q", got, "Audit Consolidato...")
+	}
+}
+
+func TestPDFGenerator_Executive_RealisticScenario(t *testing.T) {
+	gen := report.NewPDFGenerator()
+	now := time.Now().UTC()
+	startedAt := now.Add(-30 * time.Minute)
+
+	score75 := 7.5
+	score50 := 5.0
+	cve1 := "CVE-2023-50387"
+	cve2 := "CVE-2023-28450"
+	rem := "Aggiornare dnsmasq alla versione più recente supportata per mitigare la vulnerabilità CVE-2023-50387. Isolare o segmentare l'accesso alla porta se l'esposizione non è strettamente necessaria."
+
+	banner := "dnsmasq 2.89"
+	svc := "dnsmasq"
+	ver := "2.89"
+
+	var findings []*domain.Finding
+	// 5 High findings
+	for i := 0; i < 5; i++ {
+		cve := cve1
+		if i%2 == 1 {
+			cve = cve2
+		}
+		findings = append(findings, &domain.Finding{
+			ID:             uuid.New(),
+			HostIP:         "192.168.1.1",
+			Port:           53,
+			Protocol:       "tcp",
+			ServiceName:    &svc,
+			ServiceVersion: &ver,
+			RawBanner:      &banner,
+			CVEID:          &cve,
+			CVSSScore:      &score75,
+			Severity:       domain.SeverityHigh,
+			Remediation:    &rem,
+			CreatedAt:      now,
+		})
+	}
+	// 7 Medium findings
+	for i := 0; i < 7; i++ {
+		findings = append(findings, &domain.Finding{
+			ID:          uuid.New(),
+			HostIP:      "192.168.1.10",
+			Port:        135,
+			Protocol:    "tcp",
+			ServiceName: &svc,
+			CVSSScore:   &score50,
+			Severity:    domain.SeverityMedium,
+			Remediation: &rem,
+			CreatedAt:   now,
+		})
+	}
+	// 14 Info findings
+	for i := 0; i < 14; i++ {
+		findings = append(findings, &domain.Finding{
+			ID:        uuid.New(),
+			HostIP:    "192.168.1.10",
+			Port:      80 + i,
+			Protocol:  "tcp",
+			Severity:  domain.SeverityInfo,
+			CreatedAt: now,
+		})
+	}
+
+	reportData := report.PDFReportData{
+		Tenant: &domain.Tenant{
+			ID:          uuid.New(),
+			Name:        "Test Organization",
+			BrandColors: domain.DefaultBrandColors(),
+		},
+		Scan: &domain.Scan{
+			ID:          uuid.New(),
+			Status:      domain.ScanStatusCompleted,
+			TriggerType: domain.TriggerManual,
+			StartedAt:   &startedAt,
+			CompletedAt: &now,
+			SummaryStats: domain.ScanSummaryStats{
+				TotalHosts: 9,
+				UpHosts:    9,
+				HighCount:  5,
+			},
+		},
+		Target: &domain.Target{
+			Value: "Casa",
+			Type:  domain.TargetType("COMPANY_SCOPE"),
+		},
+		Profile: &domain.ScanProfile{
+			Name:     "Audit Consolidato Perimetrale Aziendale",
+			NmapArgs: "Consolidato su 9 target dell'azienda",
+		},
+		Findings:    findings,
+		Template:    domain.ReportTemplateExecutive,
+		GeneratedAt: now,
+	}
+
+	pdfBytes, err := gen.Generate(reportData)
+	if err != nil {
+		t.Fatalf("generazione Executive PDF scenario realistico fallita: %v", err)
+	}
+	if !bytes.HasPrefix(pdfBytes, []byte("%PDF-")) {
+		t.Errorf("intestazione PDF non conforme")
+	}
+
+	// Stesso per template Technical
+	reportData.Template = domain.ReportTemplateTechnical
+	pdfTechBytes, err := gen.Generate(reportData)
+	if err != nil {
+		t.Fatalf("generazione Technical PDF scenario realistico fallita: %v", err)
+	}
+	if !bytes.HasPrefix(pdfTechBytes, []byte("%PDF-")) {
+		t.Errorf("intestazione Technical PDF non conforme")
+	}
+}
+
 
 

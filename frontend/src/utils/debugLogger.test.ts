@@ -107,6 +107,14 @@ describe('sanitizeData', () => {
     expect(sanitizeData(standaloneJwt)).toBe('[REDACTED_JWT]');
   });
 
+  it('sanitizes secret parameters in URLs and query strings', () => {
+    const streamUrl = '/api/v1/scans/123/stream?token=secret-token-value&other=123';
+    expect(sanitizeData(streamUrl)).toBe('/api/v1/scans/123/stream?token=[REDACTED]&other=123');
+
+    const wsUrl = '/ws/v1/ssh/servers/456/terminal?ticket=st_secret_ticket_123';
+    expect(sanitizeData(wsUrl)).toBe('/ws/v1/ssh/servers/456/terminal?ticket=[REDACTED]');
+  });
+
   it('safely handles circular references without infinite recursion or stack overflow', () => {
     const circularObj: Record<string, unknown> = {
       name: 'root',

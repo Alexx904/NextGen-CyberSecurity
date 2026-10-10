@@ -53,6 +53,8 @@ Piattaforma di CyberSecurity moderna e modulare concepita per trasformare il vul
 ### FR-01: Gestione Target e Asset Scope
 - **FR-01.1:** Inserimento e validazione target: IP singoli, range IP (`10.0.0.1-10.0.0.25`), blocchi CIDR (`192.168.1.0/24`) o FQDN (`scanme.org`).
 - **FR-01.2:** Assegnazione ad asset group e verifica blacklist a livello tenant.
+- **FR-01.3:** Attestazione di Consenso & Autorizzazione Legale (Scan Authorization Gate): Richiesta di attestazione esplicita di autorizzazione/ownership per target pubblici e reti terze prima dell'esecuzione di scansioni attive, registrata immutabilmente nell'audit log con timestamp e user_id (conformità normativa art. 615-ter c.p. / CFAA).
+- **FR-01.4:** Deny-List e Isolamento Infrastruttura Interna: Blocco proattivo di target diretti verso loopback (`127.0.0.0/8`, `::1`), link-local/cloud metadata (`169.254.169.254`), container bridge Docker e host della piattaforma (`postgres`, `backend`), con verifica e risoluzione DNS preventiva anti-rebinding.
 
 ### FR-02: Motore di Scansione Basato su Nmap Containerizzato
 - **FR-02.1:** Backend Go con esecuzione sicura di Nmap in container con Linux capabilities controllate.
@@ -253,9 +255,29 @@ Piattaforma di CyberSecurity moderna e modulare concepita per trasformare il vul
 - **FR-16.3 (Live Command Preview Sicuro):** L'interfaccia deve mostrare l'anteprima in tempo reale del comando Nmap generato, con validazione rigorosa per prevenire flag injection (`IsSafeArgument`).
 - **FR-16.4 (Gestione e Salvataggio Profili Custom):** Possibilità di salvare una configurazione personalizzata come nuovo profilo riutilizzabile e schedulabile dal tenant, con persistenza su database (`POST /api/v1/scan-profiles`, `DELETE /api/v1/scan-profiles/{id}`).
 
+### FR-17: Ricerca Vulnerabilità Online (NVD API 2.0 Cloud Lookup) & Script Vulnerabilità Nmap (--script vuln)
+- **FR-17.1 (Ricerca CVE Online su Feed Ufficiale NIST NVD):** In aggiunta al catalogo locale, il motore di correlazione deve poter interrogare in tempo reale le API REST pubbliche ufficiali (NIST NVD API 2.0) tramite CPE 2.3 URI o keyword di prodotto/versione per identificare CVE note appena pubblicate.
+- **FR-17.2 (Auto-Popolamento e Caching su PostgreSQL):** Ogni CVE recuperata tramite ricerca online deve essere automaticamente memorizzata nella tabella `cve_entries` di PostgreSQL (upsert atomico con indici CVSS), arricchendo in modo incrementale il database locale e garantendo velocità istantanea e resilienza offline per le scansioni successive.
+- **FR-17.3 (Script Engine Nmap per Vulnerabilità Attive `--script vuln`):** I profili specialistici di audit (es. *Falle di Sistema*, *All-in-One 360°*) e il configuratore custom devono supportare l'esecuzione controllata degli script NSE di vulnerabilità (`--script=vuln`), rilevando configurazioni deboli (SMB EternalBlue, SSL POODLE, RDP, exploit web).
+- **FR-17.4 (Parsing XML & Correlazione Risultati Script NSE):** Il parser Nmap e l'orchestratore devono decodificare i tag `<script>` associati a porte e host, estraendo automaticamente CVE ID menzionati nell'output, severità, banner e raccomandazioni di remediation da salvare come finding formali.
+
 ### UC-15: Scansione Specialistica e Personalizzata di Vulnerabilità
 - **Attore:** Penetration Tester / Security Engineer / IT Auditor.
 - **Flusso:** L'utente apre il modale *Nuova Scansione*. Seleziona il target (o la cartella dell'azienda). Può scegliere la modalità **Semplice / Guidata** per selezionare con 1 click un profilo preimpostato categorizzato in base all'obiettivo dell'audit (Pen Test, Falle di Sistema, Web App, Discovery, Compliance) con spiegazione chiara di impatto e tempo stimato; oppure passare alla modalità **Professionale** per personalizzare porte specifiche, livello di stealth, OS detection e flag addizionali, visualizzando l'anteprima del comando e salvando facoltativamente il profilo custom. La scansione viene validata ed eseguita in modo sicuro dal backend.
+
+### FR-18: Qualità Grafica, Layout A4 & Coerenza Dati nei Report PDF (Executive & Technical)
+- **FR-18.1 (Executive Summary Compatto A4):** Il report direzionale deve essere strutturato come un Executive Brief elegante di esattamente 2 pagine (pagina 1: Copertina, Sintesi Esecutiva, Statistiche KPI, Distribuzione Severità; pagina 2: Top Priority Findings con remediation dettagliata e Governance/Prossimi Passi), eliminando salti pagina artificiali che lasciano pagine semivuote.
+- **FR-18.2 (Zero Testo Tagliato & Formattazione Multiriga Card):** Le card "Top Priorities" e le schede dei finding tecnici devono calcolare dinamicamente l'altezza in base al testo di remediation tramite wrapping multiriga, senza overflow orizzontale oltre i margini della pagina A4 e senza font miniaturizzati illegibili.
+- **FR-18.3 (Separazione Righe CVE & Azione):** L'identificativo CVE e la label "Azione:" devono essere posizionati su righe distinte con spaziatura e gutter calibrati, eliminando sovrapposizioni di testo.
+- **FR-18.4 (Colori Semantici & Metriche Coerenti):** Le KPI devono riflettere semanticamente il dato rappresentato (es. MAX CVSS colorato in base alla severità effettiva: arancione per High 7.0-8.9, rosso per Critical 9.0+, giallo per Medium; Host Attivi con colore neutro ardesia scuro).
+- **FR-18.5 (Coerenza Punteggi Posture & Testo Qualitativo):** L'algoritmo di Posture Score deve normalizzare le penalità su perimetri multi-host per prevenire il collasso sistematico a 0/100 Grade F su reti ampie e garantire coerenza tra punteggio numerico, grado e testo esplicativo (nessuna menzione di "CVSS >= 9.0" se non ci sono vulnerabilità critiche).
+- **FR-18.6 (Nomi Software Reali & Protocolli Insicuri):** Nei titoli e nelle raccomandazioni deve essere utilizzato il nome reale del prodotto/software ricavato dai banner (`dnsmasq`, `vsftpd`, `Dropbear`) anziché la denominazione generica della porta di rete (`domain`, `ftp`, `ssh`). Servizi storici e protocolli non cifrati attivi (Telnet, FTP, SMB, NetBIOS) devono ricevere opportuna evidenza con severità calcolata e remediation prescrittiva.
+- **FR-18.7 (Impaginazione Fluida Report Tecnico):** Le schede dei finding nel report tecnico devono fluire verticalmente sfruttando l'intera pagina fino al footer (margine dinamico a 270mm anziché interruzioni premature a 225mm), eliminando vuoti anomali di 80-150px a fondo pagina.
+- **FR-18.8 (Dati Temporali Sempre Valorizzati):** "Data Avvio" e "Durata Totale" devono essere sempre calcolati e visualizzati, aggregando le durate effettive degli audit ed eliminando diciture "N/A".
+
+### UC-17: Generazione e Presentazione Report PDF Direzionale e Tecnico per Clienti
+- **Attore:** CISO / Security Consultant / Auditor.
+- **Flusso:** L'operatore genera i report dall'Hub `/reports` dopo aver completato l'audit su una cartella/azienda. L'Executive Summary viene stampato o inviato in formato A4 di 2 pagine, perfettamente leggibile, con colori conformi alle direttive di sicurezza e testo di raccomandazione completo senza troncamenti. Il Technical Report presenta tutte le evidenze host per host distribuite uniformemente senza spazi vuoti e con i nomi software corretti.
 
 ---
 

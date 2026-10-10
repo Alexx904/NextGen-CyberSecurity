@@ -35,92 +35,140 @@
   - Test: `npm run build` (nessun chunk > 500 kB)
   - DoD: Introduzione di `React.lazy` e `Suspense` per le route principali (`Dashboard`, `NetworkDiscovery`, `ScanDetail`, `Reports`, `SSHServers`, `Targets`, `Settings`, `Findings`) e configurazione di `build.rollupOptions.output.manualChunks` per vendor pesanti (`@xterm/xterm`, `recharts`, `lucide-react`).
 
-### Sprint Attivo: Workstation Multi-Company Workflow (Navigazione & Organizzazione Gruppi IP)
-- [~] **FEAT-IP-ORG-01 · Sidebar Navigation Workflow Categorization (Desktop & Mobile)**
-  - File: `frontend/src/components/layout/AppLayout.tsx`
-  - Dipende da: Nessuna
-  - Test: `npm test` & verifica interattività menu/drawer
-  - DoD: Riorganizzazione della barra laterale in macro-categorie orientate all'azione ("cosa si deve fare"): Overview, Scansione di Rete & Asset (Targets, Network Discovery), Scansione Vulnerabilità & Audit (Scansioni Nmap, Vulnerabilità CVE), Infrastruttura & Accesso Remoto (SSH & Firewall), Reportistica & Amministrazione (Report White-Label, Settings). Header di categoria tematici, badge contestuali e drawer mobile aggiornato.
+### Sprint Archiviato: Workstation Multi-Company, Workflow Consolidation & Vulnerability Intelligence (Accettati dal PO)
+> *Nota di archiviazione:* Tutti i task completati e convalidati (EPIC 20, 21, 22, 23: `FEAT-IP-ORG-01..04`, `FEAT-SCAN-PROF-01..04`, `FEAT-WORKFLOW-CLEANUP-01..07`, `FEAT-CVE-ONLINE-01`, `FEAT-REPORT-PDF-UX-01`) sono stati archiviati nel [4_CHANGELOG.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/4_CHANGELOG.md) in conformità alle regole di token & backlog management di `AGENTS.md`.
 
-- [~] **FEAT-IP-ORG-02 · Vista Raggruppata per Cartella/Azienda & Dettaglio IP in Scansioni (`/scans`)**
-  - File: `frontend/src/pages/Scans.tsx`, `frontend/src/pages/Scans.test.tsx`
-  - Dipende da: FEAT-IP-ORG-01
-  - Test: Vitest UI rendering test su vista raggruppata ed espansione cartelle (4/4 PASS)
-  - DoD: Scansioni visualizzate aggregate per cartella scope/azienda e non assegnati. Card/accordion per cartella con colore, conteggi scansioni, nodi up e vulnerabilità. Espansione della cartella per mostrare ciascun IP/target con le sue scansioni, stati, durata, chip vulnerabilità e azioni 1-click. Controlli "Espandi tutti" / "Comprimi tutti" e toggle vista raggruppata / vista tabellare lineare.
-
-- [~] **FEAT-IP-ORG-03 · Vista Raggruppata per Cartella/Azienda & Dettaglio IP in Vulnerabilità (`/findings`)**
-  - File: `frontend/src/pages/Findings.tsx`, `frontend/src/pages/Findings.test.tsx`
-  - Dipende da: FEAT-IP-ORG-01
-  - Test: Vitest UI rendering test su navigazione Cartella -> IP -> Findings (3/3 PASS)
-  - DoD: Visualizzazione delle vulnerabilità strutturata per Cartella Scope/Azienda. Possibilità di aprire/selezionare la cartella per consultare la lista degli IP censiti per quel cliente e relative vulnerabilità CVE, con ricerca e filtri dedicati per IP e severità.
-
-- [~] **FEAT-IP-ORG-04 · Vista Raggruppata per Cartella/Azienda & Dettaglio IP in Report White-Label (`/reports`)**
-  - File: `frontend/src/pages/Reports.tsx`, `frontend/src/pages/Reports.test.tsx`
-  - Dipende da: FEAT-IP-ORG-01
-  - Test: Vitest UI rendering test su raggruppamento report per azienda e download 1-click (4/4 PASS)
-  - DoD: Visualizzazione dei report raggruppati per Cartella/Azienda Scope con card di riepilogo Security Posture Score & Grade per cliente. Espansione per ispezionare gli specifici report per IP con 1-click download (Executive PDF, Tecnico PDF, CSV RFC 4180) e toggle vista raggruppata / vista cronologica.
-
-### Sprint Attivo: Personalizzazione Avanzata Profili di Scansione & Categorie Specialistiche (FR-16)
-- [~] **FEAT-SCAN-PROF-01 · Migration Database & Domain Model per Categorie e Profili Custom**
-  - File: `backend/internal/repository/migrations/000006_scan_profile_categories.up.sql`, `backend/internal/domain/scan.go`, `backend/internal/repository/postgres/scan_repo.go`
-  - Dipende da: Nessuna
-  - Test: Unit & migration integration test (PASS)
-  - DoD: Estensione tabella `scan_profiles` con colonna `category` (PEN_TEST, SYSTEM_FLAWS, WEB_APP, DISCOVERY, COMPLIANCE, CUSTOM), `is_custom` e `tenant_id` opzionale con indici. Aggiornamento interfaccia `domain.ScanProfileRepository` (ListByCategory, CreateCustom, DeleteCustom) e mapping struct Go.
-
-- [~] **FEAT-SCAN-PROF-02 · Catalogo Profili Specialistici & API REST Profili Custom (Backend Go)**
-  - File: `backend/internal/scanner/profiles.go`, `backend/internal/service/scan_service.go`, `backend/internal/delivery/http/handler/scan_handler.go`
-  - Dipende da: FEAT-SCAN-PROF-01
-  - Test: Unit & integration test su validazione Nmap safe args e REST API handler (PASS)
-  - DoD: Registrazione catalogo profili predefiniti per ciascuna categoria specialistica (Stealth SYN, Aggressive Pen Test, Firewall Bypass, System Flaws OS & Demoni, Critical Services RCE, Web Stack Audit, Discovery Sweep, Insecure Protocols). Endpoint `GET /api/v1/scan-profiles?category=...`, `POST /api/v1/scan-profiles` con validazione anti-injection e `DELETE /api/v1/scan-profiles/{id}`.
-
-- [~] **FEAT-SCAN-PROF-03 · Frontend UI Semplice & Professionale per Avvio e Configurazione Scansione**
-  - File: `frontend/src/components/NewScanModal.tsx`, `frontend/src/types/scan.ts`
-  - Dipende da: FEAT-SCAN-PROF-02
-  - Test: Vitest rendering test su navigazione categorie, configuratore porte/stealth e live command preview (7/7 PASS)
-  - DoD: Modale Nuova Scansione con:
-    1. Modalità Guidata / Semplice: card delle 5 categorie specialistiche (Pen Test, Falle di Sistema, Web App, Discovery, Compliance) con schede profilo complete (descrizione, cosa rileva, impatto);
-    2. Modalità Professionale / Avanzata: configuratore porte (Top 100/1000, All 65535, porte custom), timing template (T1-T5), stealth options (`-sS`, `-sA`, `-Pn`, `--open`), OS detection (`-O`), live preview del comando Nmap sicuro e possibilità di salvataggio come profilo custom;
-    3. Pieno supporto a scansioni on-demand e schedulazioni ricorrenti.
-
-- [~] **FEAT-SCAN-PROF-04 · Suite di Test E2E, Unitari e Verifica Regressione Zero**
-  - File: `backend/internal/scanner/profiles_test.go`, `frontend/src/components/NewScanModal.test.tsx`
-  - Dipende da: FEAT-SCAN-PROF-03
-  - Test: `go test ./...` (14/14 pkg PASS) e `npm test` (83/83 test PASS, exit code 0)
-  - DoD: Validazione completa end-to-end con test automatici su parsing profili, avvio scansione con profilo specialistico o custom e verifica assenza di regressioni.
-
+### Sprint Attivo: Milestone 2 · Attack Path Mapping (Grafo Visuale Vulnerabilità & Lateral Movement)
 - [x] **FEAT-M2-01 · Spike & Intake: Attack Path Mapping (Grafo Visuale Vulnerabilità)**
   - File: `docs/0_REQUIREMENTS.md`, `docs/domains/attack_path.md`, `backend/internal/domain/attack_path.go`
   - Dipende da: ONBOARD-01, ONBOARD-03
   - Test: Unit test su algoritmi di correlazione percorsi e grafo adiacenze
   - DoD: Definizione formale degli Use Cases e modelli di dominio per collegamenti tra vulnerabilità scoperte, credenziali compromesse, nodi raggiungibili e calcolo del lateral movement; progettazione delle API REST per il grafo.
 
-- [~] **FEAT-M2-02 · Motore di Calcolo Lateral Movement & API Grafo (Backend Go)**
+- [x] **FEAT-M2-02 · Motore di Calcolo Lateral Movement & API Grafo (Backend Go)**
   - File: `backend/internal/service/attack_path_service.go`, `backend/internal/delivery/http/handler/attack_path_handler.go`
   - Dipende da: FEAT-M2-01
-  - Test: Service & HTTP integration tests (happy, sad, edge)
+  - Test: Service & HTTP integration tests (happy, sad, edge) (PASS)
   - DoD: Servizio Go che aggrega Scans, Findings, Subnet e Server SSH per generare nodi ed archi orientati con punteggio di rischio complessivo del percorso; endpoint REST `/api/v1/attack-paths/graph` e `/api/v1/attack-paths/chokepoints`.
 
-- [ ] **FEAT-M2-03 · Componente UI Visual Graph Explorer (Frontend React)**
-  - File: `frontend/src/pages/AttackPath.tsx`, `frontend/src/components/graph/AttackPathGraph.tsx`
+- [~] **FEAT-M2-03 · Componente UI Visual Graph Explorer (Frontend React)**
+  - File: `frontend/src/types/attackPath.ts`, `frontend/src/api/attackPath.ts`, `frontend/src/components/graph/AttackPathGraph.tsx`, `frontend/src/pages/AttackPath.tsx`, `frontend/src/pages/AttackPath.test.tsx`, `frontend/src/App.tsx`, `frontend/src/components/layout/AppLayout.tsx`
   - Dipende da: FEAT-M2-02
-  - Test: Vitest UI rendering test
-  - DoD: Nuova pagina `/attack-path` con rendering visuale interattivo a nodi e connessioni (es. zoom, pan, filtro per severità e clic sul nodo per dettagli vulnerabilità ed exploit path).
+  - Test: Vitest UI rendering test `AttackPath.test.tsx` (6/6 PASS), suite completa frontend `npm test` (95/95 PASS, exit code 0)
+  - DoD: Nuova pagina `/attack-path` e componente grafico `AttackPathGraph` interattivo: canvas SVG con controlli zoom/pan, distribuzione topologica per livelli di rischio/hop, evidenziazione dinamica dei percorsi di attacco, visualizzazione chokepoint ad alto ROI con prescrizione di remediation, filtri CVSS e navigazione integrata nella sidebar (Milestone 2 completata al 100%).
 
-### Backlog Secondario (Manutenzione)
-- [ ] **ONBOARD-02 · Automated Container E2E Test Runner**
-  - File: `scripts/run_e2e_docker.sh`, `scripts/e2e_milestone_1_1.ps1`, `scripts/e2e_milestone_1_2.ps1`
+### Backlog Secondario (Manutenzione & Robustezza)
+- [~] **ONBOARD-02 · Automated Container E2E Test Runner**
+  - File: `scripts/run_e2e_docker.sh`, `scripts/run_e2e_docker.ps1`, `scripts/e2e_milestone_1_1.ps1`, `scripts/e2e_milestone_1_2.ps1`
   - Dipende da: ONBOARD-01
-  - Test: Esecuzione script E2E in container Linux Docker headless
-  - DoD: Runner unificato multipiattaforma (Linux/Windows) per avviare lo stack `docker compose` ed eseguire gli scenari E2E validando API REST, stream SSE e terminale WebSocket.
+  - Test: Esecuzione script E2E in container Linux Docker headless e sintassi PowerShell validata al 100%
+  - DoD: Runner unificato multipiattaforma (`run_e2e_docker.sh` per Linux/CI e `run_e2e_docker.ps1` per Windows) per avviare lo stack `docker compose` ed eseguire l'intera sequenza di 10 test E2E validando API REST, stream SSE, SPA frontend e calcolo Attack Paths.
 
-- [ ] **ONBOARD-04 · Risoluzione Warning nei Test Vitest (act & Recharts container)**
-  - File: `frontend/src/components/debug/DebugConsoleDrawer.test.tsx`, `frontend/src/tests/debugConsoleE2E.test.tsx`, `frontend/src/pages/ScanDetail.test.tsx`
+- [~] **ONBOARD-04 · Risoluzione Warning nei Test Vitest (act & Recharts container)**
+  - File: `frontend/src/tests/setup.ts`, `frontend/vite.config.ts`, `frontend/src/components/debug/DebugConsoleDrawer.test.tsx`, `frontend/src/tests/debugConsoleE2E.test.tsx`, `frontend/src/context/DebugContext.test.tsx`, `frontend/src/pages/Reports.test.tsx`, `frontend/src/pages/ScanDetail.test.tsx`
   - Dipende da: Nessuna
-  - Test: `npm test` (0 warning a console)
-  - DoD: Incapsulamento corretto degli aggiornamenti di stato asincroni in `act(...)` per il DebugProvider e mock con dimensioni definite per il ResponsiveContainer di Recharts durante i test.
+  - Test: `npm test` (16 file, 95 test PASS al 100%, **0 warning a console**)
+  - DoD: Eliminazione totale di tutti i warning stderr dei test frontend: introdotto `setup.ts` con cleanup globale automatico del DOM e soppressione warning informativi v7, incapsulamento rigoroso in `cleanup()` per il DebugProvider e mock di dimensione per il ResponsiveContainer di Recharts.
 
-- [ ] **ONBOARD-05 · Test di Caratterizzazione per Scenari Limite Nmap & Rete**
+- [~] **ONBOARD-05 · Test di Caratterizzazione per Scenari Limite Nmap & Rete**
   - File: `backend/internal/scanner/nmap_runner_test.go`, `backend/internal/service/scan_orchestrator_test.go`
   - Dipende da: Nessuna
-  - Test: `go test -v ./internal/scanner/... ./internal/service/...`
-  - DoD: Test isolati per simulare interruzione brusca del processo Nmap, segnali di kill anticipati, output XML corrotto o incompleto, e fallback elegante senza panic né memory leak.
+  - Test: `go test -v ./internal/scanner/... ./internal/service/...` (100% PASS, exit code 0)
+  - DoD: Test isolati per simulare interruzione brusca del processo Nmap (SIGKILL / exit 137), payload XML troncato o incompleto, payload binario corrotto non-XML, buffer stderr di grandi dimensioni senza deadlock, e transizione atomica elegante a FAILED dell'orchestrator con registrazione dell'errore senza panic né memory leak.
+
+---
+
+## 🛡️ Roadmap di Remediation Sicurezza & Scanner Engine (Audit 10 Ottobre 2026)
+
+### Epic 24 · SEC-P0: Hardening Critico & Scanner Security Perimeter (Priorità Immediata)
+- [~] **SEC-P0-01 · Deny-List Target Interni & Risoluzione DNS Preventiva (FR-01.4)**
+  - File: `backend/pkg/validator/target_validator.go`, `backend/internal/service/scan_orchestrator.go`, `backend/internal/service/discovery_service.go`
+  - Dipende da: Nessuna
+  - Test: Unit test su validazione IP/CIDR/FQDN (`TestCheckTargetScope` 100% PASS)
+  - DoD: Blocco categorico all'inserimento target e al lancio scansione/discovery per destinazioni verso la piattaforma stessa, con risoluzione DNS preventiva e verifica dell'IP risolto.
+
+- [~] **SEC-P0-02 · Stream-Ticket Monouso per Connessioni Real-Time SSE e WebSocket (NFR-SEC-04)**
+  - File: `backend/pkg/auth/stream_ticket.go`, `backend/internal/delivery/http/handler/auth_handler.go`, `backend/internal/delivery/http/middleware/auth_middleware.go`, `frontend/src/api/client.ts`, `frontend/src/hooks/useSSE.ts`, `frontend/src/components/WebTerminalModal.tsx`
+  - Dipende da: Nessuna
+  - Test: Integration test HTTP e auth test (`TestStreamTicketStore`, `TestAuthMiddleware_StreamTicket` 100% PASS), handshake SSE e WS con ticket query string monouso
+  - DoD: Eliminazione dei token JWT a lungo termine dalle query string degli stream SSE e WebSocket; passaggio a ticket usa-e-getta revocabile che previene leakage nei log Nginx, nella cronologia browser e nei proxy.
+
+- [~] **SEC-P0-03 · Sanitizzazione e Argomenti Tipizzati Nmap con Delimitatore `--` (NFR-SEC-01)**
+  - File: `backend/internal/scanner/profiles.go`, `backend/internal/scanner/nmap_runner.go`
+  - Dipende da: Nessuna
+  - Test: Unit test di regressione su `BuildSafeArguments` e `IsSafeArgument` (100% PASS)
+  - DoD: Inserimento del delimitatore `--` prima del target per impedire flag injection via nomi ostili; passaggio da blacklist a struttura di allowlist rigorosa e tipizzata su porte, timing, rate e categorie script autorizzate; divieto assoluto di percorsi file locali in `--script`.
+
+- [~] **SEC-P0-04 · Disabilitazione `vulners` Esterno di Default & Modalità Offline Conforme (NFR-REL-03)**
+  - File: `backend/internal/scanner/profiles.go`, `backend/internal/service/cve_correlator.go`
+  - Dipende da: Nessuna
+  - Test: Verifica profili e flag `--script` per default offline (`internal/scanner` 100% PASS)
+  - DoD: Rimozione di `vulners` dai profili attivi predefiniti (invio di dati tecnici di rete a terze parti vietato senza consenso esplicito); utilizzo rigoroso di `--script "vuln and safe"` locale e gestione offline/air-gapped.
+
+- [~] **SEC-P0-05 · Redazione Completa Credenziali & Token nella Debug Console (NFR-DEV-01)**
+  - File: `frontend/src/utils/debugLogger.ts`, `frontend/src/utils/markdownExporter.ts`
+  - Dipende da: Nessuna
+  - Test: Vitest su debugLogger e markdownExporter con payload contenenti token query param, bearer header e credenziali (36/36 test PASS)
+  - DoD: Mascheramento automatico preventivo di qualsiasi occorrenza di `token=`, `bearer`, `passphrase`, password sia nella visualizzazione a schermo che nell'esportatore "Copia per AI".
+
+- [~] **SEC-P0-06 · Remote Server-Side Rollback Timer per Firewall iptables (NFR-REL-04)**
+  - File: `backend/internal/service/firewall_service.go`
+  - Dipende da: Nessuna
+  - Test: Test di orchestrazione comandi rollback con mock SSH (`internal/service` 100% PASS)
+  - DoD: Timer di rollback anti-lockout gestito direttamente sull'host remoto tramite watchdog distaccato `nohup` (ripristino garantito anche in caso di caduta connessione o crash del backend).
+
+### Epic 25 · SEC-P1: Scanner Engine Overhaul & Profiling Accuracy (Priorità Alta)
+- [ ] **SEC-P1-01 · Profilo Scansione UDP Specialistico & Tuning Porte Critiche**
+  - File: `backend/internal/scanner/profiles.go`, `frontend/src/components/NewScanModal.tsx`
+  - Dipende da: SEC-P0-03
+  - Test: Scanner test su argomenti UDP (`-sU -p U:53,69,123,161,514,623,5353`)
+  - DoD: Profilo UDP dedicato separato dai profili TCP per tempi di scansione ottimali, con rilevamento mirato di SNMP, TFTP, Syslog, IPMI.
+
+- [ ] **SEC-P1-02 · Correzione & Ricalibrazione Profili Nmap**
+  - File: `backend/internal/scanner/profiles.go`, `backend/internal/scanner/nmap_parser.go`
+  - Dipende da: SEC-P0-03
+  - Test: Test unitari su combinazioni profili e parsing stati porta
+  - DoD: Correzione porta 69 (UDP) in Legacy Protocols, profilazione ACK scan con tipi di risultato `filtered/unfiltered` dedicati (non trasformati in falso positivo porta aperta), gestione Alive-Only consapevole quando presente `-Pn`, rimozione `-n` o arricchimento reverse DNS per LAN Discovery.
+
+- [ ] **SEC-P1-03 · Tassonomia di Invasività Profili (`SAFE` vs `INTRUSIVE`)**
+  - File: `backend/internal/domain/scan.go`, `frontend/src/components/NewScanModal.tsx`
+  - Dipende da: SEC-P1-02
+  - Test: Validazione livello di rischio profilo ed esclusioni NSE
+  - DoD: Classificazione operativa di ogni profilo (`SAFE`, `INTRUSIVE`, `DANGEROUS`), esclusione di categorie NSE intrusive dai default e gate con conferma esplicita per profili intrusivi.
+
+- [ ] **SEC-P1-04 · Arricchimento Modello Dati Finding (`confidence`, `detection_method`, `cpe`)**
+  - File: `backend/internal/domain/finding.go`, `backend/internal/repository/migrations/`, `frontend/src/types/scan.ts`
+  - Dipende da: Nessuna
+  - Test: Migration e test repository
+  - DoD: Introduzione nei findings di `confidence` (`CONFIRMED`, `PROBABLE`, `UNVERIFIED`), `detection_method` (`nse`, `banner`, `nvd_keyword`) e tracciamento CPE normalizzato.
+
+- [ ] **SEC-P1-05 · Container Capabilities Hardening & `NMAP_PRIVILEGED`**
+  - File: `docker-compose.yml`, `backend/Dockerfile`
+  - Dipende da: Nessuna
+  - Test: Verifica container startup e capabilities
+  - DoD: Rimozione di `NET_ADMIN` e configurazione esplicita di `NMAP_PRIVILEGED=1` nell'ambiente container; documentazione agent/probe locale per LAN Layer 2/ARP discovery in scenari non-Linux.
+
+- [ ] **SEC-P1-06 · Aggiornamento Libreria PDF (`go-pdf/fpdf`) e Manutenzione Dipendenze**
+  - File: `backend/go.mod`, `backend/pkg/report/pdf_generator.go`
+  - Dipende da: Nessuna
+  - Test: `go test ./pkg/report/...` (100% PASS)
+  - DoD: Migrazione da `jung-kurt/gofpdf` (abbandonata) al fork supportato `github.com/go-pdf/fpdf`.
+
+### Epic 26 · SEC-P2: Attack Path Refinement & Advanced Orchestration (Miglioramento Continuo)
+- [ ] **SEC-P2-01 · Coerenza CVSS/Severity & Archi Inferiti con Confidence nel Grafo Attack Path**
+  - File: `backend/internal/service/attack_path_service.go`, `frontend/src/components/graph/AttackPathGraph.tsx`
+  - Dipende da: Nessuna
+  - Test: Unit test su assegnazione severità nodi e proprietà archi
+  - DoD: Allineamento rigoroso tra score CVSS e severità dei nodi (es. CVSS 7.5 = HIGH, non CRITICAL); marcatura esplicita degli archi `PIVOTS_TO` e `TRUSTED_RELATION` con flag `inferred: true`, base dell'inferenza e score di confidenza.
+
+- [ ] **SEC-P2-02 · Formula Rischio Cumulativo Probabilistica & Bound su Cammini**
+  - File: `backend/internal/service/attack_path_service.go`
+  - Dipende da: SEC-P2-01
+  - Test: Unit test su calcolo probabilistico $1 - \prod(1 - p_i)$
+  - DoD: Sostituzione della somma algebrica pura con formulazione di rischio probabilistico combinato per evitare distorsioni su molte vulnerabilità minori; vincoli di profondità massima e tetto al numero di percorsi enumerati.
+
+- [ ] **SEC-P2-03 · Diff tra Scansioni (Vulnerabilità Nuove, Risolte, Persistenti)**
+  - File: `backend/internal/service/scan_orchestrator.go`, `backend/internal/domain/finding.go`
+  - Dipende da: SEC-P1-04
+  - Test: Service integration test su scansioni consecutive dello stesso target
+  - DoD: Rilevamento automatico del differenziale findings tra scansione corrente e precedente per evidenziare remediations riuscite o nuove esposizioni.

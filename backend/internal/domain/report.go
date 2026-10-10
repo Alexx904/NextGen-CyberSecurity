@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -77,8 +78,26 @@ type ReportRepository interface {
 // CalculatePostureScore calcola il punteggio di postura (0-100) e il rating a lettere (A-F)
 // partendo da 100 con penalità ponderate per livello di severità delle vulnerabilità
 func CalculatePostureScore(stats ScanSummaryStats) (int, string) {
-	deduction := stats.CriticalCount*25 + stats.HighCount*15 + stats.MediumCount*5 + stats.LowCount*1
-	score := 100 - deduction
+	deduction := float64(stats.CriticalCount*25 + stats.HighCount*15 + stats.MediumCount*5 + stats.LowCount*1)
+
+	// Normalizzazione per perimetri multi-host consolidati (densità vulnerabilità per host)
+	hosts := stats.UpHosts
+	if hosts < 1 {
+		hosts = stats.TotalHosts
+	}
+	if hosts > 1 {
+		deduction = deduction / math.Sqrt(float64(hosts))
+	}
+
+	score := int(math.Round(100.0 - deduction))
+
+	// Coerenza dei dati: se non vi è alcuna vulnerabilità critica (CVSS >= 9.0),
+	// la postura non collassa a 0/100 (riservato alla compromissione critica confermata).
+	// Senza criticità, il punteggio minimo con sole vulnerabilità High/Medium è mantenuto in fascia D (min 25).
+	if stats.CriticalCount == 0 && score < 25 && (stats.HighCount > 0 || stats.MediumCount > 0) {
+		score = 25
+	}
+
 	if score < 0 {
 		score = 0
 	}

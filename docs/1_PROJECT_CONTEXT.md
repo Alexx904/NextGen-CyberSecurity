@@ -26,23 +26,24 @@ Il sistema supera il tradizionale paradigma del "report statico di vulnerabilit�
 
 ## 2. Perimetro del Progetto (Scope Boundaries)
 
-### 2.1 In-Scope (Milestone 1 & 1.1)
+### 2.1 In-Scope (Milestone 1, 1.1 & Milestone 2)
 - **Asset Scope Management & Tree Explorer:** Gestione target IP/CIDR/domini con struttura gerarchica ad albero (cartelle/sotto-cartelle), blacklist e metriche di rischio aggregate.
-- **Scanning Engine & Alive-Only Host Filter:** Esecuzione concorrente e sicura di Nmap in Docker con profili (Fast, Standard, Full, LAN Discovery) ed esclusione nativa degli host spenti (`down`) nei range IP.
-- **Real-Time Live Streaming Engine (SSE):** Streaming istantaneo unidirezionale Server-Sent Events per LAN Network Discovery (comparsa live progressiva dei nodi nella tabella) e Scansioni Nmap (avanzamento percentuale, stadi di scansione e findings parziali con salvataggio incrementale su PostgreSQL).
-- **Debug & Testing Live Console Drawer:** Finestra laterale (slide-over panel) accessibile via scorciatoia rapida (`Ctrl+Shift+D`) o pulsante fluttuante con badge contatore errori; intercettazione trasparente di chiamate HTTP Axios (request/response, payload, status, latency), stream SSE, frame WebSocket ed errori/warning JavaScript; filtri avanzati per livello/sorgente e copia istantanea del report diagnostico per AI in formato Markdown e JSON.
+- **Scanning Engine & Alive-Only Host Filter:** Esecuzione concorrente e sicura di Nmap in Docker con profili specialistici ed esclusione nativa degli host spenti (`down`) nei range IP.
+- **Real-Time Live Streaming Engine (SSE):** Streaming istantaneo Server-Sent Events per LAN Network Discovery e Scansioni Nmap con salvataggio incrementale su PostgreSQL.
+- **Debug & Testing Live Console Drawer:** Finestra laterale (slide-over panel `Ctrl+Shift+D`) per intercettazione diagnostica (HTTP, SSE, WebSocket, JS) ed export AI.
 - **Job Orchestrator:** Supporto a scansioni On-Demand e Schedulate (cron) a livello di target singolo o intera cartella dell'albero.
-- **CVE Database & Correlator:** Import e indicizzazione locale del feed CVE/CPE con arricchimento CVSS v3.1 e matching sui banner rilevati.
-- **LAN Device Discovery (Advanced IP Scanner mode):** Schermata dedicata `/network-discovery` ad altissima velocità (Ping Sweep / ARP Scan) con identificazione OUI MAC Vendor, hostname e import rapido nei Target.
-- **Remote SSH & Firewall GUI (iptables):** Gestione credenziali SSH (chiavi private o password cifrate AES-256-GCM), tabella visuale delle regole firewall (`INPUT`, `OUTPUT`, `FORWARD`), timer di anti-lockout protection e terminale Web SSH interattivo (WebSocket + xterm.js).
-- **Centralized Reports Hub:** Pagina dedicata `/reports` con archivio storico, download diretto PDF White-Label e CSV, e doppio layout (Executive Summary vs Technical Deep-Dive).
+- **CVE Database & Correlator:** Catalogo locale offline-ready con matching CVE/CPE, arricchimento CVSS e client REST NIST NVD API 2.0.
+- **LAN Device Discovery:** Modalità ad alta velocità con Ping Sweep, lookup OUI MAC Vendor e integrazione target.
+- **Remote SSH & Firewall GUI (iptables):** Gestione credenziali cifrate AES-256-GCM, Anti-Lockout Safety Timer, terminale Web SSH interattivo (xterm.js).
+- **Centralized Reports Hub:** Archivio storico, download PDF White-Label (Executive compresso A4 e Technical continuous flow) e CSV consolidati per azienda.
 - **Multi-Tenant Hybrid RBAC:** Isolamento logico dei dati per `tenant_id` e ruoli (SuperAdmin, Tenant Admin, SecOps, Auditor).
+- **Attack Path Mapping & Visual Graph Explorer (Milestone 2):** Grafo di compromissione multi-hop, inferenza percorsi di lateral movement, rilevamento nodi chokepoint ad alto ROI con prescrizione di remediation e canvas SVG interattivo con controlli zoom/pan.
 
-### 2.2 Out-of-Scope (Riservato a Milestone 2+)
-- Generazione del grafo di attacco e percorsi di lateral movement (Milestone 2).
-- Dashboard di Continuous Compliance NIS2 / DORA / ISO 27001 (Milestone 2).
-- Moduli EASM, CSPM e Identity Leak Monitoring (Roadmap futura).
+### 2.2 Out-of-Scope (Roadmap Milestone 3+)
+- Dashboard di Continuous Compliance NIS2 / DORA / ISO 27001 (Milestone 3).
+- Moduli EASM (External Attack Surface Management), CSPM e Identity Leak Monitoring (Roadmap futura).
 - Scansioni autenticate (credentialed) con agenti locali su endpoint (Roadmap futura).
+- Integrazione tool esterni (Nuclei, testssl.sh, ssh-audit) orchestrati dietro scanner worker dedicato (Roadmap futura).
 
 ---
 

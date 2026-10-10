@@ -274,4 +274,88 @@ func TestCVECorrelator_CorrelateService_And_Port(t *testing.T) {
 	if safeFindings[0].CVEID != nil {
 		t.Errorf("CVEID atteso nil per porta priva di vulnerabilità")
 	}
+
+	// 5. Test CorrelatePort con output Nmap Script (--script=vuln)
+	scriptPort := scanner.ParsedPort{
+		PortID:   445,
+		Protocol: "tcp",
+		State:    "open",
+		Service: &scanner.ParsedService{
+			Name: "microsoft-ds",
+		},
+		Scripts: []scanner.ParsedScript{
+			{
+				ID:     "smb-vuln-ms17-010",
+				Output: "VULNERABLE:\nRemote Code Execution vulnerability in Microsoft SMBv1 servers (ms17-010)\nState: VULNERABLE\nIDs: CVE-2017-0143\nRisk factor: HIGH",
+			},
+		},
+	}
+	scriptFindings, err := correlator.CorrelatePort(ctx, scanID, tenantID, host, scriptPort)
+	if err != nil {
+		t.Fatalf("CorrelatePort con script fallito: %v", err)
+	}
+	if len(scriptFindings) != 1 {
+		t.Fatalf("Atteso 1 finding da script Nmap, ottenuti %d", len(scriptFindings))
+	}
+	if scriptFindings[0].CVEID == nil || *scriptFindings[0].CVEID != "CVE-2017-0143" {
+		t.Errorf("Atteso CVE-2017-0143 estratto da script, ottenuto %v", scriptFindings[0].CVEID)
+	}
+	if scriptFindings[0].Severity != domain.SeverityHigh && scriptFindings[0].Severity != domain.SeverityCritical {
+		t.Errorf("Attesa severità High o Critical per MS17-010, ottenuta %s", scriptFindings[0].Severity)
+	}
+
+	// 6. Test CorrelateHostScripts a livello host
+	hostWithScripts := scanner.ParsedHost{
+		IP:              "192.168.1.50",
+		PrimaryHostname: "dc01.local",
+		HostScripts: []scanner.ParsedScript{
+			{
+				ID:     "smb2-vuln-uptime",
+				Output: "VULNERABLE: State: LIKELY VULNERABLE\nCVE-2020-0796 SMBGhost",
+			},
+		},
+	}
+	hostFindings, err := correlator.CorrelateHostScripts(ctx, scanID, tenantID, hostWithScripts)
+	if err != nil {
+		t.Fatalf("CorrelateHostScripts fallito: %v", err)
+	}
+	if len(hostFindings) != 1 {
+		t.Fatalf("Atteso 1 finding da host scripts, ottenuti %d", len(hostFindings))
+	}
+	// 7. Test porte con protocolli insicuri noti (Telnet, FTP, SMB)
+	telnetPort := scanner.ParsedPort{
+		PortID:   23,
+		Protocol: "tcp",
+		State:    "open",
+		Service: &scanner.ParsedService{
+			Name: "telnet",
+		},
+	}
+	telnetFindings, err := correlator.CorrelatePort(ctx, scanID, tenantID, host, telnetPort)
+	if err != nil || len(telnetFindings) != 1 {
+		t.Fatalf("CorrelatePort su Telnet fallito: %v", err)
+	}
+	if telnetFindings[0].Severity != domain.SeverityMedium {
+		t.Errorf("Attesa severità MEDIUM per Telnet in chiaro, ottenuta %s", telnetFindings[0].Severity)
+	}
+	if telnetFindings[0].Remediation == nil || !strings.Contains(*telnetFindings[0].Remediation, "SSH") {
+		t.Errorf("Remediation Telnet mancante o non corretta: %v", telnetFindings[0].Remediation)
+	}
+
+	ftpPort := scanner.ParsedPort{
+		PortID:   21,
+		Protocol: "tcp",
+		State:    "open",
+		Service: &scanner.ParsedService{
+			Name: "ftp",
+		},
+	}
+	ftpFindings, err := correlator.CorrelatePort(ctx, scanID, tenantID, host, ftpPort)
+	if err != nil || len(ftpFindings) != 1 {
+		t.Fatalf("CorrelatePort su FTP fallito: %v", err)
+	}
+	if ftpFindings[0].Severity != domain.SeverityLow {
+		t.Errorf("Attesa severità LOW per FTP in chiaro, ottenuta %s", ftpFindings[0].Severity)
+	}
 }
+

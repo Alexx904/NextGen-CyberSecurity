@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -17,16 +18,29 @@ import (
 type Correlator interface {
 	CorrelateService(ctx context.Context, s *scanner.ParsedService) ([]*domain.CVEEntry, error)
 	CorrelatePort(ctx context.Context, scanID, tenantID uuid.UUID, host scanner.ParsedHost, port scanner.ParsedPort) ([]*domain.Finding, error)
+	CorrelateHostScripts(ctx context.Context, scanID, tenantID uuid.UUID, host scanner.ParsedHost) ([]*domain.Finding, error)
 }
 
-// CVECorrelator implementa il motore di correlazione locale tra servizi rilevati e CVE (NFR-REL-03)
+// CVECorrelator implementa il motore di correlazione tra servizi rilevati, script Nmap e CVE locali/cloud (NFR-REL-03, FR-17)
 type CVECorrelator struct {
-	cveRepo domain.CVERepository
+	cveRepo      domain.CVERepository
+	onlineClient OnlineCVEClient
 }
 
-// NewCVECorrelator inizializza una nuova istanza di CVECorrelator
-func NewCVECorrelator(cveRepo domain.CVERepository) *CVECorrelator {
-	return &CVECorrelator{cveRepo: cveRepo}
+// NewCVECorrelator inizializza una nuova istanza di CVECorrelator con supporto opzionale a client online
+func NewCVECorrelator(cveRepo domain.CVERepository, onlineClients ...OnlineCVEClient) *CVECorrelator {
+	var client OnlineCVEClient
+	if len(onlineClients) > 0 && onlineClients[0] != nil {
+		client = onlineClients[0]
+	} else {
+		client = NewNVDOnlineClient()
+	}
+	return &CVECorrelator{cveRepo: cveRepo, onlineClient: client}
+}
+
+// SetOnlineClient aggiorna o disabilita il client online per le query esterne
+func (c *CVECorrelator) SetOnlineClient(client OnlineCVEClient) {
+	c.onlineClient = client
 }
 
 // NormalizeCPETo23 converte un identificatore CPE 2.2 o incompleto nel formato standard CPE 2.3 URI
@@ -162,6 +176,43 @@ func (c *CVECorrelator) CorrelateService(ctx context.Context, s *scanner.ParsedS
 		}
 	}
 
+	// 2.5 Ricerca Online Fallback (NIST NVD API 2.0) se non vi sono match locali (FR-17)
+	if len(cveMap) == 0 && c.onlineClient != nil {
+		var onlineEntries []*domain.CVEEntry
+
+		// Tentativo A: Ricerca per CPE
+		for _, rawCPE := range s.CPEs {
+			cpe23 := NormalizeCPETo23(rawCPE)
+			if cpe23 != "" {
+				entries, err := c.onlineClient.SearchByCPE(ctx, cpe23)
+				if err == nil && len(entries) > 0 {
+					onlineEntries = append(onlineEntries, entries...)
+					break
+				}
+			}
+		}
+
+		// Tentativo B: Ricerca per Keyword Prodotto + Versione
+		if len(onlineEntries) == 0 && s.Product != "" {
+			kw := s.Product
+			if s.Version != "" {
+				kw += " " + s.Version
+			}
+			entries, err := c.onlineClient.SearchByKeyword(ctx, kw)
+			if err == nil && len(entries) > 0 {
+				onlineEntries = append(onlineEntries, entries...)
+			}
+		}
+
+		// Se abbiamo trovato CVE online, le integriamo e le salviamo su PostgreSQL
+		if len(onlineEntries) > 0 {
+			for _, e := range onlineEntries {
+				cveMap[e.CVEID] = e
+			}
+			_ = c.cveRepo.UpsertBatch(ctx, onlineEntries)
+		}
+	}
+
 	// 3. Conversione in slice e ordinamento decrescente per CVSS Score
 	var result []*domain.CVEEntry
 	for _, entry := range cveMap {
@@ -202,11 +253,11 @@ func (c *CVECorrelator) CorrelatePort(
 
 	var serviceName, serviceVersion, rawBanner *string
 	if port.Service != nil {
-		if port.Service.Name != "" {
-			serviceName = &port.Service.Name
-		}
-		if port.Service.Product != "" && (serviceName == nil || *serviceName == "") {
+		// Privilegia il nome del software/prodotto reale (es. dnsmasq, vsftpd) rispetto al nome generico della porta (es. domain, ftp)
+		if port.Service.Product != "" {
 			serviceName = &port.Service.Product
+		} else if port.Service.Name != "" {
+			serviceName = &port.Service.Name
 		}
 		if port.Service.Version != "" {
 			serviceVersion = &port.Service.Version
@@ -239,8 +290,33 @@ func (c *CVECorrelator) CorrelatePort(
 		return nil, fmt.Errorf("correlazione servizio porta %d fallita: %w", port.PortID, err)
 	}
 
-	// Se nessuna vulnerabilità nota è stata rilevata, registriamo la porta aperta come finding informativo (INFO)
-	if len(cves) == 0 {
+	// Correlazione script NSE eseguiti sulla porta (es. --script=vuln)
+	scriptFindings := c.correlateScriptList(scanID, tenantID, host, port.PortID, port.Protocol, serviceName, serviceVersion, port.Scripts, now)
+
+	// Se nessuna vulnerabilità nota o script problematica è stata rilevata, verifichiamo la presenza di protocolli insicuri noti
+	if len(cves) == 0 && len(scriptFindings) == 0 {
+		sev := domain.SeverityInfo
+		var remText *string
+		svcLower := ""
+		if port.Service != nil {
+			svcLower = strings.ToLower(port.Service.Name + " " + port.Service.Product)
+		}
+
+		switch {
+		case port.PortID == 23 || strings.Contains(svcLower, "telnet"):
+			sev = domain.SeverityMedium
+			msg := "Protocollo Telnet in chiaro attivo: tutte le comunicazioni e le credenziali transitano prive di cifratura. Disabilitare Telnet e migrare a SSH (porta 22) con crittografia end-to-end e autenticazione a chiavi."
+			remText = &msg
+		case port.PortID == 21 || strings.Contains(svcLower, "ftp"):
+			sev = domain.SeverityLow
+			msg := "Protocollo FTP in chiaro attivo: le credenziali di autenticazione transitano in chiaro sulla rete. Sostituire il servizio con SFTP (SSH File Transfer Protocol) o FTPS con crittografia TLS obbligatoria."
+			remText = &msg
+		case port.PortID == 445 || port.PortID == 139 || strings.Contains(svcLower, "netbios") || strings.Contains(svcLower, "microsoft-ds") || strings.Contains(svcLower, "smb"):
+			sev = domain.SeverityLow
+			msg := "Esposizione servizio di condivisione SMB/NetBIOS: limitare l'accesso alla sola subnet fidata tramite firewall e disabilitare le versioni deprecate del protocollo (SMBv1)."
+			remText = &msg
+		}
+
 		return []*domain.Finding{
 			{
 				ID:             uuid.New(),
@@ -252,8 +328,9 @@ func (c *CVECorrelator) CorrelatePort(
 				Protocol:       port.Protocol,
 				ServiceName:    serviceName,
 				ServiceVersion: serviceVersion,
-				Severity:       domain.SeverityInfo,
+				Severity:       sev,
 				RawBanner:      rawBanner,
+				Remediation:    remText,
 				CreatedAt:      now,
 			},
 		}, nil
@@ -303,5 +380,122 @@ func (c *CVECorrelator) CorrelatePort(
 		findings = append(findings, f)
 	}
 
+	if len(scriptFindings) > 0 {
+		findings = append(findings, scriptFindings...)
+	}
+
 	return findings, nil
+}
+
+// CorrelateHostScripts elabora gli script NSE eseguiti a livello di host (es. controlli SMB su host)
+func (c *CVECorrelator) CorrelateHostScripts(
+	ctx context.Context,
+	scanID, tenantID uuid.UUID,
+	host scanner.ParsedHost,
+) ([]*domain.Finding, error) {
+	if len(host.HostScripts) == 0 {
+		return nil, nil
+	}
+	now := time.Now().UTC()
+	return c.correlateScriptList(scanID, tenantID, host, 0, "ip", nil, nil, host.HostScripts, now), nil
+}
+
+var cveRegex = regexp.MustCompile(`CVE-\d{4}-\d+`)
+
+func (c *CVECorrelator) correlateScriptList(
+	scanID, tenantID uuid.UUID,
+	host scanner.ParsedHost,
+	portID int,
+	protocol string,
+	serviceName, serviceVersion *string,
+	scripts []scanner.ParsedScript,
+	now time.Time,
+) []*domain.Finding {
+	if len(scripts) == 0 {
+		return nil
+	}
+
+	var findings []*domain.Finding
+	var hostname *string
+	if host.PrimaryHostname != "" {
+		hostname = &host.PrimaryHostname
+	}
+
+	for _, sc := range scripts {
+		outUpper := strings.ToUpper(sc.Output)
+		isVuln := strings.Contains(outUpper, "VULNERABLE") ||
+			strings.Contains(outUpper, "RISK FACTOR: HIGH") ||
+			strings.Contains(outUpper, "RISK FACTOR: CRITICAL") ||
+			(strings.Contains(sc.ID, "vuln") && !strings.Contains(outUpper, "NOT VULNERABLE") && !strings.Contains(outUpper, "ERROR"))
+
+		if !isVuln {
+			continue
+		}
+
+		// Estrai codici CVE menzionati
+		matches := cveRegex.FindAllString(sc.Output, -1)
+		matchedCVEs := make(map[string]bool)
+		for _, m := range matches {
+			matchedCVEs[m] = true
+		}
+
+		if len(matchedCVEs) > 0 {
+			for cveIDStr := range matchedCVEs {
+				idCopy := cveIDStr
+				sev := domain.SeverityHigh
+				score := 7.5
+				if strings.Contains(outUpper, "CRITICAL") || strings.Contains(outUpper, "REMOTE CODE EXECUTION") {
+					sev = domain.SeverityCritical
+					score = 9.8
+				}
+				rem := fmt.Sprintf("Mitigazione prescrittiva per %s rilevata dallo script Nmap '%s': applicare tempestivamente le patch di sicurezza o isolare il servizio con regole firewall.", idCopy, sc.ID)
+				bannerCopy := sc.Output
+				findings = append(findings, &domain.Finding{
+					ID:             uuid.New(),
+					ScanID:         scanID,
+					TenantID:       tenantID,
+					HostIP:         host.IP,
+					Hostname:       hostname,
+					Port:           portID,
+					Protocol:       protocol,
+					ServiceName:    serviceName,
+					ServiceVersion: serviceVersion,
+					CVEID:          &idCopy,
+					CVSSScore:      &score,
+					Severity:       sev,
+					RawBanner:      &bannerCopy,
+					Remediation:    &rem,
+					CreatedAt:      now,
+				})
+			}
+		} else {
+			sev := domain.SeverityMedium
+			score := 5.0
+			if strings.Contains(outUpper, "HIGH") || strings.Contains(outUpper, "CRITICAL") {
+				sev = domain.SeverityHigh
+				score = 7.5
+			}
+			scriptIDCopy := sc.ID
+			bannerCopy := sc.Output
+			rem := fmt.Sprintf("Vulnerabilità rilevata dallo script Nmap '%s': verificare la configurazione del servizio e applicare le patch raccomandate dal vendor.", sc.ID)
+			findings = append(findings, &domain.Finding{
+				ID:             uuid.New(),
+				ScanID:         scanID,
+				TenantID:       tenantID,
+				HostIP:         host.IP,
+				Hostname:       hostname,
+				Port:           portID,
+				Protocol:       protocol,
+				ServiceName:    &scriptIDCopy,
+				ServiceVersion: serviceVersion,
+				CVSSScore:      &score,
+				Severity:       sev,
+				RawBanner:      &bannerCopy,
+				Remediation:    &rem,
+				CreatedAt:      now,
+			})
+		}
+	}
+
+	return findings
 }

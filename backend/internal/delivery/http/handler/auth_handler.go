@@ -45,13 +45,44 @@ type LoginResponse struct {
 // AuthHandler gestisce gli endpoint di autenticazione e identità
 type AuthHandler struct {
 	authService service.AuthService
+	ticketStore auth.StreamTicketStore
 }
 
 // NewAuthHandler crea una nuova istanza del controller Auth
-func NewAuthHandler(authService service.AuthService) *AuthHandler {
+func NewAuthHandler(authService service.AuthService, ticketStore ...auth.StreamTicketStore) *AuthHandler {
+	var ts auth.StreamTicketStore
+	if len(ticketStore) > 0 {
+		ts = ticketStore[0]
+	}
 	return &AuthHandler{
 		authService: authService,
+		ticketStore: ts,
 	}
+}
+
+// IssueStreamTicket emette un ticket monouso di breve durata per stream SSE e WebSocket POST /api/v1/auth/stream-ticket
+func (h *AuthHandler) IssueStreamTicket(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.GetUserClaims(r.Context())
+	if !ok || claims == nil {
+		response.Error(w, http.StatusUnauthorized, "UNAUTHORIZED", "Autenticazione richiesta")
+		return
+	}
+
+	if h.ticketStore == nil {
+		response.Error(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Gestore stream ticket non configurato")
+		return
+	}
+
+	ticket, err := h.ticketStore.IssueTicket(claims, 30*time.Second)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "TICKET_GENERATION_FAILED", "Impossibile generare stream ticket")
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]interface{}{
+		"ticket":     ticket.Ticket,
+		"expires_in": 30,
+	})
 }
 
 // Login elabora le credenziali inviate via POST /api/v1/auth/login

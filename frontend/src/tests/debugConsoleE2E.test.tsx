@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, cleanup } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { DebugProvider } from '../context/DebugContext';
 import { DebugFloatingToggle } from '../components/debug/DebugFloatingToggle';
@@ -28,6 +28,7 @@ describe('Debug Console E2E & Integrated Workflow', () => {
   });
 
   afterEach(() => {
+    cleanup();
     apiClient.defaults.adapter = originalAdapter;
     debugLogger.clear();
   });
@@ -74,7 +75,7 @@ describe('Debug Console E2E & Integrated Workflow', () => {
 
     // 2. Render dell'applicazione
     render(
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <DebugProvider>
           <MockAppDashboard />
         </DebugProvider>

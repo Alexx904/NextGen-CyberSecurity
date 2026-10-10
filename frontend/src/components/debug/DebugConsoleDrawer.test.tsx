@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, cleanup } from '@testing-library/react';
 import { DebugProvider, useDebugConsole } from '../../context/DebugContext';
 import { DebugConsoleDrawer } from './DebugConsoleDrawer';
 import { DebugFloatingToggle } from './DebugFloatingToggle';
@@ -27,6 +27,7 @@ describe('DebugConsoleDrawer & DebugFloatingToggle UI', () => {
   });
 
   afterEach(() => {
+    cleanup();
     debugLogger.clear();
   });
 

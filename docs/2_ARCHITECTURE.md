@@ -172,6 +172,8 @@ erDiagram
     CVE_ENTRIES ||--o{ FINDINGS : "correlated_with"
 
     SSH_SERVERS ||--o{ FIREWALL_BACKUPS : "has_snapshots"
+    TENANTS ||--o{ DISCOVERY_SESSIONS : "performs"
+    DISCOVERY_SESSIONS ||--o{ DISCOVERY_DEVICES : "discovers"
 
     TARGET_GROUPS {
         uuid id PK
@@ -252,6 +254,79 @@ erDiagram
         text remediation
         timestamp created_at
     }
+
+    TENANTS {
+        uuid id PK
+        string name
+        string slug
+        string logo_url
+        string primary_color
+        string secondary_color
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    USERS {
+        uuid id PK
+        uuid tenant_id FK
+        string email
+        string password_hash
+        string role "SuperAdmin, TenantAdmin, SecOps, Auditor"
+        string full_name
+        boolean is_active
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    SCAN_PROFILES {
+        uuid id PK
+        uuid tenant_id FK "Opzionale per profili custom"
+        string name
+        string description
+        string category "discovery, system_flaws, pentest, web_app, compliance, all_in_one"
+        text raw_args
+        integer timeout_seconds
+        boolean is_default
+        boolean is_custom
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    CVE_ENTRIES {
+        string cve_id PK
+        text description
+        float cvss_v31_score
+        string cvss_v31_severity
+        jsonb cpe_matchers
+        timestamp published_at
+        timestamp last_modified_at
+        timestamp created_at
+    }
+
+    DISCOVERY_SESSIONS {
+        uuid id PK
+        uuid tenant_id FK
+        string target_subnet
+        integer total_hosts
+        integer alive_hosts
+        string status "RUNNING, COMPLETED, FAILED"
+        timestamp started_at
+        timestamp completed_at
+        timestamp created_at
+    }
+
+    DISCOVERY_DEVICES {
+        uuid id PK
+        uuid session_id FK
+        uuid tenant_id FK
+        string ip
+        string mac_address
+        string vendor
+        string hostname
+        float latency_ms
+        jsonb ports_open
+        timestamp created_at
+    }
 ```
 
 ---
@@ -260,11 +335,12 @@ erDiagram
 
 Per garantire modularità ed efficienza di contesto, i dettagli tecnici e i contratti specifici sono frammentati nei file di dominio:
 
-1. **[Scanning & LAN Network Discovery](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/domains/scanning_and_discovery.md)**: Profili Nmap, filtro host spenti (Alive-Only), scansione LAN ad alta velocità, database IEEE OUI e specifiche stream SSE (`/api/v1/network-discovery/stream`, `/api/v1/scans/{id}/stream`).
+1. **[Scanning & LAN Network Discovery](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/domains/scanning_and_discovery.md)**: 13 profili specialistici (6 macro-aree), configuratore professionale con Live Command Preview, validazione sicura argomenti, filtro host spenti (Alive-Only), LAN Discovery con OUI database, scansioni per azienda (`POST /api/v1/target-groups/{id}/scan`) e stream SSE in tempo reale.
 2. **[Remote SSH & iptables Firewall Manager](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/domains/ssh_and_firewall.md)**: Gestione credenziali e cifratura AES-256-GCM, Anti-Lockout Safety Timer, ispezione e modifica regole iptables, WebSocket Web Terminal SSH PTY.
-3. **[Asset Tree Management & Centralized Reports Hub](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/domains/reporting_and_assets.md)**: Albero gerarchico asset (`TargetGroup`), tipi di target e blacklist, archivio storico `/reports` e motori di esportazione PDF White-Label (Executive/Technical) e CSV RFC 4180.
+3. **[Asset Tree Management & Centralized Reports Hub](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/domains/reporting_and_assets.md)**: Workstation Multi-Company Workflow, albero gerarchico asset (`TargetGroup`), dossier consolidati per azienda (`GET /api/v1/reports/company/{groupId}/download`), algoritmo Posture Score normalizzato e perfezionamento tipografico A4 (Executive 2 pagine dense, technical continuous flow fino a 270mm, wrapping multiriga fluido).
 4. **[Debug & Testing Live Console Drawer](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/domains/debug_console.md)**: In-Memory Ring Buffer (500 log), intercettori Axios/SSE/WS/JS, sanificazione credenziali `[REDACTED]` ed esportatore Markdown preformattato per AI.
-5. **[Attack Path Mapping & Threat Chaining](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/domains/attack_path.md)**: Analisi topologica a grafo, calcolo del Cumulative Path Risk Score, rilevamento catene di compromissione e individuazione algoritmica dei chokepoint.
+5. **[Attack Path Mapping & Threat Chaining](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/domains/attack_path.md)**: Analisi topologica a grafo, calcolo del Cumulative Path Risk Score, rilevamento catene di compromissione, individuazione algoritmica dei chokepoint e Visual Graph Explorer SVG interattivo con controlli zoom/pan e filtri CVSS.
+6. **[Vulnerability Intelligence & CVE Correlation](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/domains/vulnerability_intelligence.md)**: Catalogo locale offline-ready, client REST NIST NVD API 2.0 (timeout 4s), auto-caching PostgreSQL su `cve_entries`, correlazione script NSE (`--script=vuln`, `--script=vulners`) ed endpoint `/api/v1/cve/stats` e `/api/v1/cve/sync`.
 
 ---
 
@@ -272,16 +348,38 @@ Per garantire modularità ed efficienza di contesto, i dettagli tecnici e i cont
 
 Tutte le API rispondono sotto `/api/v1` con payload standard `{ "success": true, "data": ..., "error": null }` e autenticazione Bearer JWT:
 
-- `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
-- `GET`, `POST`, `PUT`, `DELETE /api/v1/targets`
-- `GET`, `POST`, `PUT`, `DELETE /api/v1/target-groups`
+- `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `GET /api/v1/auth/me`, `POST /api/v1/auth/stream-ticket` (Ticket Monouso TTL 30s)
+- `GET /api/v1/tenants/current`, `PUT /api/v1/tenants/current/branding`
+- `GET`, `POST`, `DELETE /api/v1/targets`, `GET /api/v1/targets/{id}`
+- `GET`, `POST`, `PUT`, `DELETE /api/v1/target-groups`, `GET /api/v1/target-groups/{id}`, `POST /api/v1/target-groups/{id}/scan`
+- `GET`, `POST`, `DELETE /api/v1/scan-profiles`
 - `POST /api/v1/network-discovery/scan`, `GET /api/v1/network-discovery/results`, `POST /api/v1/network-discovery/import-targets`
-- `GET /api/v1/network-discovery/stream?session_id={id}&token={jwt}` (SSE)
+- `GET /api/v1/network-discovery/stream?session_id={id}&ticket={ticket}` (SSE con ticket monouso, fallback `?token=`)
 - `POST /api/v1/scans`, `GET /api/v1/scans`, `GET /api/v1/scans/{id}`, `POST /api/v1/scans/{id}/cancel`
-- `GET /api/v1/scans/{id}/stream?token={jwt}` (SSE)
+- `GET /api/v1/scans/{id}/findings`, `GET /api/v1/scans/{id}/stream?ticket={ticket}` (SSE con ticket monouso, fallback `?token=`)
+- `GET /api/v1/reports`, `GET /api/v1/reports/{id}/download` (PDF/CSV), `GET /api/v1/reports/company/{groupId}/download` (PDF/CSV)
+- `GET /api/v1/scans/{id}/reports/pdf`, `GET /api/v1/scans/{id}/reports/csv`
+- `GET /api/v1/schedules`, `GET /api/v1/schedules/{id}`, `POST /api/v1/schedules`, `PUT /api/v1/schedules/{id}/toggle`, `DELETE /api/v1/schedules/{id}`
+- `GET /api/v1/cve/stats`, `POST /api/v1/cve/sync`
 - `GET /api/v1/attack-paths/graph`, `GET /api/v1/attack-paths/chokepoints`
-- `GET /api/v1/reports`, `GET /api/v1/reports/{scan_id}/download` (PDF/CSV)
-- `GET`, `POST`, `DELETE /api/v1/ssh/servers`, `POST /api/v1/ssh/servers/{id}/test-connection`
-- `GET`, `POST`, `DELETE /api/v1/ssh/servers/{id}/firewall/rules`
-- `POST /api/v1/ssh/servers/{id}/firewall/apply-with-safety-timer`, `confirm`, `rollback`
-- `GET /ws/v1/ssh/servers/{id}/terminal?token={jwt}` (WebSocket PTY)
+- `GET`, `POST`, `PUT`, `DELETE /api/v1/ssh/servers`, `GET /api/v1/ssh/servers/{id}`, `POST /api/v1/ssh/servers/{id}/test-connection`
+- `GET /api/v1/ssh/servers/{id}/firewall`, `POST /api/v1/ssh/servers/{id}/firewall/rules`, `DELETE /api/v1/ssh/servers/{id}/firewall/rules/{line}`
+- `POST /api/v1/ssh/servers/{id}/firewall/apply`, `POST /api/v1/ssh/servers/{id}/firewall/confirm`, `POST /api/v1/ssh/servers/{id}/firewall/rollback`
+- `GET /ws/v1/ssh/servers/{id}/terminal?ticket={ticket}` (WebSocket PTY con ticket monouso, fallback `?token=`)
+
+---
+
+## 7. Architecture Decision Records (ADR)
+
+- **ADR-01 (Modularizzazione Documentazione per Domini):** Scomposizione dei dettagli architetturali in `docs/domains/` mantenendo `2_ARCHITECTURE.md` snello per contratti globali ed ERD.
+- **ADR-02 (Preservazione Storica Legacy):** Archiviazione storica dei documenti preesistenti in `docs/_legacy/` con tracciamento mapping.
+- **ADR-03 (Branching Strategy):** Utilizzo di branch tematici dedicati per feature (`feat/`) e manutenzione (`chore/agent-onboarding`).
+- **ADR-04 (Stream-Ticket Monouso & Hardening Perimetro Scansioni SEC-P0):**
+  - **Contesto:** I token JWT a lungo termine inviati in query string (`?token=...`) per SSE e WebSocket venivano esposti nei log proxy/Nginx e nella cronologia browser. Inoltre, l'esecuzione di Nmap necessitava di barriere perimetrali contro l'iniezione di flag o target interni.
+  - **Decisione:**
+    1. Implementato `StreamTicketStore` in memoria, thread-safe con TTL 30s e auto-invalidation atomica al primo utilizzo. Endpoint `POST /api/v1/auth/stream-ticket` protetto da Bearer header.
+    2. Separatore POSIX `--` anteposto sistematicamente al target nell'invocazione di Nmap in `BuildSafeArguments`.
+    3. Deny-list preventiva in `CheckTargetScope` contro loopback, link-local, bridge Docker e host della piattaforma, con risoluzione DNS anti-rebinding.
+    4. Watchdog di rollback firewall remoto via `nohup` distaccato per garanzia di ripristino anche in caso di caduta connessione SSH.
+  - **Conseguenze:** Eliminazione del rischio di cred leakage nei log; sicurezza perimetrale dello scanner rafforzata; piena retrocompatibilità garantita.
+

@@ -12,10 +12,22 @@ vi.mock('../api/client', () => ({
 }));
 
 describe('NewScanModal Component - Guided & Professional Scan Customization', () => {
+  const mockGroups = [
+    {
+      id: 'group-01',
+      tenant_id: 'tenant-1',
+      name: 'ACME Corporation',
+      description: 'Sede Centrale',
+      color: '#06b6d4',
+      target_count: 2,
+    },
+  ];
+
   const mockTargets = [
     {
       id: 'target-01',
       tenant_id: 'tenant-1',
+      group_id: 'group-01',
       type: 'IP',
       value: '192.168.1.100',
       description: 'Main Web Server',
@@ -24,6 +36,7 @@ describe('NewScanModal Component - Guided & Professional Scan Customization', ()
     {
       id: 'target-02',
       tenant_id: 'tenant-1',
+      group_id: 'group-01',
       type: 'IP',
       value: '192.168.1.200',
       description: 'Excluded Gateway',
@@ -32,6 +45,15 @@ describe('NewScanModal Component - Guided & Professional Scan Customization', ()
   ];
 
   const mockProfiles = [
+    {
+      id: 'prof-all-01',
+      name: 'All-in-One 360° Comprehensive Audit',
+      nmap_args: '-sS -sV -O -T4 --open',
+      description: 'Audit generalista a 360°',
+      timeout_seconds: 5400,
+      category: 'ALL_IN_ONE',
+      is_custom: false,
+    },
     {
       id: 'prof-pen-01',
       name: 'Stealth SYN Pen Test',
@@ -73,6 +95,14 @@ describe('NewScanModal Component - Guided & Professional Scan Customization', ()
   beforeEach(() => {
     vi.clearAllMocks();
     (apiClient.get as any).mockImplementation((url: string) => {
+      if (url.includes('/target-groups')) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: mockGroups,
+          },
+        });
+      }
       if (url.includes('/targets')) {
         return Promise.resolve({
           data: {
@@ -104,23 +134,45 @@ describe('NewScanModal Component - Guided & Professional Scan Customization', ()
 
     // Titolo e modalità
     expect(screen.getByText('Nuova Scansione di Vulnerabilità')).toBeTruthy();
-    expect(screen.getByText('Modalità Guidata')).toBeTruthy();
-    expect(screen.getByText('Modalità Professionale')).toBeTruthy();
+    expect(screen.getByText('Guidata (1-Click)')).toBeTruthy();
+    expect(screen.getByText('Componi Multi-Obiettivo')).toBeTruthy();
+    expect(screen.getByText('Professionale (Pro)')).toBeTruthy();
 
     // Attendi caricamento dati
     await waitFor(() => {
+      expect(screen.getByText('Tutto in Uno (360°)')).toBeTruthy();
       expect(screen.getByText('Penetration Testing')).toBeTruthy();
       expect(screen.getByText('Falle di Sistema')).toBeTruthy();
       expect(screen.getByText('Web App & API')).toBeTruthy();
-      expect(screen.getByText('Network Discovery')).toBeTruthy();
       expect(screen.getByText('Compliance & Hardening')).toBeTruthy();
       expect(screen.getByText('Profili Custom')).toBeTruthy();
+      expect(screen.queryByText('Network Discovery')).toBeNull();
     });
 
-    // Profilo di default categoria PEN_TEST
-    expect(screen.getByText('Stealth SYN Pen Test')).toBeTruthy();
+    // Profilo di default categoria ALL_IN_ONE
+    expect(screen.getByText('All-in-One 360° Comprehensive Audit')).toBeTruthy();
     // Live preview
     expect(screen.getByText('Live Nmap Command Preview')).toBeTruthy();
+  });
+
+  it('toggles interactive help guide displaying simple explanations for PO and users', async () => {
+    render(
+      <NewScanModal
+        isOpen={true}
+        onClose={vi.fn()}
+        onScanLaunched={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Guida Semplice')).toBeTruthy();
+    });
+
+    // Apri guida semplice
+    fireEvent.click(screen.getByText('Guida Semplice'));
+
+    expect(screen.getByText(/Come Scegliere la Scansione Ideale per la Tua Rete/i)).toBeTruthy();
+    expect(screen.getAllByText(/Controllo a 360° globale/i).length).toBeGreaterThanOrEqual(1);
   });
 
   it('filters profiles dynamically when selecting different categories', async () => {
@@ -133,7 +185,7 @@ describe('NewScanModal Component - Guided & Professional Scan Customization', ()
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Stealth SYN Pen Test')).toBeTruthy();
+      expect(screen.getByText('All-in-One 360° Comprehensive Audit')).toBeTruthy();
     });
 
     // Clic su "Falle di Sistema"
@@ -141,7 +193,7 @@ describe('NewScanModal Component - Guided & Professional Scan Customization', ()
 
     await waitFor(() => {
       expect(screen.getByText('OS & System Flaws Audit')).toBeTruthy();
-      expect(screen.queryByText('Stealth SYN Pen Test')).toBeNull();
+      expect(screen.queryByText('All-in-One 360° Comprehensive Audit')).toBeNull();
     });
 
     // Clic su "Web App & API"
@@ -150,6 +202,59 @@ describe('NewScanModal Component - Guided & Professional Scan Customization', ()
     await waitFor(() => {
       expect(screen.getByText('Web & API Surface Audit')).toBeTruthy();
       expect(screen.queryByText('OS & System Flaws Audit')).toBeNull();
+    });
+  });
+
+  it('allows composing multi-objective scan with automatic port and flag union', async () => {
+    const handleLaunched = vi.fn();
+    const handleClose = vi.fn();
+
+    (apiClient.post as any).mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: { id: 'prof-multi-123', name: 'Multi-Audit' },
+      },
+    });
+    (apiClient.post as any).mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: { id: 'scan-multi-999', status: 'QUEUED' },
+      },
+    });
+
+    render(
+      <NewScanModal
+        isOpen={true}
+        onClose={handleClose}
+        onScanLaunched={handleLaunched}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Componi Multi-Obiettivo')).toBeTruthy();
+    });
+
+    // Switch a modalità Multi-Obiettivo
+    fireEvent.click(screen.getByText('Componi Multi-Obiettivo'));
+
+    expect(screen.getByText('Seleziona uno o più Obiettivi di Scansione')).toBeTruthy();
+    expect(screen.getByText('Siti Web, Portali & API')).toBeTruthy();
+    expect(screen.getByText('Servizi Critici & Accesso Remoto')).toBeTruthy();
+
+    // Avvia scansione multi-obiettivo
+    const submitBtn = screen.getByRole('button', { name: /Avvia Scansione Ora/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(apiClient.post).toHaveBeenCalledWith('/scan-profiles', expect.objectContaining({
+        category: 'CUSTOM',
+      }));
+      expect(apiClient.post).toHaveBeenCalledWith('/scans', {
+        group_id: 'group-01',
+        profile_id: 'prof-multi-123',
+      });
+      expect(handleLaunched).toHaveBeenCalled();
+      expect(handleClose).toHaveBeenCalled();
     });
   });
 
@@ -163,11 +268,11 @@ describe('NewScanModal Component - Guided & Professional Scan Customization', ()
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Modalità Professionale')).toBeTruthy();
+      expect(screen.getByText('Professionale (Pro)')).toBeTruthy();
     });
 
     // Switch a modalità professionale
-    fireEvent.click(screen.getByText('Modalità Professionale'));
+    fireEvent.click(screen.getByText('Professionale (Pro)'));
 
     // Verifica controlli professionali
     expect(screen.getByText('Scope Porte Bersaglio')).toBeTruthy();
@@ -191,10 +296,10 @@ describe('NewScanModal Component - Guided & Professional Scan Customization', ()
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Modalità Professionale')).toBeTruthy();
+      expect(screen.getByText('Professionale (Pro)')).toBeTruthy();
     });
 
-    fireEvent.click(screen.getByText('Modalità Professionale'));
+    fireEvent.click(screen.getByText('Professionale (Pro)'));
 
     // Clic su porte critiche
     fireEvent.click(screen.getByText('Servizi Critici & RCE'));
@@ -225,7 +330,7 @@ describe('NewScanModal Component - Guided & Professional Scan Customization', ()
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Stealth SYN Pen Test')).toBeTruthy();
+      expect(screen.getByText('All-in-One 360° Comprehensive Audit')).toBeTruthy();
     });
 
     // Clic su "Avvia Scansione Ora"
@@ -234,8 +339,8 @@ describe('NewScanModal Component - Guided & Professional Scan Customization', ()
 
     await waitFor(() => {
       expect(apiClient.post).toHaveBeenCalledWith('/scans', {
-        target_id: 'target-01',
-        profile_id: 'prof-pen-01',
+        group_id: 'group-01',
+        profile_id: 'prof-all-01',
       });
       expect(handleLaunched).toHaveBeenCalled();
       expect(handleClose).toHaveBeenCalled();
@@ -271,10 +376,10 @@ describe('NewScanModal Component - Guided & Professional Scan Customization', ()
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Modalità Professionale')).toBeTruthy();
+      expect(screen.getByText('Professionale (Pro)')).toBeTruthy();
     });
 
-    fireEvent.click(screen.getByText('Modalità Professionale'));
+    fireEvent.click(screen.getByText('Professionale (Pro)'));
 
     // Attiva checkbox "Salva questa configurazione come nuovo Profilo Custom"
     const saveCheckbox = screen.getByRole('checkbox', {
@@ -295,7 +400,7 @@ describe('NewScanModal Component - Guided & Professional Scan Customization', ()
         name: 'My Custom Audit',
       }));
       expect(apiClient.post).toHaveBeenCalledWith('/scans', {
-        target_id: 'target-01',
+        group_id: 'group-01',
         profile_id: 'new-custom-prof-id',
       });
       expect(handleLaunched).toHaveBeenCalled();
@@ -324,7 +429,7 @@ describe('NewScanModal Component - Guided & Professional Scan Customization', ()
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Schedulazione Cron')).toBeTruthy();
+      expect(screen.getByText('All-in-One 360° Comprehensive Audit')).toBeTruthy();
     });
 
     // Switch a tab Schedulazione Cron
@@ -340,12 +445,57 @@ describe('NewScanModal Component - Guided & Professional Scan Customization', ()
     await waitFor(() => {
       expect(apiClient.post).toHaveBeenCalledWith('/schedules', {
         target_id: 'target-01',
-        profile_id: 'prof-pen-01',
+        profile_id: 'prof-all-01',
         cron_expression: '0 2 * * *',
         is_active: true,
       });
       expect(handleScheduleCreated).toHaveBeenCalled();
       expect(handleClose).toHaveBeenCalled();
     });
+  });
+
+  it('renders company / folder selector and displays preview chips for all contained targets', async () => {
+    render(
+      <NewScanModal
+        isOpen={true}
+        onClose={vi.fn()}
+        onScanLaunched={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Azienda / Cartella Target da Scansionare')).toBeTruthy();
+      expect(screen.getByText('ACME Corporation')).toBeTruthy();
+      expect(screen.getByText('192.168.1.100')).toBeTruthy();
+      expect(screen.getByText('192.168.1.200')).toBeTruthy();
+      expect(screen.getByText('2 IP inclusi')).toBeTruthy();
+    });
+  });
+
+  it('supports --script=vuln in multi-objective and professional modes', async () => {
+    render(
+      <NewScanModal
+        isOpen={true}
+        onClose={vi.fn()}
+        onScanLaunched={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('All-in-One 360° Comprehensive Audit')).toBeTruthy();
+    });
+
+    // Switch to Multi-Objective mode
+    fireEvent.click(screen.getByText(/Componi Multi-Obiettivo/i));
+
+    // Verify option exists
+    expect(screen.getByText('Script Vulnerabilità Nmap (--script=vuln)')).toBeTruthy();
+    const scriptMatches = screen.getAllByText(/--script=vuln/);
+    expect(scriptMatches.length).toBeGreaterThanOrEqual(2);
+
+    // Switch to Professional mode
+    fireEvent.click(screen.getByText(/Professionale \(Pro\)/i));
+    const profScriptMatches = screen.getAllByText('Script Vulnerabilità Nmap (--script=vuln)');
+    expect(profScriptMatches.length).toBeGreaterThanOrEqual(1);
   });
 });

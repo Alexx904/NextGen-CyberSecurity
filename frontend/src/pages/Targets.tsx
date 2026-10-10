@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Crosshair,
   Plus,
   Search,
   Filter,
   Trash2,
-  Play,
   ShieldAlert,
   CheckCircle2,
   RefreshCw,
@@ -14,12 +14,12 @@ import {
   Check,
   Folder,
   X,
+  ArrowRight,
 } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { ApiResponse } from '../types/auth';
 import { TargetItem, TargetListResponseData, TargetGroupNode, TargetGroup } from '../types/target';
 import { TargetModal } from '../components/TargetModal';
-import { QuickScanModal } from '../components/QuickScanModal';
 import { TreeExplorer, getGroupAndDescendantIds } from '../components/TreeExplorer';
 
 export const Targets: React.FC = () => {
@@ -39,9 +39,13 @@ export const Targets: React.FC = () => {
 
   // Modali
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
-  const [quickScanTarget, setQuickScanTarget] = useState<TargetItem | null>(null);
   const [targetToDelete, setTargetToDelete] = useState<TargetItem | null>(null);
   const [deleting, setDeleting] = useState<boolean>(false);
+
+  // Selezione multipla per eliminazione massiva
+  const [selectedTargetIds, setSelectedTargetIds] = useState<Set<string>>(new Set());
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState<boolean>(false);
+  const [bulkDeleting, setBulkDeleting] = useState<boolean>(false);
 
   // Feedback copia
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -93,6 +97,11 @@ export const Targets: React.FC = () => {
       const response = await apiClient.delete<ApiResponse<{ message: string }>>(`/targets/${targetToDelete.id}`);
       if (response.data && response.data.success) {
         setTargetToDelete(null);
+        setSelectedTargetIds((prev) => {
+          const next = new Set(prev);
+          next.delete(targetToDelete.id);
+          return next;
+        });
         fetchTargets();
       } else {
         alert(response.data?.error?.message || 'Impossibile eliminare il target');
@@ -104,10 +113,16 @@ export const Targets: React.FC = () => {
     }
   };
 
-  const handleCopy = (value: string, id: string) => {
-    navigator.clipboard.writeText(value);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
+  const handleToggleSelectTarget = (id: string) => {
+    setSelectedTargetIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   };
 
   // Calcola gli ID ammissibili per la cartella selezionata (include tutti i sotto-rami)
@@ -144,6 +159,49 @@ export const Targets: React.FC = () => {
       return matchesSearch && matchesType && matchesStatus && matchesGroup;
     });
   }, [targets, search, selectedType, selectedStatus, activeSubtreeGroupIds]);
+
+  const isAllFilteredSelected = useMemo(() => {
+    return (
+      filteredTargets.length > 0 &&
+      filteredTargets.every((t) => selectedTargetIds.has(t.id))
+    );
+  }, [filteredTargets, selectedTargetIds]);
+
+  const handleSelectAllFiltered = () => {
+    if (isAllFilteredSelected) {
+      setSelectedTargetIds(new Set());
+    } else {
+      setSelectedTargetIds(new Set(filteredTargets.map((t) => t.id)));
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedTargetIds(new Set());
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedTargetIds.size === 0) return;
+    setBulkDeleting(true);
+    try {
+      const deletePromises = Array.from(selectedTargetIds).map((id) =>
+        apiClient.delete<ApiResponse<{ message: string }>>(`/targets/${id}`)
+      );
+      await Promise.allSettled(deletePromises);
+      setSelectedTargetIds(new Set());
+      setIsBulkDeleteModalOpen(false);
+      fetchTargets();
+    } catch (err: any) {
+      alert(err.response?.data?.error?.message || 'Errore durante l\'eliminazione massiva dei target');
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
+  const handleCopy = (value: string, id: string) => {
+    navigator.clipboard.writeText(value);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   const getTypeBadge = (type: string) => {
     switch (type.toUpperCase()) {
@@ -212,6 +270,23 @@ export const Targets: React.FC = () => {
         </button>
       </div>
 
+      {/* Workflow Guidance Banner */}
+      <div className="p-3.5 rounded-xl border border-blue-500/30 bg-blue-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-blue-200">
+        <div className="flex items-center space-x-2.5">
+          <Folder className="w-4 h-4 text-cyan-400 shrink-0" />
+          <span>
+            <strong>Gestione Bersagli & Aziende</strong>: Questa sezione è dedicata al censimento, organizzazione in cartelle/aziende e blacklist degli host. Per avviare scansioni e audit di vulnerabilità, recati nella sezione dedicata.
+          </span>
+        </div>
+        <Link
+          to="/scans"
+          className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs whitespace-nowrap transition-colors shadow-sm self-start sm:self-auto"
+        >
+          <span>Vai a Scansioni</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
+      </div>
+
       {/* Error Alert */}
       {error && (
         <div className="p-4 rounded-xl border border-rose-800/50 bg-rose-950/30 text-rose-300 text-xs flex items-center justify-between">
@@ -239,6 +314,7 @@ export const Targets: React.FC = () => {
               setSelectedGroupNode(node || null);
             }}
             onGroupsLoaded={handleGroupsLoaded}
+            targets={targets}
           />
         </div>
 
@@ -338,6 +414,42 @@ export const Targets: React.FC = () => {
             </div>
           </div>
 
+          {/* Bulk Actions Floating Banner */}
+          {selectedTargetIds.size > 0 && (
+            <div className="p-3.5 rounded-xl border border-rose-500/30 bg-rose-950/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs animate-in fade-in">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-1 rounded-md bg-rose-500/20 text-rose-400">
+                  <Trash2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="font-bold text-white">
+                    {selectedTargetIds.size} bersaglio/i selezionato/i
+                  </span>
+                  <span className="text-slate-400 ml-1.5 text-[11px]">
+                    (su {filteredTargets.length} visualizzati)
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={handleClearSelection}
+                  className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-medium transition-colors"
+                >
+                  Deseleziona
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsBulkDeleteModalOpen(true)}
+                  className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition-all shadow-[0_0_12px_rgba(225,29,72,0.3)]"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Elimina Selezionati ({selectedTargetIds.size})</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Tabella Target */}
           <div className="rounded-xl border border-cyber-border bg-cyber-card/40 overflow-hidden shadow-xl">
             {loading ? (
@@ -381,6 +493,15 @@ export const Targets: React.FC = () => {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-cyber-border/80 text-[11px] font-semibold text-slate-400 uppercase tracking-wider bg-slate-900/40">
+                      <th className="py-3 px-3 w-10 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isAllFilteredSelected}
+                          onChange={handleSelectAllFiltered}
+                          className="rounded border-cyber-border bg-slate-900 text-cyan-500 focus:ring-cyan-500 w-3.5 h-3.5 cursor-pointer accent-cyan-500"
+                          title={isAllFilteredSelected ? 'Deseleziona tutti' : 'Seleziona tutti i target filtrati'}
+                        />
+                      </th>
                       <th className="py-3 px-4">Bersaglio / Valore</th>
                       <th className="py-3 px-4">Cartella Scope</th>
                       <th className="py-3 px-4">Tipo</th>
@@ -393,9 +514,25 @@ export const Targets: React.FC = () => {
                   <tbody className="divide-y divide-cyber-border/40 text-xs">
                     {filteredTargets.map((target) => {
                       const group = target.group_id ? flatGroups.get(target.group_id) : null;
+                      const isSelected = selectedTargetIds.has(target.id);
 
                       return (
-                        <tr key={target.id} className="hover:bg-slate-800/25 transition-colors">
+                        <tr
+                          key={target.id}
+                          className={`hover:bg-slate-800/25 transition-colors ${
+                            isSelected ? 'bg-cyan-500/10' : ''
+                          }`}
+                        >
+                          {/* Checkbox di Selezione */}
+                          <td className="py-3.5 px-3 w-10 text-center">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleToggleSelectTarget(target.id)}
+                              className="rounded border-cyber-border bg-slate-900 text-cyan-500 focus:ring-cyan-500 w-3.5 h-3.5 cursor-pointer accent-cyan-500"
+                            />
+                          </td>
+
                           {/* Valore Target */}
                           <td className="py-3.5 px-4 font-mono font-medium text-slate-100">
                             <div className="flex items-center space-x-2">
@@ -470,20 +607,6 @@ export const Targets: React.FC = () => {
                           {/* Azioni */}
                           <td className="py-3.5 px-4 text-right">
                             <div className="flex items-center justify-end space-x-2">
-                              {/* Quick Scan */}
-                              <button
-                                onClick={() => setQuickScanTarget(target)}
-                                disabled={target.is_blacklisted}
-                                className="p-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 hover:border-cyan-500/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                title={
-                                  target.is_blacklisted
-                                    ? 'Scansione vietata: target in blacklist'
-                                    : 'Avvia Scansione Rapida'
-                                }
-                              >
-                                <Play className="w-3.5 h-3.5" />
-                              </button>
-
                               {/* Delete */}
                               <button
                                 onClick={() => setTargetToDelete(target)}
@@ -513,12 +636,7 @@ export const Targets: React.FC = () => {
         defaultGroupId={selectedGroupId}
       />
 
-      {/* Modale Scansione Rapida */}
-      <QuickScanModal
-        isOpen={!!quickScanTarget}
-        target={quickScanTarget}
-        onClose={() => setQuickScanTarget(null)}
-      />
+
 
       {/* Conferma Eliminazione Target Dialog */}
       {targetToDelete && (
@@ -555,6 +673,47 @@ export const Targets: React.FC = () => {
                 className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-colors disabled:opacity-50"
               >
                 {deleting ? 'Eliminazione...' : 'Elimina Definitivamente'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Conferma Eliminazione Multipla Target Dialog */}
+      {isBulkDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="max-w-md w-full p-6 rounded-2xl border border-rose-800/40 bg-[#111726] shadow-2xl space-y-4">
+            <div className="flex items-center space-x-3">
+              <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Conferma Eliminazione Multipla</h3>
+                <p className="text-xs text-slate-400">Questa operazione non può essere annullata</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Sei sicuro di voler rimuovere <strong className="font-mono text-rose-400 font-bold">{selectedTargetIds.size}</strong> bersagli
+              selezionati dallo scope dell'organizzazione?
+            </p>
+
+            <div className="flex items-center justify-end space-x-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsBulkDeleteModalOpen(false)}
+                disabled={bulkDeleting}
+                className="px-4 py-2 rounded-lg border border-cyber-border bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-medium transition-colors"
+              >
+                Annulla
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkDelete}
+                disabled={bulkDeleting}
+                className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-colors disabled:opacity-50"
+              >
+                {bulkDeleting ? 'Eliminazione in corso...' : `Elimina Definitivamente (${selectedTargetIds.size})`}
               </button>
             </div>
           </div>

@@ -17,6 +17,9 @@ UPDATE scan_profiles SET category = 'PEN_TEST' WHERE name = 'Full Deep Scan';
 -- Inserimento del catalogo profili specialistici di sistema predefiniti (idempotente)
 INSERT INTO scan_profiles (id, name, nmap_args, description, timeout_seconds, category, is_custom, tenant_id)
 VALUES
+    -- 0. All-in-One 360° Comprehensive Audit (Generalista Completo)
+    (gen_random_uuid(), 'All-in-One 360° Comprehensive Audit', '-sS -sV -O -T4 --open', 'Scansione generalista completa a 360°: mappatura host vivi, scansione porte standard, identificazione versioni demoni (sV), fingerprinting del sistema operativo (O) ed elusione filtri base (-sS)', 5400, 'ALL_IN_ONE', false, NULL),
+
     -- 1. Penetration Testing & Offensive Emulation
     (gen_random_uuid(), 'Stealth SYN Penetration Audit', '-sS -Pn -T2 --open', 'Ricognizione stealth a basso rumore con pacchetti SYN senza handshake TCP completo, elusione baseline firewall e solo porte aperte', 3600, 'PEN_TEST', false, NULL),
     (gen_random_uuid(), 'Firewall & Filter Bypass Check', '-sA -Pn -T3', 'Mappatura filtri firewall perimetrali e apparati IDS con pacchetti TCP ACK per verificare se i firewall sono stateful o stateless', 1800, 'PEN_TEST', false, NULL),

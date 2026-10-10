@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 
@@ -290,5 +291,113 @@ func IsTargetBlacklisted(targetValue string, blacklistedEntries []string) (bool,
 	}
 
 	return false, nil
+}
+
+// RestrictedSubnetsCIDR elenca le subnet riservate e dell'infrastruttura interna (NFR-SEC-01, FR-01.4)
+var RestrictedSubnetsCIDR = []string{
+	"0.0.0.0/8",       // Indirizzi rete corrente / host locale
+	"127.0.0.0/8",     // IPv4 Loopback
+	"::1/128",         // IPv6 Loopback
+	"169.254.0.0/16",  // IPv4 Link-Local / Cloud Instance Metadata Service (AWS/GCP/Azure 169.254.169.254)
+	"fe80::/10",       // IPv6 Link-Local
+	"172.17.0.0/16",   // Docker default bridge
+	"172.18.0.0/16",   // Docker compose networks
+	"172.19.0.0/16",
+	"172.20.0.0/16",
+}
+
+// RestrictedHostnames elenca gli hostname interni riservati dei container della piattaforma
+var RestrictedHostnames = []string{
+	"localhost",
+	"postgres",
+	"nextgen-postgres",
+	"backend",
+	"nextgen-backend",
+	"frontend",
+	"nextgen-frontend",
+}
+
+// CheckTargetScope verifica che il target non ricada nell'infrastruttura interna protetta
+// e non ecceda la dimensione massima ammessa (FR-01.4).
+func CheckTargetScope(targetValue string, resolveDNS bool) error {
+	// Consente lo sblocco per sviluppo locale o testing autorizzato se espressamente configurato via ambiente
+	if strings.EqualFold(os.Getenv("ALLOW_INTERNAL_TARGETS"), "true") || strings.EqualFold(os.Getenv("DEV_ALLOW_LOCALHOST"), "true") {
+		return nil
+	}
+
+	clean := strings.ToLower(strings.TrimSpace(targetValue))
+	for _, forbiddenHost := range RestrictedHostnames {
+		if clean == forbiddenHost || strings.HasSuffix(clean, "."+forbiddenHost) {
+			return domain.ErrTargetInternalRestricted
+		}
+	}
+
+	targetInfo, err := ValidateTarget(targetValue)
+	if err != nil {
+		return err
+	}
+
+	// 1. Controllo dimensione massima ammissibile (un /8 non deve partire)
+	if targetInfo.Type == domain.TargetTypeCIDR {
+		_, ipNet, isIPv6 := IsValidCIDR(targetInfo.CleanValue)
+		if ipNet != nil {
+			ones, _ := ipNet.Mask.Size()
+			if !isIPv6 && ones < 16 {
+				return fmt.Errorf("%w: prefisso /%d inferiore al minimo consentito /16 (max 65536 host)", domain.ErrTargetScopeTooBroad, ones)
+			}
+			if isIPv6 && ones < 64 {
+				return fmt.Errorf("%w: prefisso IPv6 /%d inferiore al minimo consentito /64", domain.ErrTargetScopeTooBroad, ones)
+			}
+		}
+	}
+
+	// 2. Controllo contro hostname riservati
+	if targetInfo.Type == domain.TargetTypeFQDN {
+		lowerFQDN := strings.ToLower(targetInfo.CleanValue)
+		for _, forbiddenHost := range RestrictedHostnames {
+			if lowerFQDN == forbiddenHost || strings.HasSuffix(lowerFQDN, "."+forbiddenHost) {
+				return domain.ErrTargetInternalRestricted
+			}
+		}
+
+		if strings.HasSuffix(lowerFQDN, ".internal") || strings.HasSuffix(lowerFQDN, ".local") {
+			return domain.ErrTargetInternalRestricted
+		}
+
+		// Controllo anti-DNS Rebinding se abilitata la risoluzione
+		if resolveDNS {
+			resolvedIPs, lookupErr := net.LookupIP(targetInfo.CleanValue)
+			if lookupErr == nil {
+				for _, ip := range resolvedIPs {
+					if isIPRestricted(ip) {
+						return fmt.Errorf("%w: dominio '%s' risolve su IP riservato %s", domain.ErrTargetInternalRestricted, targetInfo.CleanValue, ip.String())
+					}
+				}
+			}
+		}
+		return nil
+	}
+
+	// 3. Controllo IP / CIDR / Range contro le subnet riservate
+	isRestricted, err := IsTargetBlacklisted(targetInfo.CleanValue, RestrictedSubnetsCIDR)
+	if err != nil {
+		return err
+	}
+	if isRestricted {
+		return domain.ErrTargetInternalRestricted
+	}
+
+	return nil
+}
+
+// isIPRestricted controlla se un IP net.IP appartiene alle subnet protette
+func isIPRestricted(ip net.IP) bool {
+	for _, cidr := range RestrictedSubnetsCIDR {
+		_, ipNet, err := net.ParseCIDR(cidr)
+		if err == nil && ipNet != nil && ipNet.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }
 

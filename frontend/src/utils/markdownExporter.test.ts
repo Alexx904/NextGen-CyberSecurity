@@ -139,4 +139,25 @@ describe('markdownExporter', () => {
 
     clickSpy.mockRestore();
   });
+
+  it('redacts tokens and sensitive query params from generated markdown report', () => {
+    const sensitiveEntries: DebugEntry[] = [
+      {
+        id: 'log-sec',
+        timestamp: '2026-10-09T18:00:00.000Z',
+        level: 'error',
+        source: 'sse',
+        title: 'SSE Connection Failed to /api/v1/scans/1/stream?token=secret-jwt-123',
+        url: '/api/v1/scans/1/stream?token=secret-jwt-123',
+        error: 'Authorization header Bearer secret-bearer-token was rejected',
+      },
+    ];
+    const md = generateAiMarkdownReport(sensitiveEntries, sampleStats, '/scans?token=my-secret-token');
+
+    expect(md).not.toContain('secret-jwt-123');
+    expect(md).not.toContain('secret-bearer-token');
+    expect(md).not.toContain('my-secret-token');
+    expect(md).toContain('token=[REDACTED]');
+    expect(md).toContain('Bearer [REDACTED]');
+  });
 });

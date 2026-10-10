@@ -166,6 +166,14 @@ func (h *TargetHandler) Create(w http.ResponseWriter, r *http.Request) {
 		IsBlacklisted: req.IsBlacklisted,
 	})
 	if err != nil {
+		if errors.Is(err, domain.ErrTargetInternalRestricted) {
+			response.Error(w, http.StatusBadRequest, "TARGET_RESTRICTED", err.Error())
+			return
+		}
+		if errors.Is(err, domain.ErrTargetScopeTooBroad) {
+			response.Error(w, http.StatusBadRequest, "SCOPE_TOO_BROAD", err.Error())
+			return
+		}
 		if errors.Is(err, domain.ErrTargetInvalid) {
 			response.Error(w, http.StatusBadRequest, "INVALID_TARGET_FORMAT", "Formato bersaglio non valido (IP, CIDR, Range o FQDN atteso, metacaratteri vietati)")
 			return

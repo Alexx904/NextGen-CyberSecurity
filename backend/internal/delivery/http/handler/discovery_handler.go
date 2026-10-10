@@ -101,6 +101,14 @@ func (h *DiscoveryHandler) Scan(w http.ResponseWriter, r *http.Request) {
 		SessionID:          req.SessionID,
 	})
 	if err != nil {
+		if errors.Is(err, domain.ErrTargetInternalRestricted) {
+			response.Error(w, http.StatusBadRequest, "TARGET_RESTRICTED", err.Error())
+			return
+		}
+		if errors.Is(err, domain.ErrTargetScopeTooBroad) {
+			response.Error(w, http.StatusBadRequest, "SCOPE_TOO_BROAD", err.Error())
+			return
+		}
 		if errors.Is(err, domain.ErrTargetInvalid) {
 			response.Error(w, http.StatusBadRequest, "INVALID_SUBNET", "Subnet non valida o tipologia non supportata per LAN discovery")
 			return
@@ -319,6 +327,10 @@ func (h *DiscoveryHandler) ImportTargets(w http.ResponseWriter, r *http.Request)
 				reason = "Target già registrato per l'organizzazione"
 			} else if errors.Is(err, domain.ErrTargetBlacklisted) {
 				reason = "Target presente nella blacklist di esclusione"
+			} else if errors.Is(err, domain.ErrTargetInternalRestricted) {
+				reason = "Target ricade nell'infrastruttura interna protetta o intervallo IP riservato"
+			} else if errors.Is(err, domain.ErrTargetScopeTooBroad) {
+				reason = "Intervallo IP o subnet eccessivamente ampio"
 			} else if errors.Is(err, domain.ErrTargetInvalid) {
 				reason = "Formato indirizzo IP non valido"
 			}
@@ -355,7 +367,14 @@ func buildDeviceDescription(dev ImportDiscoveredDevice) string {
 	}
 
 	vendor := strings.TrimSpace(dev.Vendor)
+	if strings.EqualFold(vendor, "Unknown") {
+		vendor = ""
+	}
+
 	hostname := strings.TrimSpace(dev.Hostname)
+	if strings.EqualFold(hostname, "Dispositivo LAN") {
+		hostname = ""
+	}
 
 	if vendor != "" && hostname != "" {
 		return fmt.Sprintf("Discovered LAN device (%s - %s)", vendor, hostname)

@@ -1,50 +1,62 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  Building,
   Crosshair,
+  Radio,
   Terminal,
-  Server,
   ShieldAlert,
   RefreshCw,
   ArrowRight,
-  Clock,
   CheckCircle2,
   AlertCircle,
-  Play,
+  AlertTriangle,
   Layers,
-  Radio
+  FileText,
+  Copy,
+  Check,
+  Search,
 } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { ApiResponse } from '../types/auth';
+import { TargetGroupNode, TargetItem, TargetListResponseData } from '../types/target';
+import { ReportListResponseData, ReportItem } from '../types/report';
 import { ScanListResponseData, ScanItem } from '../types/scan';
-import { TargetListResponseData } from '../types/target';
-import { SeverityChart } from '../components/SeverityChart';
-import { useAuth } from '../context/AuthContext';
 
 export const Dashboard: React.FC = () => {
-  const { user } = useAuth();
-  const [scans, setScans] = useState<ScanItem[]>([]);
-  const [totalScans, setTotalScans] = useState<number>(0);
-  const [totalTargets, setTotalTargets] = useState<number>(0);
+
+  const [groups, setGroups] = useState<TargetGroupNode[]>([]);
+  const [targets, setTargets] = useState<TargetItem[]>([]);
+  const [reports, setReports] = useState<ReportItem[]>([]);
+  const [recentScans, setRecentScans] = useState<ScanItem[]>([]);
+
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [copiedIP, setCopiedIP] = useState<string | null>(null);
+  const [companySearch, setCompanySearch] = useState<string>('');
 
   const fetchDashboardData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [scansRes, targetsRes] = await Promise.all([
-        apiClient.get<ApiResponse<ScanListResponseData>>('/scans?limit=10'),
-        apiClient.get<ApiResponse<TargetListResponseData>>('/targets?limit=1'),
+      const [groupsRes, targetsRes, reportsRes, scansRes] = await Promise.all([
+        apiClient.get<ApiResponse<TargetGroupNode[]>>('/target-groups').catch(() => null),
+        apiClient.get<ApiResponse<TargetListResponseData>>('/targets?limit=200').catch(() => null),
+        apiClient.get<ApiResponse<ReportListResponseData>>('/reports?limit=100').catch(() => null),
+        apiClient.get<ApiResponse<ScanListResponseData>>('/scans?limit=50').catch(() => null),
       ]);
 
-      if (scansRes.data?.data) {
-        setScans(scansRes.data.data.items || []);
-        setTotalScans(scansRes.data.data.total || 0);
+      if (groupsRes?.data?.data) {
+        setGroups(groupsRes.data.data);
       }
-
-      if (targetsRes.data?.data) {
-        setTotalTargets(targetsRes.data.data.total || 0);
+      if (targetsRes?.data?.data) {
+        setTargets(targetsRes.data.data.items || []);
+      }
+      if (reportsRes?.data?.data) {
+        setReports(reportsRes.data.data.items || []);
+      }
+      if (scansRes?.data?.data) {
+        setRecentScans(scansRes.data.data.items || []);
       }
     } catch (err: any) {
       setError(
@@ -61,82 +73,203 @@ export const Dashboard: React.FC = () => {
     fetchDashboardData();
   }, [fetchDashboardData]);
 
-  // Calcolo metriche aggregate
-  const activeScansCount = scans.filter(
-    (s) => s.status === 'RUNNING' || s.status === 'QUEUED'
-  ).length;
+  const handleCopy = (ip: string) => {
+    navigator.clipboard.writeText(ip);
+    setCopiedIP(ip);
+    setTimeout(() => setCopiedIP(null), 2000);
+  };
 
-  const upHostsCount = scans.reduce(
-    (acc, s) => acc + (s.summary_stats?.up_hosts || 0),
-    0
-  );
-
-  const totalOpenPorts = scans.reduce(
-    (acc, s) => acc + (s.summary_stats?.total_open_ports || 0),
-    0
-  );
-
-  const severityTotals = scans.reduce(
-    (acc, s) => {
-      const stats = s.summary_stats;
-      if (stats) {
-        acc.critical += stats.critical_count || 0;
-        acc.high += stats.high_count || 0;
-        acc.medium += stats.medium_count || 0;
-        acc.low += stats.low_count || 0;
-        acc.info += stats.info_count || 0;
+  // Mappatura delle singole aziende con metriche aggregate dedicate
+  const companyCards = useMemo(() => {
+    const flatGroupsMap = new Map<string, TargetGroupNode>();
+    function recurse(nodes: TargetGroupNode[]) {
+      for (const n of nodes) {
+        flatGroupsMap.set(n.id, n);
+        if (n.children && n.children.length > 0) {
+          recurse(n.children);
+        }
       }
-      return acc;
-    },
-    { critical: 0, high: 0, medium: 0, low: 0, info: 0 }
-  );
+    }
+    recurse(groups);
 
-  const totalVulnerabilities =
-    severityTotals.critical +
-    severityTotals.high +
-    severityTotals.medium +
-    severityTotals.low +
-    severityTotals.info;
+    // Mappa target per group
+    const targetsByGroup = new Map<string, TargetItem[]>();
+    const unassignedTargets: TargetItem[] = [];
 
-  const getStatusBadge = (status: string) => {
+    targets.forEach((t) => {
+      if (t.group_id) {
+        if (!targetsByGroup.has(t.group_id)) {
+          targetsByGroup.set(t.group_id, []);
+        }
+        targetsByGroup.get(t.group_id)!.push(t);
+      } else {
+        unassignedTargets.push(t);
+      }
+    });
+
+    // Mappa report per group
+    const reportsByGroup = new Map<string, ReportItem[]>();
+    reports.forEach((r) => {
+      if (r.group_id) {
+        if (!reportsByGroup.has(r.group_id)) {
+          reportsByGroup.set(r.group_id, []);
+        }
+        reportsByGroup.get(r.group_id)!.push(r);
+      }
+    });
+
+    // Mappa scansioni per target
+    const scansByTarget = new Map<string, ScanItem[]>();
+    recentScans.forEach((s) => {
+      if (!scansByTarget.has(s.target_id)) {
+        scansByTarget.set(s.target_id, []);
+      }
+      scansByTarget.get(s.target_id)!.push(s);
+    });
+
+    const result: Array<{
+      id: string;
+      name: string;
+      description?: string | null;
+      color_tag: string;
+      targets: TargetItem[];
+      criticalCount: number;
+      highCount: number;
+      mediumCount: number;
+      lowCount: number;
+      postureScore: number;
+      postureGrade: string;
+      latestScan?: ScanItem;
+    }> = [];
+
+    flatGroupsMap.forEach((gNode, gId) => {
+      const gTargets = targetsByGroup.get(gId) || [];
+      const gReports = reportsByGroup.get(gId) || [];
+
+      let crit = 0;
+      let high = 0;
+      let med = 0;
+      let low = 0;
+
+      gReports.forEach((r) => {
+        crit += r.summary_stats.critical_count || 0;
+        high += r.summary_stats.high_count || 0;
+        med += r.summary_stats.medium_count || 0;
+        low += r.summary_stats.low_count || 0;
+      });
+
+      if (gReports.length === 0 && gNode.severity_counts) {
+        crit = gNode.severity_counts['CRITICAL'] || 0;
+        high = gNode.severity_counts['HIGH'] || 0;
+        med = gNode.severity_counts['MEDIUM'] || 0;
+        low = gNode.severity_counts['LOW'] || 0;
+      }
+
+      // Calcolo Posture Score e Grade
+      const deduction = crit * 25 + high * 15 + med * 5 + low * 1;
+      let postureScore = Math.max(0, 100 - deduction);
+      if (gReports.length > 0) {
+        const avgR = Math.round(gReports.reduce((acc, r) => acc + r.posture_score, 0) / gReports.length);
+        postureScore = avgR;
+      }
+
+      let postureGrade = 'A';
+      if (postureScore < 25) postureGrade = 'F';
+      else if (postureScore < 50) postureGrade = 'D';
+      else if (postureScore < 75) postureGrade = 'C';
+      else if (postureScore < 90) postureGrade = 'B';
+
+      // Ultima scansione per uno qualsiasi dei target dell'azienda
+      let latestScan: ScanItem | undefined;
+      let latestTime = 0;
+      gTargets.forEach((t) => {
+        const tScans = scansByTarget.get(t.id) || [];
+        tScans.forEach((s) => {
+          const tVal = new Date(s.completed_at || s.created_at).getTime();
+          if (tVal > latestTime) {
+            latestTime = tVal;
+            latestScan = s;
+          }
+        });
+      });
+
+      result.push({
+        id: gId,
+        name: gNode.name,
+        description: gNode.description,
+        color_tag: gNode.color_tag || '#06b6d4',
+        targets: gTargets,
+        criticalCount: crit,
+        highCount: high,
+        mediumCount: med,
+        lowCount: low,
+        postureScore,
+        postureGrade,
+        latestScan,
+      });
+    });
+
+    return {
+      companies: result.filter((c) =>
+        companySearch.trim()
+          ? c.name.toLowerCase().includes(companySearch.toLowerCase()) ||
+            (c.description && c.description.toLowerCase().includes(companySearch.toLowerCase())) ||
+            c.targets.some((t) => t.value.toLowerCase().includes(companySearch.toLowerCase()))
+          : true
+      ),
+      unassignedTargets,
+    };
+  }, [groups, targets, reports, recentScans, companySearch]);
+
+  const getGradeBadge = (grade: string) => {
+    switch (grade) {
+      case 'A':
+        return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40';
+      case 'B':
+        return 'bg-cyan-500/15 text-cyan-400 border-cyan-500/40';
+      case 'C':
+        return 'bg-amber-500/15 text-amber-400 border-amber-500/40';
+      case 'D':
+        return 'bg-orange-500/15 text-orange-400 border-orange-500/40';
+      case 'F':
+      default:
+        return 'bg-rose-500/15 text-rose-400 border-rose-500/40';
+    }
+  };
+
+  const getStatusBadge = (status?: string) => {
+    if (!status) {
+      return (
+        <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-slate-800 text-slate-400 border border-slate-700">
+          In attesa di primo audit
+        </span>
+      );
+    }
     switch (status) {
       case 'COMPLETED':
         return (
-          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
             <CheckCircle2 className="w-3 h-3" />
-            <span>Completata</span>
+            <span>Audit Completato</span>
           </span>
         );
       case 'RUNNING':
         return (
-          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 animate-pulse">
+          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 animate-pulse">
             <Radio className="w-3 h-3 animate-spin" />
-            <span>In Esecuzione</span>
-          </span>
-        );
-      case 'QUEUED':
-        return (
-          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/30">
-            <Clock className="w-3 h-3" />
-            <span>In Coda</span>
+            <span>Audit In Corso</span>
           </span>
         );
       case 'FAILED':
         return (
-          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-500/10 text-rose-400 border border-rose-500/30">
+          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-medium bg-rose-500/10 text-rose-400 border border-rose-500/30">
             <AlertCircle className="w-3 h-3" />
-            <span>Fallita</span>
-          </span>
-        );
-      case 'CANCELLED':
-        return (
-          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-500/10 text-slate-400 border border-slate-500/30">
-            <span>Annullata</span>
+            <span>Fallito</span>
           </span>
         );
       default:
         return (
-          <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-800 text-slate-300">
+          <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-slate-800 text-slate-300">
             {status}
           </span>
         );
@@ -145,37 +278,126 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-8">
-      {/* Page Header */}
+      {/* Header Panoramica */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-white flex items-center space-x-2">
-            <span>Security Operations Dashboard</span>
-          </h2>
-          <p className="text-sm text-slate-400 mt-1">
-            Superficie d'attacco, scansioni attive e vulnerabilità per l'organizzazione{' '}
-            <strong className="text-slate-200">
-              {user?.tenant_id ? `(Tenant: ${user.tenant_id.slice(0, 8)}...)` : 'Default'}
-            </strong>
-          </p>
+          <div className="flex items-center space-x-3">
+            <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
+              <Building className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight text-white flex items-center space-x-2.5">
+                <span>Panoramica Sicurezza per Azienda</span>
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 font-medium">
+                  MSSP Multi-Company Posture
+                </span>
+              </h2>
+              <p className="text-sm text-slate-400 mt-0.5">
+                Cruscotto operativo per il monitoraggio della postura di sicurezza e conformità delle singole aziende clienti gestite.
+              </p>
+            </div>
+          </div>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2 self-start sm:self-auto">
           <button
             onClick={fetchDashboardData}
             disabled={loading}
-            className="flex items-center space-x-2 px-3 py-1.5 rounded-lg border border-cyber-border bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white transition-colors text-xs font-medium disabled:opacity-50"
-            title="Aggiorna metriche"
+            className="flex items-center space-x-2 px-3 py-1.5 rounded-xl border border-cyber-border bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white transition-colors text-xs font-medium disabled:opacity-50"
+            title="Aggiorna dati"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-cyan-400' : ''}`} />
-            <span>{loading ? 'Sincronizzazione...' : 'Aggiorna Dati'}</span>
+            <span>{loading ? 'Caricamento...' : 'Aggiorna'}</span>
           </button>
+        </div>
+      </div>
 
+      {/* Guida al Flusso Operativo Lineare (Nessuna confusione o ridondanza) */}
+      <div className="p-4 rounded-2xl border border-cyber-border bg-slate-950/80 shadow-lg space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center space-x-1.5">
+            <Layers className="w-4 h-4 text-cyan-400" />
+            <span>Flusso Operativo Lineare della Piattaforma</span>
+          </span>
+          <span className="text-[11px] text-slate-500">
+            5 passaggi lineari: Discovery → Target → Scansioni → Vulnerabilità → Report
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3 text-xs">
+          {/* Step 1 */}
+          <Link
+            to="/discovery"
+            className="p-3 rounded-xl border border-cyber-border bg-slate-900/60 hover:border-cyan-500/50 hover:bg-cyan-500/5 transition-all group"
+          >
+            <div className="flex items-center justify-between text-slate-400 group-hover:text-cyan-400 font-mono text-[11px]">
+              <span>PASSO 1</span>
+              <Radio className="w-3.5 h-3.5" />
+            </div>
+            <div className="font-bold text-white mt-1 group-hover:text-cyan-300">Network Discovery</div>
+            <p className="text-[11px] text-slate-400 mt-1 line-clamp-2">
+              Scansiona la subnet LAN e rileva gli IP attivi nella rete locale.
+            </p>
+          </Link>
+
+          {/* Step 2 */}
+          <Link
+            to="/targets"
+            className="p-3 rounded-xl border border-cyber-border bg-slate-900/60 hover:border-cyan-500/50 hover:bg-cyan-500/5 transition-all group"
+          >
+            <div className="flex items-center justify-between text-slate-400 group-hover:text-cyan-400 font-mono text-[11px]">
+              <span>PASSO 2</span>
+              <Crosshair className="w-3.5 h-3.5" />
+            </div>
+            <div className="font-bold text-white mt-1 group-hover:text-cyan-300">Target & Aziende</div>
+            <p className="text-[11px] text-slate-400 mt-1 line-clamp-2">
+              Assegna gli IP alle rispettive Aziende e gestisci le blacklist.
+            </p>
+          </Link>
+
+          {/* Step 3 */}
           <Link
             to="/scans"
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs transition-colors shadow-[0_0_15px_rgba(6,182,212,0.3)]"
+            className="p-3 rounded-xl border border-cyber-border bg-slate-900/60 hover:border-cyan-500/50 hover:bg-cyan-500/5 transition-all group"
           >
-            <Play className="w-3.5 h-3.5" />
-            <span>Nuova Scansione</span>
+            <div className="flex items-center justify-between text-slate-400 group-hover:text-cyan-400 font-mono text-[11px]">
+              <span>PASSO 3</span>
+              <Terminal className="w-3.5 h-3.5" />
+            </div>
+            <div className="font-bold text-white mt-1 group-hover:text-cyan-300">Scansioni Nmap</div>
+            <p className="text-[11px] text-slate-400 mt-1 line-clamp-2">
+              Esegui audit di sicurezza (All-in-One 360°, Web, Falle, Pen Test).
+            </p>
+          </Link>
+
+          {/* Step 4 */}
+          <Link
+            to="/findings"
+            className="p-3 rounded-xl border border-cyber-border bg-slate-900/60 hover:border-cyan-500/50 hover:bg-cyan-500/5 transition-all group"
+          >
+            <div className="flex items-center justify-between text-slate-400 group-hover:text-cyan-400 font-mono text-[11px]">
+              <span>PASSO 4</span>
+              <ShieldAlert className="w-3.5 h-3.5" />
+            </div>
+            <div className="font-bold text-white mt-1 group-hover:text-cyan-300">Vulnerabilità CVE</div>
+            <p className="text-[11px] text-slate-400 mt-1 line-clamp-2">
+              Analizza le falle scoperte per azienda e verifica la remediation.
+            </p>
+          </Link>
+
+          {/* Step 5 */}
+          <Link
+            to="/reports"
+            className="p-3 rounded-xl border border-cyber-border bg-slate-900/60 hover:border-cyan-500/50 hover:bg-cyan-500/5 transition-all group"
+          >
+            <div className="flex items-center justify-between text-slate-400 group-hover:text-cyan-400 font-mono text-[11px]">
+              <span>PASSO 5</span>
+              <FileText className="w-3.5 h-3.5" />
+            </div>
+            <div className="font-bold text-white mt-1 group-hover:text-cyan-300">Report Aziendali</div>
+            <p className="text-[11px] text-slate-400 mt-1 line-clamp-2">
+              Scarica il dossier consolidato (Executive PDF, Tecnico PDF, CSV).
+            </p>
           </Link>
         </div>
       </div>
@@ -196,332 +418,225 @@ export const Dashboard: React.FC = () => {
         </div>
       )}
 
-      {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* KPI: Target Censiti */}
-        <Link
-          to="/targets"
-          className="p-5 rounded-xl border border-cyber-border bg-cyber-card/60 hover:border-cyan-500/40 transition-colors group relative overflow-hidden"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Target Censiti
-            </span>
-            <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 group-hover:scale-105 transition-transform">
-              <Crosshair className="w-4 h-4" />
-            </div>
+      {/* Ricerca e Filtro Aziende */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="relative flex-1 max-w-sm">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+            <Search className="w-4 h-4" />
           </div>
-          <div className="text-2xl font-bold text-white tracking-tight">
-            {loading ? '...' : totalTargets}
-          </div>
-          <div className="mt-3 pt-3 border-t border-cyber-border/60 flex items-center justify-between text-xs text-slate-400">
-            <span>Asset configurati</span>
-            <ArrowRight className="w-3.5 h-3.5 text-cyan-400 group-hover:translate-x-1 transition-transform" />
-          </div>
-        </Link>
-
-        {/* KPI: Scansioni Eseguite */}
-        <Link
-          to="/scans"
-          className="p-5 rounded-xl border border-cyber-border bg-cyber-card/60 hover:border-cyan-500/40 transition-colors group relative overflow-hidden"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Scansioni Totali
-            </span>
-            <div className="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 group-hover:scale-105 transition-transform">
-              <Terminal className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="flex items-baseline space-x-2">
-            <span className="text-2xl font-bold text-white tracking-tight">
-              {loading ? '...' : totalScans}
-            </span>
-            {activeScansCount > 0 && (
-              <span className="text-xs font-medium text-cyan-400 animate-pulse">
-                ({activeScansCount} attive)
-              </span>
-            )}
-          </div>
-          <div className="mt-3 pt-3 border-t border-cyber-border/60 flex items-center justify-between text-xs text-slate-400">
-            <span>Storico esecuzioni</span>
-            <ArrowRight className="w-3.5 h-3.5 text-cyan-400 group-hover:translate-x-1 transition-transform" />
-          </div>
-        </Link>
-
-        {/* KPI: Host Attivi */}
-        <div className="p-5 rounded-xl border border-cyber-border bg-cyber-card/60 relative overflow-hidden">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Host Attivi
-            </span>
-            <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-              <Server className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-white tracking-tight">
-            {loading ? '...' : upHostsCount}
-          </div>
-          <div className="mt-3 pt-3 border-t border-cyber-border/60 flex items-center justify-between text-xs text-slate-400">
-            <span>Rilevati online</span>
-            <span className="text-emerald-400 font-medium">{totalOpenPorts} porte aperte</span>
-          </div>
-        </div>
-
-        {/* KPI: Vulnerabilità Rilevate */}
-        <Link
-          to="/findings"
-          className="p-5 rounded-xl border border-cyber-border bg-cyber-card/60 hover:border-red-500/40 transition-colors group relative overflow-hidden"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Vulnerabilità (CVE)
-            </span>
-            <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 group-hover:scale-105 transition-transform">
-              <ShieldAlert className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="flex items-baseline space-x-2">
-            <span className="text-2xl font-bold text-white tracking-tight">
-              {loading ? '...' : totalVulnerabilities}
-            </span>
-            {severityTotals.critical > 0 && (
-              <span className="text-xs font-bold text-red-400">
-                ({severityTotals.critical} critiche)
-              </span>
-            )}
-          </div>
-          <div className="mt-3 pt-3 border-t border-cyber-border/60 flex items-center justify-between text-xs text-slate-400">
-            <span>Catalogo riscontrato</span>
-            <ArrowRight className="w-3.5 h-3.5 text-red-400 group-hover:translate-x-1 transition-transform" />
-          </div>
-        </Link>
-      </div>
-
-      {/* Main Grid: Charts & Surface Details */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Severity Chart Container */}
-        <div className="lg:col-span-7 p-6 rounded-xl border border-cyber-border bg-cyber-card/40 space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-cyber-border/60">
-            <div>
-              <h3 className="text-base font-semibold text-white">
-                Distribuzione Severità Vulnerabilità (CVE)
-              </h3>
-              <p className="text-xs text-slate-400">
-                Correlazione CVSS v3.1 rilevata sui banner dei servizi scansionati
-              </p>
-            </div>
-            <Link
-              to="/findings"
-              className="text-xs text-cyan-400 hover:text-cyan-300 font-medium flex items-center space-x-1"
-            >
-              <span>Dettagli</span>
-              <ArrowRight className="w-3 h-3" />
-            </Link>
-          </div>
-
-          <SeverityChart
-            critical={severityTotals.critical}
-            high={severityTotals.high}
-            medium={severityTotals.medium}
-            low={severityTotals.low}
-            info={severityTotals.info}
+          <input
+            type="text"
+            value={companySearch}
+            onChange={(e) => setCompanySearch(e.target.value)}
+            placeholder="Filtra aziende o IP perimetrali..."
+            className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-cyber-border rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
           />
         </div>
 
-        {/* Attack Surface Summary Card */}
-        <div className="lg:col-span-5 p-6 rounded-xl border border-cyber-border bg-cyber-card/40 space-y-5">
-          <div className="pb-3 border-b border-cyber-border/60">
-            <h3 className="text-base font-semibold text-white">
-              Sintesi Esposizione Rete
-            </h3>
-            <p className="text-xs text-slate-400">
-              Indicatori di superficie emersi dalle attività di discovery Nmap
+        <div className="text-xs text-slate-400">
+          Mostrando <strong className="text-white">{companyCards.companies.length}</strong> aziende clienti
+        </div>
+      </div>
+
+      {/* Griglia Card delle Singole Aziende */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+        {companyCards.companies.length === 0 ? (
+          <div className="col-span-full p-12 rounded-2xl border border-cyber-border bg-cyber-card/40 text-center space-y-3">
+            <Building className="w-10 h-10 text-slate-600 mx-auto" />
+            <div className="text-sm font-semibold text-white">Nessuna Azienda registrata</div>
+            <p className="text-xs text-slate-400 max-w-md mx-auto">
+              Non è ancora presente alcuna azienda censita nel sistema. Accedi a Target per creare la prima cartella/azienda e assegnarvi i bersagli di rete.
             </p>
-          </div>
-
-          <div className="space-y-4">
-            <div className="p-4 rounded-lg bg-slate-900/60 border border-cyber-border flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400">
-                  <Layers className="w-4 h-4" />
-                </div>
-                <div>
-                  <div className="text-xs text-slate-400">Porte Aperte Rilevate</div>
-                  <div className="text-lg font-bold text-white">{totalOpenPorts}</div>
-                </div>
-              </div>
-              <span className="text-[11px] text-slate-500 font-mono">TCP / UDP</span>
-            </div>
-
-            <div className="p-4 rounded-lg bg-slate-900/60 border border-cyber-border flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
-                  <Server className="w-4 h-4" />
-                </div>
-                <div>
-                  <div className="text-xs text-slate-400">Host Responsivi (Up)</div>
-                  <div className="text-lg font-bold text-white">{upHostsCount}</div>
-                </div>
-              </div>
-              <span className="text-[11px] text-emerald-400 font-medium">Online</span>
-            </div>
-
-            <div className="p-4 rounded-lg bg-slate-900/60 border border-cyber-border flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 rounded-lg bg-red-500/10 text-red-400">
-                  <ShieldAlert className="w-4 h-4" />
-                </div>
-                <div>
-                  <div className="text-xs text-slate-400">Severità Critica + Alta</div>
-                  <div className="text-lg font-bold text-red-400">
-                    {severityTotals.critical + severityTotals.high}
-                  </div>
-                </div>
-              </div>
-              <span className="text-[11px] text-red-400 font-medium">Priorità Alta</span>
-            </div>
-          </div>
-
-          <div className="pt-2">
             <Link
-              to="/reports"
-              className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white transition-colors text-xs font-semibold border border-cyber-border"
+              to="/targets"
+              className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-lg bg-cyan-500 text-slate-950 font-semibold text-xs"
             >
-              <span>Genera Report Audit White-Label (PDF)</span>
+              <span>Configura Aziende in Target</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
-        </div>
-      </div>
-
-      {/* Recent Scans Table Section */}
-      <div className="p-6 rounded-xl border border-cyber-border bg-cyber-card/40 space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-cyber-border/60">
-          <div>
-            <h3 className="text-base font-semibold text-white">
-              Ultime Scansioni di Rete Eseguite
-            </h3>
-            <p className="text-xs text-slate-400">
-              Cronologia recente dei job di ricognizione e vulnerabilità
-            </p>
-          </div>
-          <Link
-            to="/scans"
-            className="text-xs text-cyan-400 hover:text-cyan-300 font-medium flex items-center space-x-1"
-          >
-            <span>Tutte le scansioni</span>
-            <ArrowRight className="w-3 h-3" />
-          </Link>
-        </div>
-
-        {loading ? (
-          <div className="py-12 flex flex-col items-center justify-center text-slate-400 space-y-2">
-            <RefreshCw className="w-5 h-5 animate-spin text-cyan-400" />
-            <span className="text-xs">Caricamento storico scansioni...</span>
-          </div>
-        ) : scans.length === 0 ? (
-          <div className="py-12 flex flex-col items-center justify-center text-center space-y-3">
-            <div className="w-12 h-12 rounded-xl bg-slate-900 border border-cyber-border flex items-center justify-center text-slate-500">
-              <Terminal className="w-6 h-6" />
-            </div>
-            <div className="text-sm font-semibold text-slate-300">
-              Nessuna scansione presente
-            </div>
-            <p className="text-xs text-slate-500 max-w-sm">
-              Non è ancora stata avviata alcuna scansione di rete. Configura un target e avvia la prima analisi Nmap.
-            </p>
-            <Link
-              to="/scans"
-              className="mt-2 inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs transition-colors"
-            >
-              <Play className="w-3.5 h-3.5" />
-              <span>Avvia la prima scansione</span>
-            </Link>
-          </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-cyber-border/80 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                  <th className="py-3 px-4">Scansione ID</th>
-                  <th className="py-3 px-4">Trigger</th>
-                  <th className="py-3 px-4">Stato</th>
-                  <th className="py-3 px-4">Host Up</th>
-                  <th className="py-3 px-4">Vulnerabilità</th>
-                  <th className="py-3 px-4">Durata</th>
-                  <th className="py-3 px-4">Data Creazione</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-cyber-border/40 text-xs">
-                {scans.map((scan) => (
-                  <tr
-                    key={scan.id}
-                    className="hover:bg-slate-800/30 transition-colors"
-                  >
-                    <td className="py-3 px-4 font-mono text-cyan-400 font-medium">
-                      {scan.id.slice(0, 8)}...
-                    </td>
-                    <td className="py-3 px-4 text-slate-300">
-                      <span className="px-2 py-0.5 rounded bg-slate-900 border border-cyber-border text-[11px]">
-                        {scan.trigger_type}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">{getStatusBadge(scan.status)}</td>
-                    <td className="py-3 px-4 text-slate-300">
-                      {scan.summary_stats?.up_hosts ?? 0} / {scan.summary_stats?.total_hosts ?? 0}
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center space-x-1 text-[11px]">
-                        {(scan.summary_stats?.critical_count ?? 0) > 0 && (
-                          <span className="px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/30 font-semibold">
-                            C:{scan.summary_stats.critical_count}
-                          </span>
-                        )}
-                        {(scan.summary_stats?.high_count ?? 0) > 0 && (
-                          <span className="px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/30 font-semibold">
-                            H:{scan.summary_stats.high_count}
-                          </span>
-                        )}
-                        {(scan.summary_stats?.medium_count ?? 0) > 0 && (
-                          <span className="px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-400 border border-yellow-500/30">
-                            M:{scan.summary_stats.medium_count}
-                          </span>
-                        )}
-                        {(scan.summary_stats?.low_count ?? 0) > 0 && (
-                          <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/30">
-                            L:{scan.summary_stats.low_count}
-                          </span>
-                        )}
-                        {(scan.summary_stats?.critical_count ?? 0) === 0 &&
-                          (scan.summary_stats?.high_count ?? 0) === 0 &&
-                          (scan.summary_stats?.medium_count ?? 0) === 0 &&
-                          (scan.summary_stats?.low_count ?? 0) === 0 && (
-                            <span className="text-slate-500">-</span>
-                          )}
+          companyCards.companies.map((company) => (
+            <div
+              key={company.id}
+              className="rounded-2xl border border-cyber-border bg-cyber-card/80 p-5 flex flex-col justify-between shadow-xl hover:border-slate-700 transition-all space-y-4"
+            >
+              {/* Header Azienda */}
+              <div className="space-y-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center space-x-2.5">
+                    <div
+                      className="p-2 rounded-xl border shrink-0"
+                      style={{
+                        backgroundColor: `${company.color_tag}20`,
+                        borderColor: `${company.color_tag}50`,
+                        color: company.color_tag,
+                      }}
+                    >
+                      <Building className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-white line-clamp-1">{company.name}</h3>
+                      <div className="text-[11px] text-slate-400">
+                        {company.targets.length} IP / Target gestiti
                       </div>
-                    </td>
-                    <td className="py-3 px-4 text-slate-400 font-mono">
-                      {scan.summary_stats?.duration_seconds
-                        ? `${scan.summary_stats.duration_seconds.toFixed(1)}s`
-                        : '-'}
-                    </td>
-                    <td className="py-3 px-4 text-slate-400">
-                      {new Date(scan.created_at).toLocaleString('it-IT', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                  </div>
+
+                  {/* Posture Badge */}
+                  <span
+                    className={`px-2 py-0.5 rounded text-xs font-mono font-bold border ${getGradeBadge(
+                      company.postureGrade
+                    )}`}
+                  >
+                    GRADE {company.postureGrade}
+                  </span>
+                </div>
+
+                {company.description && (
+                  <p className="text-xs text-slate-400 line-clamp-2">{company.description}</p>
+                )}
+              </div>
+
+              {/* Security Posture Index & Progress Bar */}
+              <div className="p-3 rounded-xl bg-slate-900/70 border border-cyber-border/80 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-400 font-medium">Posture Score:</span>
+                  <span className="font-mono font-bold text-white">{company.postureScore}/100</span>
+                </div>
+                <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{
+                      width: `${company.postureScore}%`,
+                      backgroundColor:
+                        company.postureScore >= 80
+                          ? '#10b981'
+                          : company.postureScore >= 50
+                          ? '#f59e0b'
+                          : '#f43f5e',
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Vulnerabilità Rilevate per l'Azienda */}
+              <div className="space-y-1.5">
+                <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                  Vulnerabilità Perimetro:
+                </div>
+                <div className="grid grid-cols-4 gap-1.5 text-center font-mono text-xs">
+                  <div className="p-1.5 rounded-lg bg-rose-500/10 border border-rose-500/25 text-rose-400">
+                    <div className="font-bold">{company.criticalCount}</div>
+                    <div className="text-[9px] text-rose-300">Critiche</div>
+                  </div>
+                  <div className="p-1.5 rounded-lg bg-orange-500/10 border border-orange-500/25 text-orange-400">
+                    <div className="font-bold">{company.highCount}</div>
+                    <div className="text-[9px] text-orange-300">Alte</div>
+                  </div>
+                  <div className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-400">
+                    <div className="font-bold">{company.mediumCount}</div>
+                    <div className="text-[9px] text-amber-300">Medie</div>
+                  </div>
+                  <div className="p-1.5 rounded-lg bg-blue-500/10 border border-blue-500/25 text-blue-400">
+                    <div className="font-bold">{company.lowCount}</div>
+                    <div className="text-[9px] text-blue-300">Basse</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* IP inclusi nel perimetro */}
+              <div className="space-y-1.5">
+                <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                  Indirizzi IP Censiti ({company.targets.length}):
+                </div>
+                {company.targets.length === 0 ? (
+                  <div className="p-2 rounded-lg bg-slate-900/40 border border-slate-800 text-[11px] text-slate-500 italic">
+                    Nessun IP associato. Aggiungine uno in Target.
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto">
+                    {company.targets.map((tgt) => (
+                      <span
+                        key={tgt.id}
+                        className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-mono bg-slate-900 border border-slate-700 text-slate-300"
+                      >
+                        <span>{tgt.value}</span>
+                        <button
+                          onClick={() => handleCopy(tgt.value)}
+                          className="hover:text-cyan-400"
+                          title="Copia IP"
+                        >
+                          {copiedIP === tgt.value ? (
+                            <Check className="w-2.5 h-2.5 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-2.5 h-2.5" />
+                          )}
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Stato Ultimo Audit */}
+              <div className="pt-2 border-t border-cyber-border flex items-center justify-between text-xs">
+                <span className="text-slate-400">Ultimo Audit:</span>
+                <div>{getStatusBadge(company.latestScan?.status)}</div>
+              </div>
+
+              {/* Azioni Rapide per l'Azienda */}
+              <div className="grid grid-cols-3 gap-2 pt-1 text-center">
+                <Link
+                  to="/scans"
+                  className="py-1.5 px-2 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 font-semibold text-xs transition-colors flex items-center justify-center space-x-1"
+                >
+                  <Terminal className="w-3 h-3" />
+                  <span>Audit</span>
+                </Link>
+
+                <Link
+                  to="/findings"
+                  className="py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors flex items-center justify-center space-x-1"
+                >
+                  <ShieldAlert className="w-3 h-3 text-red-400" />
+                  <span>Falle</span>
+                </Link>
+
+                <Link
+                  to="/reports"
+                  className="py-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors flex items-center justify-center space-x-1"
+                >
+                  <FileText className="w-3 h-3 text-cyan-400" />
+                  <span>Dossier</span>
+                </Link>
+              </div>
+            </div>
+          ))
         )}
       </div>
+
+      {/* Bersagli Non Assegnati ad alcuna Azienda (Callout Opzionale) */}
+      {companyCards.unassignedTargets.length > 0 && (
+        <div className="p-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-200">
+          <div className="flex items-center space-x-2.5">
+            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+            <div>
+              <span className="font-bold">Attenzione: {companyCards.unassignedTargets.length} bersagli non sono ancora assegnati ad alcuna Azienda.</span>
+              <p className="text-[11px] text-amber-300/80 mt-0.5">
+                Organizza gli host nelle rispettive cartelle perimetrali in Target per consentire la corretta aggregazione dei report aziendali.
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/targets"
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-semibold text-xs whitespace-nowrap transition-colors shadow-sm self-start sm:self-auto"
+          >
+            <span>Assegna in Target</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+      )}
     </div>
   );
 };

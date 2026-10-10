@@ -174,7 +174,7 @@ func TestTargetService_CreateTarget_TypesInference(t *testing.T) {
 		expectedType domain.TargetType
 	}{
 		{"192.168.1.10", domain.TargetTypeIP},
-		{"::1", domain.TargetTypeIP},
+		{"2001:db8::1", domain.TargetTypeIP},
 		{"10.0.0.0/24", domain.TargetTypeCIDR},
 		{"192.168.1.1-50", domain.TargetTypeRange},
 		{"scanme.nmap.org", domain.TargetTypeFQDN},
@@ -190,6 +190,34 @@ func TestTargetService_CreateTarget_TypesInference(t *testing.T) {
 		}
 		if target.Type != tc.expectedType {
 			t.Errorf("Per input '%s': atteso tipo %v, ottenuto %v", tc.inputVal, tc.expectedType, target.Type)
+		}
+	}
+}
+
+func TestTargetService_CreateTarget_RestrictedScope(t *testing.T) {
+	targetRepo := newMockTargetRepo()
+	groupRepo := newMockGroupRepo()
+	svc := service.NewTargetService(targetRepo, groupRepo)
+
+	ctx := context.Background()
+	tenantID := uuid.New()
+
+	restricted := []string{
+		"127.0.0.1",
+		"::1",
+		"169.254.169.254",
+		"172.17.0.1",
+		"localhost",
+		"postgres",
+	}
+
+	for _, r := range restricted {
+		_, err := svc.CreateTarget(ctx, service.CreateTargetInput{
+			TenantID: tenantID,
+			Value:    r,
+		})
+		if !errors.Is(err, domain.ErrTargetInternalRestricted) && !errors.Is(err, domain.ErrTargetInvalid) {
+			t.Errorf("Per target riservato '%s': atteso ErrTargetInternalRestricted o ErrTargetInvalid, ottenuto %v", r, err)
 		}
 	}
 }

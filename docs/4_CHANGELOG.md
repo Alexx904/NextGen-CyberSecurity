@@ -249,5 +249,77 @@
   - **File coinvolti:** `frontend/src/tests/debugConsoleE2E.test.tsx`, `frontend/src/App.tsx`, `frontend/package.json`
   - **DoD:** Suite E2E completa del ciclo di vita della console di debug con simulazione errori, filtri ed esportazione Markdown. Compilazione `npm run build` con 0 errori TypeScript.
 
+---
+
+## 🏢 WORKSTATION MULTI-COMPANY & WORKFLOW CONSOLIDATION - Sprint 2026-10-10
+
+> **Data di Rilascio:** 2026-10-10  
+> **Obiettivo:** Ottimizzazione completa dell'esperienza utente su workstation multi-azienda (audit su PC unico presso clienti diversi), flusso operativo sequenziale Passo 1 -> Passo 5, dossier report consolidati per azienda, rimozione ridondanze, personalizzazione profili Nmap con guida semplice interattiva, correlazione CVE cloud su NIST NVD 2.0 e perfezionamento grafico/tipografico dei report PDF A4.
+
+### EPIC 20: Workstation Multi-Company Workflow (Categorizzazione & Isolamento Visivo)
+- [x] **FEAT-IP-ORG-01 · Sidebar Navigation Workflow Categorization (Desktop & Mobile)**
+  - **File:** `frontend/src/components/layout/AppLayout.tsx`
+  - **DoD:** Riorganizzazione della barra laterale in macro-categorie orientate all'azione ("cosa si deve fare"): Overview, Scansione di Rete & Asset, Scansione Vulnerabilità & Audit, Infrastruttura & Accesso Remoto, Reportistica & Amministrazione.
+- [x] **FEAT-IP-ORG-02 · Vista Raggruppata per Cartella/Azienda & Dettaglio IP in Scansioni (`/scans`)**
+  - **File:** `frontend/src/pages/Scans.tsx`, `frontend/src/pages/Scans.test.tsx`
+  - **DoD:** Scansioni aggregate per Cartella/Azienda Scope con card/accordion, statistiche nodi e vulnerabilità per cliente, espansione per IP ed espandi/comprimi globale.
+- [x] **FEAT-IP-ORG-03 · Vista Raggruppata per Cartella/Azienda & Dettaglio IP in Vulnerabilità (`/findings`)**
+  - **File:** `frontend/src/pages/Findings.tsx`, `frontend/src/pages/Findings.test.tsx`
+  - **DoD:** Visualizzazione vulnerabilità raggruppata per Cartella/Azienda con navigazione gerarchica Cliente -> IP -> Findings e filtri per severità.
+- [x] **FEAT-IP-ORG-04 · Vista Raggruppata per Cartella/Azienda & Dettaglio IP in Report White-Label (`/reports`)**
+  - **File:** `frontend/src/pages/Reports.tsx`, `frontend/src/pages/Reports.test.tsx`
+  - **DoD:** Hub report con card per azienda, Security Posture Score & Grade per cliente e download diretto a 1-click.
+
+### EPIC 21: Personalizzazione Avanzata Profili di Scansione Nmap (FR-16)
+- [x] **FEAT-SCAN-PROF-01 · Migration Database & Domain Model per Categorie e Profili Custom**
+  - **File:** `backend/internal/repository/migrations/000006_scan_profile_categories.up.sql`, `backend/internal/domain/scan.go`, `backend/internal/repository/postgres/scan_repo.go`
+  - **DoD:** Estensione tabella `scan_profiles` con categorie specialistiche (`PEN_TEST`, `SYSTEM_FLAWS`, `WEB_APP`, `DISCOVERY`, `COMPLIANCE`, `CUSTOM`) e isolamento tenant per profili custom.
+- [x] **FEAT-SCAN-PROF-02 · Catalogo Profili Specialistici & API REST Profili Custom (Backend Go)**
+  - **File:** `backend/internal/scanner/profiles.go`, `backend/internal/service/scan_service.go`, `backend/internal/delivery/http/handler/scan_handler.go`
+  - **DoD:** Catalogo profili Nmap specialistici predefiniti, API REST per profili custom e validazione anti-injection dei flag.
+- [x] **FEAT-SCAN-PROF-03 · Frontend UI Semplice, Multi-Obiettivo & Professionale per Avvio Scansione**
+  - **File:** `frontend/src/components/NewScanModal.tsx`, `frontend/src/types/scan.ts`
+  - **DoD:** Modale Nuova Scansione con profilo consigliato "Tutto in Uno (360°)", modalità "Componi Multi-Obiettivo" via checkbox, Guida Semplice con spiegazioni umane per PO e modalità Professionale con live command preview.
+- [x] **FEAT-SCAN-PROF-04 · Suite di Test E2E, Unitari e Verifica Regressione Zero**
+  - **File:** `backend/internal/scanner/profiles_test.go`, `frontend/src/components/NewScanModal.test.tsx`
+  - **DoD:** Test completi su profili, parsing flag Nmap e rendering modale con 0 errori.
+
+### EPIC 22: Ottimizzazione Flusso Operativo, Consolidamento Report per Azienda & Cleanup
+- [x] **FEAT-WORKFLOW-CLEANUP-01 · Report Consolidati per Azienda (Executive PDF, Tecnico PDF, CSV RFC 4180)**
+  - **File:** `backend/internal/service/report_service.go`, `backend/internal/delivery/http/handler/report_handler.go`, `frontend/src/api/reports.ts`, `frontend/src/pages/Reports.tsx`
+  - **DoD:** Eliminazione report per singolo IP. In `/reports` ciascuna card rappresenta un'Azienda con Security Posture Score, Grade e download 1-click di Executive PDF (direzionale), Tecnico PDF (per host) e CSV RFC 4180 consolidato con deduplica.
+- [x] **FEAT-WORKFLOW-CLEANUP-02 · Rimozione Opzione Ridondante Network Discovery da `/scans`**
+  - **File:** `frontend/src/components/NewScanModal.tsx`, `frontend/src/components/NewScanModal.test.tsx`
+  - **DoD:** Eliminazione categoria Discovery da `/scans`, centralizzandola in `/network-discovery`.
+- [x] **FEAT-WORKFLOW-CLEANUP-03 · Rimozione Avvio Diretto Scansione da `/targets` e Indirizzamento a `/scans`**
+  - **File:** `frontend/src/pages/Targets.tsx`
+  - **DoD:** Eliminazione pulsante rapido Play da `/targets` e inserimento banner guida orientato a `/scans`.
+- [x] **FEAT-WORKFLOW-CLEANUP-04 · Dashboard Panoramica Focalizzata sulle Singole Aziende & Flusso Lineare**
+  - **File:** `frontend/src/pages/Dashboard.tsx`, `frontend/src/pages/Dashboard.test.tsx`
+  - **DoD:** Dashboard a schede per ciascun cliente con Security Posture Score, metriche vulnerabilità e stepper operativo a 5 passaggi.
+- [x] **FEAT-WORKFLOW-CLEANUP-05 · Targets: Rimozione Profili/Lancio, Eliminazione Massiva con Checkbox & Badge Dinamico**
+  - **File:** `frontend/src/components/TreeExplorer.tsx`, `frontend/src/pages/Targets.tsx`
+  - **DoD:** Selezione multipla di target con checkbox di riga e seleziona tutto, barra flottante, eliminazione massiva protetta e conteggio badge dinamico nell'albero.
+- [x] **FEAT-WORKFLOW-CLEANUP-06 · Network Discovery: Creazione Cartella all'Import & Cache Descrizioni Host**
+  - **File:** `frontend/src/pages/NetworkDiscovery.tsx`, `backend/internal/scanner/profiles.go`, `backend/internal/service/discovery_service.go`, `backend/internal/delivery/http/handler/discovery_handler.go`
+  - **DoD:** Creazione rapida di una nuova cartella/azienda all'importazione degli IP, sonde Discovery potenziate (ICMP/TCP/UDP) e cache persistente delle descrizioni IP per tenant.
+- [x] **FEAT-WORKFLOW-CLEANUP-07 · Sidebar Sequenziale (Passo 1 a 5) & Scansioni Esclusive per Cartella/Azienda**
+  - **File:** `frontend/src/components/layout/AppLayout.tsx`, `frontend/src/components/NewScanModal.tsx`, `frontend/src/components/NewScanModal.test.tsx`
+  - **DoD:** Barra laterale riordinata per sequenza di lavoro operativa (Passo 1 Discovery -> Passo 2 Target -> Passo 3 Scansioni -> Passo 4 Vulnerabilità -> Passo 5 Dossier & Report). Selezione vincolata alla Cartella/Azienda con anteprima dei chip IP contenuti.
+
+### EPIC 23: Vulnerability Intelligence Online & Reportistica PDF A4 Avanzata
+- [x] **FEAT-CVE-ONLINE-01 · Ricerca Vulnerabilità Online NIST NVD 2.0 & Script Nmap (`--script=vuln`) (FR-17, UC-16)**
+  - **File:** `backend/internal/scanner/profiles.go`, `backend/internal/scanner/nmap_parser.go`, `backend/internal/service/online_cve_client.go`, `backend/internal/service/cve_correlator.go`, `backend/internal/service/scan_orchestrator.go`, `frontend/src/components/NewScanModal.tsx`
+  - **DoD:** Whitelist sicura di `--script=vuln` e `--script=vulners`; parsing XML Nmap per script a livello porte e host con estrazione automatica CVE (es. SMB EternalBlue MS17-010, SSL, RCE); client REST NIST NVD API 2.0 con timeout resiliente a 4s e auto-caching persistente in PostgreSQL locale (`cveRepo.UpsertBatch`); supporto nei profili 360°, Multi-Obiettivo e Professionale.
+- [x] **FEAT-REPORT-PDF-UX-01 · Perfezionamento Grafico, Tipografico & Coerenza Dati dei Report PDF A4 (FR-18, UC-17)**
+  - **File:** `backend/internal/domain/report.go`, `backend/internal/service/cve_correlator.go`, `backend/internal/service/report_service.go`, `backend/pkg/report/pdf_generator.go`
+  - **DoD:** Risoluzione di tutti i difetti segnalati: Executive compresso esattamente a 2 pagine dense senza buchi; testo remediation multiriga dinamico senza troncamenti né font miniaturizzati; separazione riga CVE e riga Azione; colori semantici coerenti (MAX CVSS arancione per High 7.5, host attivi in slate); normalizzazione scoring multi-host con floor 25/100 se 0 critici; nomi software reali dai banner (`dnsmasq`, `vsftpd`, `Dropbear`); protocolli insicuri (Telnet 23, FTP 21, SMB 445) elevati a finding prescrittivi; flusso tecnico continuo fino a 270mm senza vuoti da 150px; date e durate sempre valorizzate.
+
+### EPIC 24: Attack Path Mapping Engine (Backend Go)
+- [x] **FEAT-M2-02 · Motore di Calcolo Lateral Movement & API Grafo (Backend Go)**
+  - **File:** `backend/internal/service/attack_path_service.go`, `backend/internal/delivery/http/handler/attack_path_handler.go`
+  - **DoD:** Servizio di aggregazione topologica per calcolo dei cammini di movimento laterale, analisi dei pivot tra reti interne, identificazione chokepoint di remediation ad alto impatto e registrazione endpoint REST `/api/v1/attack-paths/graph` e `/api/v1/attack-paths/chokepoints`.
+
+
 
 

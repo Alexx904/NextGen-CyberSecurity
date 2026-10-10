@@ -355,4 +355,51 @@ func TestAuthMiddleware_QueryToken_Success(t *testing.T) {
 	}
 }
 
+func TestAuthMiddleware_StreamTicket(t *testing.T) {
+	tokenMgr, _ := auth.NewJWTManager("test-secret-key-12345", 15*time.Minute, 24*time.Hour)
+	ticketStore := auth.NewMemoryStreamTicketStore()
+
+	r := chi.NewRouter()
+	r.Use(middleware.Authenticate(tokenMgr, ticketStore))
+	r.Use(middleware.RequireTenant())
+	r.Get("/test-stream", func(w http.ResponseWriter, r *http.Request) {
+		tid, _ := middleware.GetTenantID(r.Context())
+		response.JSON(w, http.StatusOK, map[string]string{"tenant_id": tid.String()})
+	})
+
+	tenantID := uuid.New()
+	userID := uuid.New()
+	claims := &auth.UserClaims{
+		UserID:    userID,
+		TenantID:  tenantID,
+		Role:      domain.RoleSecOps,
+		Email:     "operator@test.local",
+		TokenType: auth.TokenTypeAccess,
+	}
+
+	ticket, err := ticketStore.IssueTicket(claims, 30*time.Second)
+	if err != nil {
+		t.Fatalf("IssueTicket fallito: %v", err)
+	}
+
+	// 1. Prima richiesta con ticket valido: DEVE passare 200 OK
+	req := httptest.NewRequest(http.MethodGet, "/test-stream?ticket="+ticket.Ticket, nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Atteso 200 OK con ticket valido, ottenuto %d", rec.Code)
+	}
+
+	// 2. Seconda richiesta con lo stesso ticket già consumato: DEVE fallire 401 Unauthorized
+	req2 := httptest.NewRequest(http.MethodGet, "/test-stream?ticket="+ticket.Ticket, nil)
+	rec2 := httptest.NewRecorder()
+	r.ServeHTTP(rec2, req2)
+
+	if rec2.Code != http.StatusUnauthorized {
+		t.Fatalf("Atteso 401 Unauthorized per ticket riutilizzato, ottenuto %d", rec2.Code)
+	}
+}
+
+
 

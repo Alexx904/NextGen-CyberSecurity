@@ -29,6 +29,10 @@ const BEARER_TOKEN_REGEX = /Bearer\s+([A-Za-z0-9\-_.~+/]+=*)/i;
 // Pattern per Basic auth negli header
 const BASIC_AUTH_REGEX = /Basic\s+([A-Za-z0-9+/=]+)/i;
 
+// Pattern per parametri URL sensibili (query string token, ticket, passphrase)
+const QUERY_SECRET_PARAM_REGEX =
+  /([?&](?:token|ticket|access_token|refresh_token|passphrase|password|secret|api[_-]?key)=)[^& \t\r\n]+/gi;
+
 // Pattern per JSON Web Token (JWT) inline (3 parti base64url separate da punti)
 const JWT_PATTERN_REGEX = /^[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}$/;
 
@@ -76,16 +80,20 @@ export function sanitizeData(data: unknown, seen = new WeakSet<object>()): unkno
       }
     }
 
-    if (BEARER_TOKEN_REGEX.test(data)) {
-      return data.replace(BEARER_TOKEN_REGEX, 'Bearer [REDACTED]');
+    let str = data;
+    if (BEARER_TOKEN_REGEX.test(str)) {
+      str = str.replace(BEARER_TOKEN_REGEX, 'Bearer [REDACTED]');
     }
-    if (BASIC_AUTH_REGEX.test(data)) {
-      return data.replace(BASIC_AUTH_REGEX, 'Basic [REDACTED]');
+    if (BASIC_AUTH_REGEX.test(str)) {
+      str = str.replace(BASIC_AUTH_REGEX, 'Basic [REDACTED]');
+    }
+    if (QUERY_SECRET_PARAM_REGEX.test(str)) {
+      str = str.replace(QUERY_SECRET_PARAM_REGEX, '$1[REDACTED]');
     }
     if (JWT_PATTERN_REGEX.test(trimmed)) {
       return '[REDACTED_JWT]';
     }
-    return data;
+    return str;
   }
 
   // Gestione istanze Error
@@ -135,6 +143,8 @@ export function sanitizeData(data: unknown, seen = new WeakSet<object>()): unkno
           sanitizedObj[key] = val.replace(BEARER_TOKEN_REGEX, 'Bearer [REDACTED]');
         } else if (BASIC_AUTH_REGEX.test(val)) {
           sanitizedObj[key] = val.replace(BASIC_AUTH_REGEX, 'Basic [REDACTED]');
+        } else if (QUERY_SECRET_PARAM_REGEX.test(val)) {
+          sanitizedObj[key] = val.replace(QUERY_SECRET_PARAM_REGEX, '$1[REDACTED]');
         } else if (JWT_PATTERN_REGEX.test(val.trim())) {
           sanitizedObj[key] = '[REDACTED_JWT]';
         } else if (LEAF_SECRET_KEY_REGEX.test(key) || CONTAINER_OR_HEADER_KEY_REGEX.test(key)) {

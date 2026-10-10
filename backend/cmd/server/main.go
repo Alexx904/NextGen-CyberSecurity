@@ -130,7 +130,7 @@ func main() {
 
 	scanService := service.NewScanService(scanRepo, scanProfileRepo, targetRepo, findingRepo, targetGroupRepo, scanOrchestrator)
 	reportRepo := postgres.NewReportRepo(db.Pool)
-	reportService := service.NewReportService(reportRepo, scanRepo, scanProfileRepo, targetRepo, findingRepo, tenantRepo, nil)
+	reportService := service.NewReportService(reportRepo, scanRepo, scanProfileRepo, targetRepo, findingRepo, tenantRepo, nil, targetGroupRepo)
 
 	ouiDB := scanner.NewOUIDatabase()
 	discoveryService := service.NewDiscoveryService(scannerRunner, ouiDB, logger, eventBroadcaster)
@@ -148,9 +148,13 @@ func main() {
 	r.Use(chimw.Logger)
 	r.Use(chimw.Recoverer)
 
+	// 8.1 Inizializzazione Gestore StreamTicket Monouso & Middleware Autenticazione (NFR-SEC-04)
+	streamTicketStore := auth.NewMemoryStreamTicketStore()
+	authMiddleware := appmw.Authenticate(tokenManager, streamTicketStore)
+
 	// 9. Registrazione Handler di Sistema, Auth, Targets & Scans
 	healthHandler := handler.NewHealthHandler(cfg.AppName, cfg.AppVersion)
-	authHandler := handler.NewAuthHandler(authService)
+	authHandler := handler.NewAuthHandler(authService, streamTicketStore)
 	tenantHandler := handler.NewTenantHandler(tenantService)
 	targetHandler := handler.NewTargetHandler(targetService)
 	targetGroupHandler := handler.NewTargetGroupHandler(targetGroupService, scanService)
@@ -171,14 +175,15 @@ func main() {
 			authRouter.Post("/refresh", authHandler.RefreshToken)
 
 			authRouter.Group(func(protected chi.Router) {
-				protected.Use(appmw.Authenticate(tokenManager))
+				protected.Use(authMiddleware)
 				protected.Use(appmw.RequireTenant())
 				protected.Get("/me", authHandler.Me)
+				protected.Post("/stream-ticket", authHandler.IssueStreamTicket)
 			})
 		})
 
 		api.Route("/tenants", func(tenantRouter chi.Router) {
-			tenantRouter.Use(appmw.Authenticate(tokenManager))
+			tenantRouter.Use(authMiddleware)
 			tenantRouter.Use(appmw.RequireTenant())
 
 			// Lettura impostazioni tenant consentita a tutti i ruoli autenticati
@@ -192,7 +197,7 @@ func main() {
 		})
 
 		api.Route("/targets", func(targetRouter chi.Router) {
-			targetRouter.Use(appmw.Authenticate(tokenManager))
+			targetRouter.Use(authMiddleware)
 			targetRouter.Use(appmw.RequireTenant())
 
 			// Lettura target per tutti i ruoli autenticati del tenant
@@ -208,7 +213,7 @@ func main() {
 		})
 
 		api.Route("/target-groups", func(groupRouter chi.Router) {
-			groupRouter.Use(appmw.Authenticate(tokenManager))
+			groupRouter.Use(authMiddleware)
 			groupRouter.Use(appmw.RequireTenant())
 
 			// Lettura albero e dettagli per tutti i ruoli autenticati del tenant
@@ -226,7 +231,7 @@ func main() {
 		})
 
 		api.Route("/scan-profiles", func(profileRouter chi.Router) {
-			profileRouter.Use(appmw.Authenticate(tokenManager))
+			profileRouter.Use(authMiddleware)
 			profileRouter.Get("/", scanHandler.ListProfiles)
 
 			profileRouter.Group(func(secOpsRouter chi.Router) {
@@ -238,7 +243,7 @@ func main() {
 		})
 
 		api.Route("/scans", func(scanRouter chi.Router) {
-			scanRouter.Use(appmw.Authenticate(tokenManager))
+			scanRouter.Use(authMiddleware)
 			scanRouter.Use(appmw.RequireTenant())
 
 			// Consultazione storico, dettagli scansioni e findings
@@ -260,7 +265,7 @@ func main() {
 		})
 
 		api.Route("/network-discovery", func(discRouter chi.Router) {
-			discRouter.Use(appmw.Authenticate(tokenManager))
+			discRouter.Use(authMiddleware)
 			discRouter.Use(appmw.RequireTenant())
 
 			// Lettura ultimi risultati e live stream SSE consentiti a tutti i ruoli autenticati del tenant
@@ -276,7 +281,7 @@ func main() {
 		})
 
 		api.Route("/reports", func(reportRouter chi.Router) {
-			reportRouter.Use(appmw.Authenticate(tokenManager))
+			reportRouter.Use(authMiddleware)
 			reportRouter.Use(appmw.RequireTenant())
 
 			// Consultazione storico globale report con filtri e paginazione
@@ -284,10 +289,11 @@ func main() {
 
 			// Download report unificato con selettore formato (type=pdf|csv) e template (executive|technical)
 			reportRouter.Get("/{id}/download", reportHandler.DownloadReport)
+			reportRouter.Get("/company/{groupId}/download", reportHandler.DownloadCompanyReport)
 		})
 
 		api.Route("/schedules", func(schedRouter chi.Router) {
-			schedRouter.Use(appmw.Authenticate(tokenManager))
+			schedRouter.Use(authMiddleware)
 			schedRouter.Use(appmw.RequireTenant())
 
 			schedRouter.Get("/", scheduleHandler.List)
@@ -302,7 +308,7 @@ func main() {
 		})
 
 		api.Route("/cve", func(cveRouter chi.Router) {
-			cveRouter.Use(appmw.Authenticate(tokenManager))
+			cveRouter.Use(authMiddleware)
 			cveRouter.Get("/stats", cveHandler.GetStats)
 
 			cveRouter.Group(func(adminRouter chi.Router) {
@@ -312,7 +318,7 @@ func main() {
 		})
 
 		api.Route("/ssh/servers", func(sshRouter chi.Router) {
-			sshRouter.Use(appmw.Authenticate(tokenManager))
+			sshRouter.Use(authMiddleware)
 			sshRouter.Use(appmw.RequireTenant())
 
 			// Lettura inventario server consentita a tutti i ruoli autenticati del tenant
@@ -338,7 +344,7 @@ func main() {
 		})
 
 		api.Route("/attack-paths", func(apRouter chi.Router) {
-			apRouter.Use(appmw.Authenticate(tokenManager))
+			apRouter.Use(authMiddleware)
 			apRouter.Use(appmw.RequireTenant())
 
 			apRouter.Get("/graph", attackPathHandler.GetGraph)
@@ -349,7 +355,7 @@ func main() {
 	// 10. Rotte WebSocket /ws/v1
 	r.Route("/ws/v1", func(wsRouter chi.Router) {
 		wsRouter.Route("/ssh/servers/{id}/terminal", func(termRouter chi.Router) {
-			termRouter.Use(appmw.Authenticate(tokenManager))
+			termRouter.Use(authMiddleware)
 			termRouter.Use(appmw.RequireTenant())
 			termRouter.Use(appmw.RequireSecOps())
 			termRouter.Get("/", terminalWSHandler.HandleTerminal)

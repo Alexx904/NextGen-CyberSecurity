@@ -16,6 +16,12 @@ import (
 	"nextgen-cybersec/pkg/validator"
 )
 
+type cachedHostInfo struct {
+	Hostname string
+	Vendor   string
+	MAC      string
+}
+
 type discoveryService struct {
 	runner      scanner.Runner
 	ouiDB       scanner.OUIDatabase
@@ -26,6 +32,7 @@ type discoveryService struct {
 	mu             sync.RWMutex
 	results        map[uuid.UUID]*domain.DiscoveryResult
 	sessionResults map[uuid.UUID]*domain.DiscoveryResult
+	hostCache      map[string]cachedHostInfo
 }
 
 // NewDiscoveryService inizializza il servizio per la ricognizione veloce della rete locale
@@ -45,6 +52,7 @@ func NewDiscoveryService(runner scanner.Runner, ouiDB scanner.OUIDatabase, logge
 		broadcaster:    broadcaster,
 		results:        make(map[uuid.UUID]*domain.DiscoveryResult),
 		sessionResults: make(map[uuid.UUID]*domain.DiscoveryResult),
+		hostCache:      make(map[string]cachedHostInfo),
 	}
 }
 
@@ -62,6 +70,11 @@ func (s *discoveryService) DiscoverSubnet(ctx context.Context, tenantID uuid.UUI
 		return nil, fmt.Errorf("%w: subnet '%s' non valida", domain.ErrTargetInvalid, cleanSubnet)
 	}
 
+	// 2.1 Verifica perimetro di sicurezza interno e deny-list (FR-01.4)
+	if err := validator.CheckTargetScope(cleanSubnet, false); err != nil {
+		return nil, fmt.Errorf("perimetro subnet non consentito: %w", err)
+	}
+
 	// Solo IP, CIDR o Range sono ammessi per la LAN discovery
 	if targetInfo.Type != domain.TargetTypeIP && targetInfo.Type != domain.TargetTypeCIDR && targetInfo.Type != domain.TargetTypeRange {
 		return nil, fmt.Errorf("%w: tipologia '%s' non supportata per LAN discovery (richiesto IP, CIDR o Range)", domain.ErrTargetInvalid, targetInfo.Type)
@@ -73,9 +86,9 @@ func (s *discoveryService) DiscoverSubnet(ctx context.Context, tenantID uuid.UUI
 	if !ok {
 		profile = scanner.ProfileConfig{
 			Name:        string(scanner.ProfileLANDiscovery),
-			Args:        []string{"-sn", "-PE", "-PS22,80,443,445,8080,3389", "-PU53,137", "-T4", "-n"},
+			Args:        []string{"-sn", "-PE", "-PS21,22,80,443,445,8080,8443,3389,53,8000", "-PU53,137,161,5353", "-T4", "-n"},
 			Timeout:     2 * time.Minute,
-			Description: "Ricognizione LAN ultra-veloce con ping sweep affidabile e probe ICMP/SYN/UDP senza TCP ACK",
+			Description: "Ricognizione LAN ultra-veloce con ping sweep affidabile e probe ICMP/SYN/UDP su porte standard",
 		}
 	}
 
@@ -320,6 +333,41 @@ func (s *discoveryService) DiscoverSubnet(ctx context.Context, tenantID uuid.UUI
 		}
 		hostname := scanner.CleanDeviceHostname(baseHostname, httpTitle, vendor)
 
+		// Verifica e arricchimento da cache cronologica (NFR-REL: consistenza tra scansioni successive dello stesso IP)
+		hostKey := fmt.Sprintf("%s:%s", tenantID.String(), currentHost.IP)
+		s.mu.RLock()
+		cached, hasCached := s.hostCache[hostKey]
+		s.mu.RUnlock()
+
+		if hasCached {
+			if (mac == "" || mac == "Unknown") && cached.MAC != "" {
+				mac = cached.MAC
+			}
+			if (vendor == "" || vendor == "Unknown") && cached.Vendor != "" && cached.Vendor != "Unknown" {
+				vendor = cached.Vendor
+			}
+			if (hostname == "" || hostname == "Dispositivo LAN") && cached.Hostname != "" && cached.Hostname != "Dispositivo LAN" {
+				hostname = cached.Hostname
+			}
+		}
+
+		// Aggiorna cache con i dati più recenti e dettagliati
+		if (hostname != "" && hostname != "Dispositivo LAN") || (vendor != "" && vendor != "Unknown") || mac != "" {
+			s.mu.Lock()
+			currentCache := s.hostCache[hostKey]
+			if hostname != "" && hostname != "Dispositivo LAN" {
+				currentCache.Hostname = hostname
+			}
+			if vendor != "" && vendor != "Unknown" {
+				currentCache.Vendor = vendor
+			}
+			if mac != "" {
+				currentCache.MAC = mac
+			}
+			s.hostCache[hostKey] = currentCache
+			s.mu.Unlock()
+		}
+
 		device := domain.DiscoveredDevice{
 			IP:        currentHost.IP,
 			MAC:       mac,
@@ -532,7 +580,7 @@ func (s *discoveryService) resolveHostnamesConcurrently(ctx context.Context, hos
 		maxWorkers = len(ipsToResolve)
 	}
 
-	poolCtx, poolCancel := context.WithTimeout(ctx, 2*time.Second)
+	poolCtx, poolCancel := context.WithTimeout(ctx, 8*time.Second)
 	defer poolCancel()
 
 	type hostResult struct {
@@ -556,7 +604,7 @@ func (s *discoveryService) resolveHostnamesConcurrently(ctx context.Context, hos
 				default:
 				}
 
-				itemCtx, itemCancel := context.WithTimeout(poolCtx, 250*time.Millisecond)
+				itemCtx, itemCancel := context.WithTimeout(poolCtx, 1200*time.Millisecond)
 				names, err := resolver.LookupAddr(itemCtx, ip)
 				itemCancel()
 

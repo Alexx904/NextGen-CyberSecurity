@@ -18,6 +18,7 @@ const Reports = lazy(() => import('./pages/Reports').then(m => ({ default: m.Rep
 const NetworkDiscovery = lazy(() => import('./pages/NetworkDiscovery').then(m => ({ default: m.NetworkDiscovery })));
 const SSHServers = lazy(() => import('./pages/SSHServers').then(m => ({ default: m.SSHServers })));
 const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })));
+const AttackPath = lazy(() => import('./pages/AttackPath').then(m => ({ default: m.AttackPath })));
 
 function PageLoadingFallback() {
   return (
@@ -50,6 +51,7 @@ export default function App() {
                   <Route path="/scans/:id" element={<ScanDetail />} />
                   <Route path="/ssh-servers" element={<SSHServers />} />
                   <Route path="/findings" element={<Findings />} />
+                  <Route path="/attack-path" element={<AttackPath />} />
                   <Route path="/reports" element={<Reports />} />
                   <Route path="/settings" element={<Settings />} />
                 </Route>

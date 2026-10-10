@@ -210,3 +210,15 @@ apiClient.interceptors.response.use(
 export { reportsApi } from './reports';
 export { discoveryApi } from './discovery';
 export { sshApi } from './ssh';
+
+/**
+ * Richiede un ticket monouso di breve durata (TTL 30s) per connessioni real-time (SSE e WebSocket)
+ * evitando l'esposizione del token JWT a lungo termine nella query string (NFR-SEC-04).
+ */
+export async function getStreamTicket(): Promise<string> {
+  const response = await apiClient.post<{ success: boolean; data: { ticket: string; expires_in: number } }>(
+    '/auth/stream-ticket'
+  );
+  return response.data.data.ticket;
+}
+

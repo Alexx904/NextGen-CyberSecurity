@@ -14,6 +14,7 @@ import (
 type ProfileType string
 
 const (
+	ProfileAllInOne360      ProfileType = "All-in-One 360° Comprehensive Audit"
 	ProfileFastDiscovery    ProfileType = "Fast Discovery"
 	ProfileStandardScan     ProfileType = "Standard Service Scan"
 	ProfileFullScan         ProfileType = "Full Deep Scan"
@@ -40,6 +41,13 @@ type ProfileConfig struct {
 // GetDefaultProfiles restituisce i profili di scansione di default preimpostati nel sistema
 func GetDefaultProfiles() map[ProfileType]ProfileConfig {
 	return map[ProfileType]ProfileConfig{
+		ProfileAllInOne360: {
+			Name:        string(ProfileAllInOne360),
+			Args:        []string{"-sS", "-sV", "-O", "--script=vuln", "-T4", "--open"},
+			Timeout:     90 * time.Minute,
+			Description: "Scansione generalista completa a 360°: mappatura host vivi, scansione porte standard, identificazione versioni demoni (sV), fingerprinting OS (O) e controllo vulnerabilità note (--script=vuln)",
+			Category:    domain.ProfileCategoryAllInOne,
+		},
 		ProfileFastDiscovery: {
 			Name:        string(ProfileFastDiscovery),
 			Args:        []string{"-T4", "-F"},
@@ -63,9 +71,9 @@ func GetDefaultProfiles() map[ProfileType]ProfileConfig {
 		},
 		ProfileLANDiscovery: {
 			Name:        string(ProfileLANDiscovery),
-			Args:        []string{"-sn", "-PE", "-PS22,80,443,445", "-T4", "-n"},
+			Args:        []string{"-sn", "-PE", "-PS21,22,80,443,445,8080,8443,3389,53,8000", "-PU53,137,161,5353", "-T4", "-n"},
 			Timeout:     2 * time.Minute, // 120 secondi
-			Description: "Ricognizione LAN ultra-veloce con ping sweep affidabile e probe ICMP/SYN senza TCP ACK",
+			Description: "Ricognizione LAN ultra-veloce con ping sweep affidabile e probe ICMP/SYN/UDP su porte standard",
 			Category:    domain.ProfileCategoryDiscovery,
 		},
 		ProfileStealthSYN: {
@@ -84,16 +92,16 @@ func GetDefaultProfiles() map[ProfileType]ProfileConfig {
 		},
 		ProfileSystemFlawsOS: {
 			Name:        string(ProfileSystemFlawsOS),
-			Args:        []string{"-sV", "-O", "--version-intensity", "7", "-T4"},
+			Args:        []string{"-sV", "-O", "--version-intensity", "7", "--script=vuln", "-T4"},
 			Timeout:     60 * time.Minute,
-			Description: "Rilevamento dettagliato del sistema operativo e fingerprinting approfondito dei demoni di sistema (SSH, SMB, RDP, NetBIOS, RPC)",
+			Description: "Rilevamento dettagliato del sistema operativo, fingerprinting demoni di sistema e script attivi di vulnerabilità Nmap (--script=vuln)",
 			Category:    domain.ProfileCategorySystemFlaws,
 		},
 		ProfileCriticalServices: {
 			Name:        string(ProfileCriticalServices),
-			Args:        []string{"-sV", "-p", "21,22,23,25,53,80,110,135,139,143,443,445,1433,1521,3306,3389,5432,5900,6379,8080,8443", "-T4"},
+			Args:        []string{"-sV", "-p", "21,22,23,25,53,80,110,135,139,143,443,445,1433,1521,3306,3389,5432,5900,6379,8080,8443", "--script=vuln", "-T4"},
 			Timeout:     30 * time.Minute,
-			Description: "Audit mirato sui vettori critici più colpite da exploit remoti e vulnerabilità note RCE/PrivEsc (DB, Remote Desktop, Mail, Condivisioni)",
+			Description: "Audit mirato sui vettori critici più colpite da exploit remoti e vulnerabilità note RCE/PrivEsc (--script=vuln)",
 			Category:    domain.ProfileCategorySystemFlaws,
 		},
 		ProfileWebSurface: {
@@ -140,8 +148,7 @@ var (
 
 // DisallowedFlags elenca i flag Nmap severamente vietati per ragioni di sicurezza e conformità architetturale (NFR-SEC-01)
 var DisallowedFlags = map[string]bool{
-	// Disabilitazione esecuzione script esterni o NSE arbitrari
-	"--script":          true,
+	// Disabilitazione flag ausiliari script o parametri non convalidati
 	"--script-args":     true,
 	"--script-help":     true,
 	"--script-trace":    true,
@@ -196,7 +203,8 @@ func IsSafeArgument(arg string) bool {
 	switch argClean {
 	case "-F", "-sV", "-O", "-Pn", "-sn", "-PR", "-PE", "-PP", "-sS", "-sT", "-sU", "-sA", "-sN", "-sF", "-sX",
 		"-n", "-R", "-v", "-vv", "-q", "-d", "-6", "--version-light", "--version-all",
-		"--osscan-limit", "--osscan-guess", "--open", "--packet-trace":
+		"--osscan-limit", "--osscan-guess", "--open", "--packet-trace",
+		"--script=vuln", "--script=vulners":
 		return true
 	}
 
@@ -248,6 +256,23 @@ func ParseProfileArgs(argsStr string) ([]string, error) {
 			return nil, fmt.Errorf("%w: parametro mancante per flag -p", domain.ErrDisallowedScanOption)
 		}
 
+		if token == "--script" {
+			if i+1 < len(fields) {
+				scriptCat := fields[i+1]
+				if scriptCat == "vuln" || scriptCat == "vulners" {
+					result = append(result, "--script="+scriptCat)
+					i++
+					continue
+				}
+			}
+			return nil, fmt.Errorf("%w: categoria script non consentita per %s", domain.ErrDisallowedScanOption, token)
+		}
+
+		if token == "--script=vuln" || token == "--script=vulners" {
+			result = append(result, token)
+			continue
+		}
+
 		if token == "--top-ports" {
 			if i+1 < len(fields) && validTopPortsRegex.MatchString(fields[i+1]) {
 				result = append(result, token, fields[i+1])
@@ -285,12 +310,17 @@ func ParseProfileArgs(argsStr string) ([]string, error) {
 }
 
 // BuildSafeArguments convalida il target e genera la slice ordinata di argomenti per l'invocazione diretta di Nmap
-// Output generato: ["-oX", "-", ...safeArgs, target]
+// Output generato: ["-oX", "-", ...safeArgs, "--", target]
 func BuildSafeArguments(profileArgs []string, target string) ([]string, error) {
 	// 1. Validazione preventiva del bersaglio (NFR-SEC-01)
 	targetInfo, err := validator.ValidateTarget(target)
 	if err != nil {
 		return nil, fmt.Errorf("bersaglio non valido per la scansione: %w", err)
+	}
+
+	// 1.1 Controllo perimetro di sicurezza interno e deny-list (FR-01.4)
+	if err := validator.CheckTargetScope(target, false); err != nil {
+		return nil, fmt.Errorf("perimetro di scansione non consentito: %w", err)
 	}
 
 	// 2. Controllo di sicurezza su tutti gli argomenti forniti
@@ -319,10 +349,12 @@ func BuildSafeArguments(profileArgs []string, target string) ([]string, error) {
 		}
 	}
 
-	// 4. Costruzione della slice finale: output XML forzato su stdout, argomenti del profilo e target finale
-	finalArgs := make([]string, 0, len(validatedArgs)+3)
+	// 4. Costruzione della slice finale: output XML forzato su stdout, argomenti del profilo,
+	// delimitatore standard POSIX '--' contro flag injection ostile e target finale
+	finalArgs := make([]string, 0, len(validatedArgs)+4)
 	finalArgs = append(finalArgs, "-oX", "-") // Output XML nativo su stdout
 	finalArgs = append(finalArgs, validatedArgs...)
+	finalArgs = append(finalArgs, "--")       // Delimitatore di sicurezza POSIX
 	finalArgs = append(finalArgs, targetInfo.CleanValue)
 
 	return finalArgs, nil

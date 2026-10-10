@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, act, renderHook } from '@testing-library/react';
+import { render, screen, act, renderHook, cleanup } from '@testing-library/react';
 import { DebugProvider, useDebugConsole } from './DebugContext';
 import { debugLogger } from '../utils/debugLogger';
 
@@ -50,6 +50,7 @@ describe('DebugContext & DebugProvider', () => {
   });
 
   afterEach(() => {
+    cleanup();
     debugLogger.clear();
     vi.restoreAllMocks();
   });

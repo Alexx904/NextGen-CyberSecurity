@@ -21,9 +21,11 @@ import (
 )
 
 type mockReportService struct {
-	listReportsFunc           func(ctx context.Context, tenantID uuid.UUID, filter domain.ReportFilter) ([]*domain.ReportItem, int, error)
-	generateScanPDFReportFunc func(ctx context.Context, tenantID, scanID uuid.UUID, template domain.ReportTemplate) ([]byte, string, error)
-	generateScanCSVReportFunc func(ctx context.Context, tenantID, scanID uuid.UUID) ([]byte, string, error)
+	listReportsFunc              func(ctx context.Context, tenantID uuid.UUID, filter domain.ReportFilter) ([]*domain.ReportItem, int, error)
+	generateScanPDFReportFunc    func(ctx context.Context, tenantID, scanID uuid.UUID, template domain.ReportTemplate) ([]byte, string, error)
+	generateScanCSVReportFunc    func(ctx context.Context, tenantID, scanID uuid.UUID) ([]byte, string, error)
+	generateCompanyPDFReportFunc func(ctx context.Context, tenantID, groupID uuid.UUID, template domain.ReportTemplate) ([]byte, string, error)
+	generateCompanyCSVReportFunc func(ctx context.Context, tenantID, groupID uuid.UUID) ([]byte, string, error)
 }
 
 func (m *mockReportService) ListReports(ctx context.Context, tenantID uuid.UUID, filter domain.ReportFilter) ([]*domain.ReportItem, int, error) {
@@ -47,10 +49,25 @@ func (m *mockReportService) GenerateScanCSVReport(ctx context.Context, tenantID,
 	return nil, "", domain.ErrNotFound
 }
 
+func (m *mockReportService) GenerateCompanyPDFReport(ctx context.Context, tenantID, groupID uuid.UUID, template domain.ReportTemplate) ([]byte, string, error) {
+	if m.generateCompanyPDFReportFunc != nil {
+		return m.generateCompanyPDFReportFunc(ctx, tenantID, groupID, template)
+	}
+	return nil, "", domain.ErrNotFound
+}
+
+func (m *mockReportService) GenerateCompanyCSVReport(ctx context.Context, tenantID, groupID uuid.UUID) ([]byte, string, error) {
+	if m.generateCompanyCSVReportFunc != nil {
+		return m.generateCompanyCSVReportFunc(ctx, tenantID, groupID)
+	}
+	return nil, "", domain.ErrNotFound
+}
+
 func setupReportRouter(h *handler.ReportHandler) *chi.Mux {
 	r := chi.NewRouter()
 	r.Get("/reports", h.List)
 	r.Get("/reports/{id}/download", h.DownloadReport)
+	r.Get("/reports/company/{groupId}/download", h.DownloadCompanyReport)
 	r.Get("/scans/{id}/reports/pdf", h.DownloadPDF)
 	r.Get("/scans/{id}/reports/csv", h.DownloadCSV)
 	return r
@@ -591,3 +608,135 @@ func TestReportHandler_DownloadCSV_NotFound(t *testing.T) {
 		t.Fatalf("atteso status 404 Not Found, ottenuto %d", rec.Code)
 	}
 }
+
+func TestReportHandler_DownloadCompanyReport_PDF_Success(t *testing.T) {
+	tenantID := uuid.New()
+	groupID := uuid.New()
+	dummyPDF := []byte("%PDF-1.4 Company Report")
+	expectedFilename := "report_azienda_executive_acme_corp_20261010.pdf"
+
+	mockSvc := &mockReportService{
+		generateCompanyPDFReportFunc: func(ctx context.Context, tID, gID uuid.UUID, tmpl domain.ReportTemplate) ([]byte, string, error) {
+			if tID != tenantID || gID != groupID {
+				return nil, "", domain.ErrNotFound
+			}
+			return dummyPDF, expectedFilename, nil
+		},
+	}
+
+	h := handler.NewReportHandler(mockSvc)
+	router := setupReportRouter(h)
+
+	req := httptest.NewRequest(http.MethodGet, "/reports/company/"+groupID.String()+"/download?type=pdf&template=executive", nil)
+	req = withReportUserClaims(req, tenantID)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("atteso status 200 OK, ottenuto %d", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "application/pdf" {
+		t.Errorf("atteso Content-Type application/pdf, ottenuto %s", ct)
+	}
+	if !strings.Contains(rec.Header().Get("Content-Disposition"), expectedFilename) {
+		t.Errorf("atteso header filename contenente %s", expectedFilename)
+	}
+	if rec.Body.String() != string(dummyPDF) {
+		t.Errorf("contenuto PDF non corrispondente")
+	}
+}
+
+func TestReportHandler_DownloadCompanyReport_CSV_Success(t *testing.T) {
+	tenantID := uuid.New()
+	groupID := uuid.New()
+	dummyCSV := []byte("Host IP,Port,Protocol,Service,Severity\n192.168.1.10,80,tcp,http,MEDIUM\n")
+	expectedFilename := "findings_azienda_acme_corp_20261010.csv"
+
+	mockSvc := &mockReportService{
+		generateCompanyCSVReportFunc: func(ctx context.Context, tID, gID uuid.UUID) ([]byte, string, error) {
+			if tID != tenantID || gID != groupID {
+				return nil, "", domain.ErrNotFound
+			}
+			return dummyCSV, expectedFilename, nil
+		},
+	}
+
+	h := handler.NewReportHandler(mockSvc)
+	router := setupReportRouter(h)
+
+	req := httptest.NewRequest(http.MethodGet, "/reports/company/"+groupID.String()+"/download?type=csv", nil)
+	req = withReportUserClaims(req, tenantID)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("atteso status 200 OK, ottenuto %d", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "text/csv") {
+		t.Errorf("atteso Content-Type text/csv, ottenuto %s", ct)
+	}
+	if !strings.Contains(rec.Header().Get("Content-Disposition"), expectedFilename) {
+		t.Errorf("atteso header filename contenente %s", expectedFilename)
+	}
+}
+
+func TestReportHandler_DownloadCompanyReport_InvalidGroupID(t *testing.T) {
+	tenantID := uuid.New()
+	mockSvc := &mockReportService{}
+	h := handler.NewReportHandler(mockSvc)
+	router := setupReportRouter(h)
+
+	req := httptest.NewRequest(http.MethodGet, "/reports/company/invalid-uuid/download", nil)
+	req = withReportUserClaims(req, tenantID)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("atteso status 400 Bad Request, ottenuto %d", rec.Code)
+	}
+}
+
+func TestReportHandler_DownloadCompanyReport_NotFound(t *testing.T) {
+	tenantID := uuid.New()
+	groupID := uuid.New()
+
+	mockSvc := &mockReportService{
+		generateCompanyPDFReportFunc: func(ctx context.Context, tID, gID uuid.UUID, tmpl domain.ReportTemplate) ([]byte, string, error) {
+			return nil, "", domain.ErrNotFound
+		},
+	}
+
+	h := handler.NewReportHandler(mockSvc)
+	router := setupReportRouter(h)
+
+	req := httptest.NewRequest(http.MethodGet, "/reports/company/"+groupID.String()+"/download", nil)
+	req = withReportUserClaims(req, tenantID)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("atteso status 404 Not Found, ottenuto %d", rec.Code)
+	}
+}
+
+func TestReportHandler_DownloadCompanyReport_Unauthorized(t *testing.T) {
+	groupID := uuid.New()
+	mockSvc := &mockReportService{}
+	h := handler.NewReportHandler(mockSvc)
+	router := setupReportRouter(h)
+
+	req := httptest.NewRequest(http.MethodGet, "/reports/company/"+groupID.String()+"/download", nil)
+	// Nessun claim di tenant iniettato nel contesto
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("atteso status 401 Unauthorized, ottenuto %d", rec.Code)
+	}
+}
+

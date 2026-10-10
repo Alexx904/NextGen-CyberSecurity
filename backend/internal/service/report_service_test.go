@@ -3,6 +3,7 @@ package service_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -480,3 +481,266 @@ func TestReportService_GenerateScanCSVReport_ScanNotFound(t *testing.T) {
 		t.Errorf("atteso ErrNotFound, ottenuto: %v", err)
 	}
 }
+
+type reportMockGroupRepo struct {
+	getByIDFunc func(ctx context.Context, tenantID, id uuid.UUID) (*domain.TargetGroup, error)
+	listFunc    func(ctx context.Context, tenantID uuid.UUID) ([]*domain.TargetGroup, error)
+}
+
+func (m *reportMockGroupRepo) GetByID(ctx context.Context, tenantID, id uuid.UUID) (*domain.TargetGroup, error) {
+	if m.getByIDFunc != nil {
+		return m.getByIDFunc(ctx, tenantID, id)
+	}
+	return nil, domain.ErrNotFound
+}
+func (m *reportMockGroupRepo) List(ctx context.Context, tenantID uuid.UUID) ([]*domain.TargetGroup, error) {
+	if m.listFunc != nil {
+		return m.listFunc(ctx, tenantID)
+	}
+	return nil, nil
+}
+func (m *reportMockGroupRepo) Create(ctx context.Context, group *domain.TargetGroup) error { return nil }
+func (m *reportMockGroupRepo) Update(ctx context.Context, group *domain.TargetGroup) error { return nil }
+func (m *reportMockGroupRepo) Delete(ctx context.Context, tenantID, id uuid.UUID) error    { return nil }
+func (m *reportMockGroupRepo) GetTargetCountsByGroup(ctx context.Context, tenantID uuid.UUID) (map[uuid.UUID]int, error) {
+	return nil, nil
+}
+func (m *reportMockGroupRepo) GetSeverityCountsByGroup(ctx context.Context, tenantID uuid.UUID) (map[uuid.UUID]map[domain.SeverityLevel]int, error) {
+	return nil, nil
+}
+
+func TestReportService_GenerateCompanyPDFReport_Success(t *testing.T) {
+	tenantID := uuid.New()
+	groupID := uuid.New()
+	groupName := "Azienda Ospedaliera Alpha"
+	groupDesc := "Rete clinica e perimetrale"
+	now := time.Now().UTC()
+
+	group := &domain.TargetGroup{
+		ID:          groupID,
+		TenantID:    tenantID,
+		Name:        groupName,
+		Description: &groupDesc,
+		CreatedAt:   now.Add(-24 * time.Hour),
+	}
+
+	tenant := &domain.Tenant{
+		ID:   tenantID,
+		Name: "MSSP SecOps Cloud",
+	}
+
+	target1 := &domain.Target{
+		ID:          uuid.New(),
+		TenantID:    tenantID,
+		GroupID:     &groupID,
+		Value:       "192.168.10.1",
+		Type:        domain.TargetTypeIP,
+	}
+	target2 := &domain.Target{
+		ID:          uuid.New(),
+		TenantID:    tenantID,
+		GroupID:     &groupID,
+		Value:       "192.168.10.2",
+		Type:        domain.TargetTypeIP,
+	}
+
+	scanID := uuid.New()
+	reportItems := []*domain.ReportItem{
+		{
+			ScanID:       scanID,
+			TenantID:     tenantID,
+			TargetID:     target1.ID,
+			TargetValue:  target1.Value,
+			Status:       domain.ScanStatusCompleted,
+			SummaryStats: domain.ScanSummaryStats{UpHosts: 1, CriticalCount: 1},
+		},
+	}
+
+	cve := "CVE-2023-1234"
+	cvss := 9.8
+	svcName := "http"
+	findings := []*domain.Finding{
+		{
+			ID:          uuid.New(),
+			ScanID:      scanID,
+			TenantID:    tenantID,
+			HostIP:      "192.168.10.1",
+			Port:        80,
+			Protocol:    "tcp",
+			ServiceName: &svcName,
+			CVEID:       &cve,
+			CVSSScore:   &cvss,
+			Severity:    domain.SeverityCritical,
+		},
+	}
+
+	groupRepo := &reportMockGroupRepo{
+		getByIDFunc: func(ctx context.Context, tID, gID uuid.UUID) (*domain.TargetGroup, error) {
+			if tID == tenantID && gID == groupID {
+				return group, nil
+			}
+			return nil, domain.ErrNotFound
+		},
+	}
+
+	tenantRepo := &reportMockTenantRepo{
+		getByIDFunc: func(ctx context.Context, id uuid.UUID) (*domain.Tenant, error) {
+			if id == tenantID {
+				return tenant, nil
+			}
+			return nil, domain.ErrNotFound
+		},
+	}
+
+	targetRepo := &reportMockTargetRepo{
+		getByIDFunc: func(ctx context.Context, tID, id uuid.UUID) (*domain.Target, error) {
+			return target1, nil
+		},
+	}
+	targetRepoList := func(ctx context.Context, tID uuid.UUID, filter domain.TargetFilter) ([]*domain.Target, int, error) {
+		return []*domain.Target{target1, target2}, 2, nil
+	}
+	targetMock := &struct {
+		*reportMockTargetRepo
+		listFn func(ctx context.Context, tID uuid.UUID, filter domain.TargetFilter) ([]*domain.Target, int, error)
+	}{
+		reportMockTargetRepo: targetRepo,
+		listFn:               targetRepoList,
+	}
+
+	// Usiamo struct anonima compatibile o configuriamo mock
+	reportRepo := &reportMockReportRepo{
+		listFunc: func(ctx context.Context, tID uuid.UUID, filter domain.ReportFilter) ([]*domain.ReportItem, int, error) {
+			return reportItems, 1, nil
+		},
+	}
+
+	findingRepo := &reportMockFindingRepo{
+		listFunc: func(ctx context.Context, tID uuid.UUID, filter domain.FindingFilter) ([]*domain.Finding, int, error) {
+			return findings, 1, nil
+		},
+	}
+
+	pdfGen := &reportMockPDFGenerator{
+		generateFunc: func(data report.PDFReportData) ([]byte, error) {
+			if data.Target == nil || data.Target.Value != groupName {
+				t.Errorf("atteso target aziendale con nome %s, ottenuto %v", groupName, data.Target)
+			}
+			if len(data.Findings) != 1 {
+				t.Errorf("atteso 1 finding aggregato, ottenuti %d", len(data.Findings))
+			}
+			return []byte("%PDF-Company"), nil
+		},
+	}
+
+	// Create service using standard mocks
+	svc := service.NewReportService(
+		reportRepo,
+		&reportMockScanRepo{},
+		&reportMockProfileRepo{},
+		&reportMockTargetRepoWithList{listFunc: targetMock.listFn},
+		findingRepo,
+		tenantRepo,
+		pdfGen,
+		groupRepo,
+	)
+
+	pdfBytes, filename, err := svc.GenerateCompanyPDFReport(context.Background(), tenantID, groupID, domain.ReportTemplateExecutive)
+	if err != nil {
+		t.Fatalf("errore inatteso: %v", err)
+	}
+	if len(pdfBytes) == 0 {
+		t.Errorf("il PDF generato non deve essere vuoto")
+	}
+	if !strings.Contains(filename, "report_azienda_executive_azienda_ospedaliera_alpha") {
+		t.Errorf("nome file non conforme: %s", filename)
+	}
+}
+
+func TestReportService_GenerateCompanyCSVReport_Success(t *testing.T) {
+	tenantID := uuid.New()
+	groupID := uuid.New()
+	groupName := "Beta Logistics Srl"
+
+	group := &domain.TargetGroup{
+		ID:        groupID,
+		TenantID:  tenantID,
+		Name:      groupName,
+		CreatedAt: time.Now().UTC(),
+	}
+
+	groupRepo := &reportMockGroupRepo{
+		getByIDFunc: func(ctx context.Context, tID, gID uuid.UUID) (*domain.TargetGroup, error) {
+			return group, nil
+		},
+	}
+
+	scanID := uuid.New()
+	reportRepo := &reportMockReportRepo{
+		listFunc: func(ctx context.Context, tID uuid.UUID, filter domain.ReportFilter) ([]*domain.ReportItem, int, error) {
+			return []*domain.ReportItem{
+				{
+					ScanID: scanID,
+					Status: domain.ScanStatusCompleted,
+				},
+			}, 1, nil
+		},
+	}
+
+	cve := "CVE-2024-9999"
+	svcName := "ssh"
+	findings := []*domain.Finding{
+		{
+			ID:          uuid.New(),
+			ScanID:      scanID,
+			TenantID:    tenantID,
+			HostIP:      "10.0.0.5",
+			Port:        22,
+			Protocol:    "tcp",
+			ServiceName: &svcName,
+			CVEID:       &cve,
+			Severity:    domain.SeverityHigh,
+		},
+	}
+
+	findingRepo := &reportMockFindingRepo{
+		listFunc: func(ctx context.Context, tID uuid.UUID, filter domain.FindingFilter) ([]*domain.Finding, int, error) {
+			return findings, 1, nil
+		},
+	}
+
+	svc := service.NewReportService(
+		reportRepo,
+		&reportMockScanRepo{},
+		&reportMockProfileRepo{},
+		&reportMockTargetRepo{},
+		findingRepo,
+		&reportMockTenantRepo{},
+		&reportMockPDFGenerator{},
+		groupRepo,
+	)
+
+	csvBytes, filename, err := svc.GenerateCompanyCSVReport(context.Background(), tenantID, groupID)
+	if err != nil {
+		t.Fatalf("errore inatteso: %v", err)
+	}
+	if len(csvBytes) == 0 {
+		t.Errorf("il CSV generato non deve essere vuoto")
+	}
+	if !strings.Contains(filename, "findings_azienda_beta_logistics_srl") {
+		t.Errorf("nome file non conforme: %s", filename)
+	}
+}
+
+type reportMockTargetRepoWithList struct {
+	reportMockTargetRepo
+	listFunc func(ctx context.Context, tenantID uuid.UUID, filter domain.TargetFilter) ([]*domain.Target, int, error)
+}
+
+func (m *reportMockTargetRepoWithList) List(ctx context.Context, tenantID uuid.UUID, filter domain.TargetFilter) ([]*domain.Target, int, error) {
+	if m.listFunc != nil {
+		return m.listFunc(ctx, tenantID, filter)
+	}
+	return nil, 0, nil
+}
+

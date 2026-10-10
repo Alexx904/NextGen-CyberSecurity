@@ -89,6 +89,29 @@ func TestCalculatePostureScore(t *testing.T) {
 			expectedScore: 0,
 			expectedGrade: "F",
 		},
+		{
+			name: "Multi-host consolidated network (9 hosts, 5 High, 7 Medium, 2 Low)",
+			stats: domain.ScanSummaryStats{
+				TotalHosts:  9,
+				UpHosts:     9,
+				HighCount:   5, // 75
+				MediumCount: 7, // 35
+				LowCount:    2, // 2 -> total 112 / sqrt(9) = 37.33 -> 100 - 37 = 63
+			},
+			expectedScore: 63,
+			expectedGrade: "C",
+		},
+		{
+			name: "Single host many Highs without Critical - floor at 25 Grade D",
+			stats: domain.ScanSummaryStats{
+				TotalHosts:  1,
+				UpHosts:     1,
+				HighCount:   10, // 150 deduction -> clamped to 25 because CriticalCount is 0
+				MediumCount: 5,
+			},
+			expectedScore: 25,
+			expectedGrade: "D",
+		},
 	}
 
 	for _, tt := range tests {

@@ -284,6 +284,74 @@ func (h *ReportHandler) DownloadCSV(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(csvBytes)
 }
 
+// DownloadCompanyReport gestisce GET /api/v1/reports/company/{groupId}/download con supporto a type=pdf|csv e template=executive|technical
+func (h *ReportHandler) DownloadCompanyReport(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := middleware.GetTenantID(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "UNAUTHORIZED", "Identificativo tenant mancante o non valido")
+		return
+	}
+
+	groupIDParam := chi.URLParam(r, "groupId")
+	groupID, err := uuid.Parse(groupIDParam)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "INVALID_ID", "ID azienda/cartella scope non valido")
+		return
+	}
+
+	formatType := strings.ToLower(r.URL.Query().Get("type"))
+	if formatType == "csv" {
+		csvBytes, filename, err := h.reportService.GenerateCompanyCSVReport(r.Context(), tenantID, groupID)
+		if err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				response.Error(w, http.StatusNotFound, "NOT_FOUND", "Azienda non trovata")
+				return
+			}
+			if errors.Is(err, domain.ErrValidation) {
+				response.Error(w, http.StatusBadRequest, "VALIDATION_FAILED", "Parametri di richiesta report non validi")
+				return
+			}
+			response.Error(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Errore durante la generazione del report CSV aziendale")
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+		w.Header().Set("Access-Control-Expose-Headers", "Content-Disposition")
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(csvBytes)))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(csvBytes)
+		return
+	}
+
+	// Default: Formato PDF
+	templateParam := domain.ReportTemplate(strings.ToLower(r.URL.Query().Get("template")))
+	if !templateParam.IsValid() {
+		templateParam = domain.ReportTemplateExecutive
+	}
+
+	pdfBytes, filename, err := h.reportService.GenerateCompanyPDFReport(r.Context(), tenantID, groupID, templateParam)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			response.Error(w, http.StatusNotFound, "NOT_FOUND", "Azienda non trovata")
+			return
+		}
+		if errors.Is(err, domain.ErrValidation) {
+			response.Error(w, http.StatusBadRequest, "VALIDATION_FAILED", "Parametri di richiesta report non validi")
+			return
+		}
+		response.Error(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Errore durante la generazione del report PDF aziendale")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	w.Header().Set("Access-Control-Expose-Headers", "Content-Disposition")
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(pdfBytes)))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(pdfBytes)
+}
+
 func parseDate(dateStr string, isEndOfDay bool) (*time.Time, error) {
 	clean := strings.TrimSpace(dateStr)
 	if clean == "" {

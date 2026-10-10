@@ -14,6 +14,7 @@ import (
 
 	"nextgen-cybersec/internal/domain"
 	"nextgen-cybersec/internal/scanner"
+	"nextgen-cybersec/pkg/validator"
 )
 
 // ScanJob rappresenta un'unità di lavoro da processare nel pool asincrono
@@ -291,6 +292,12 @@ func (o *ScanOrchestrator) processJob(job *ScanJob, workerID int) {
 		return
 	}
 
+	// 2.1 Verifica perimetro di sicurezza interno e deny-list (FR-01.4)
+	if err := validator.CheckTargetScope(target.Value, false); err != nil {
+		o.failScan(scan, fmt.Sprintf("bersaglio non consentito dalle policy di sicurezza: %v", err))
+		return
+	}
+
 	// 3. Recupero del profilo di scansione
 	profile, err := o.profileRepo.GetByID(ctx, scan.ProfileID)
 	if err != nil {
@@ -488,6 +495,31 @@ func (o *ScanOrchestrator) processJob(job *ScanJob, workerID int) {
 							},
 						})
 					}
+				}
+			}
+		}
+
+		// Correlazione vulnerabilità script a livello di host (es. SMB EternalBlue, SSL, ecc.) (FR-17)
+		if o.correlator != nil && len(h.HostScripts) > 0 {
+			hostFindings, err := o.correlator.CorrelateHostScripts(ctx, scan.ID, scan.TenantID, h)
+			if err != nil {
+				o.logger.Warn("Errore durante correlazione script host Nmap", "host", h.IP, "error", err)
+			}
+			if len(hostFindings) > 0 {
+				findings = append(findings, hostFindings...)
+				if o.findingRepo != nil {
+					if err := o.findingRepo.CreateBatch(context.Background(), hostFindings); err != nil {
+						o.logger.Error("Salvataggio incrementale host findings su DB fallito", "scan_id", scan.ID, "error", err)
+					}
+				}
+				for _, hf := range hostFindings {
+					o.publishEvent(topic, domain.SSEEvent{
+						Event: domain.EventScanFinding,
+						Data: domain.ScanFindingPayload{
+							ScanID:  scan.ID,
+							Finding: *hf,
+						},
+					})
 				}
 			}
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,6 +18,8 @@ type ReportService interface {
 	ListReports(ctx context.Context, tenantID uuid.UUID, filter domain.ReportFilter) ([]*domain.ReportItem, int, error)
 	GenerateScanPDFReport(ctx context.Context, tenantID, scanID uuid.UUID, template domain.ReportTemplate) ([]byte, string, error)
 	GenerateScanCSVReport(ctx context.Context, tenantID, scanID uuid.UUID) ([]byte, string, error)
+	GenerateCompanyPDFReport(ctx context.Context, tenantID, groupID uuid.UUID, template domain.ReportTemplate) ([]byte, string, error)
+	GenerateCompanyCSVReport(ctx context.Context, tenantID, groupID uuid.UUID) ([]byte, string, error)
 }
 
 type reportService struct {
@@ -24,6 +27,7 @@ type reportService struct {
 	scanRepo        domain.ScanRepository
 	scanProfileRepo domain.ScanProfileRepository
 	targetRepo      domain.TargetRepository
+	targetGroupRepo domain.TargetGroupRepository
 	findingRepo     domain.FindingRepository
 	tenantRepo      domain.TenantRepository
 	pdfGenerator    report.PDFGenerator
@@ -38,15 +42,21 @@ func NewReportService(
 	findingRepo domain.FindingRepository,
 	tenantRepo domain.TenantRepository,
 	pdfGenerator report.PDFGenerator,
+	targetGroupRepo ...domain.TargetGroupRepository,
 ) ReportService {
 	if pdfGenerator == nil {
 		pdfGenerator = report.NewPDFGenerator()
+	}
+	var groupRepo domain.TargetGroupRepository
+	if len(targetGroupRepo) > 0 {
+		groupRepo = targetGroupRepo[0]
 	}
 	return &reportService{
 		reportRepo:      reportRepo,
 		scanRepo:        scanRepo,
 		scanProfileRepo: scanProfileRepo,
 		targetRepo:      targetRepo,
+		targetGroupRepo: groupRepo,
 		findingRepo:     findingRepo,
 		tenantRepo:      tenantRepo,
 		pdfGenerator:    pdfGenerator,
@@ -163,3 +173,271 @@ func (s *reportService) GenerateScanCSVReport(ctx context.Context, tenantID, sca
 	filename := fmt.Sprintf("findings_scan_%s_%s.csv", scan.ID.String()[:8], now.Format("20060102_150405"))
 	return csvBytes, filename, nil
 }
+
+// GenerateCompanyPDFReport compila il documento PDF white-label consolidato per l'intera Azienda (tutti gli IP censiti)
+func (s *reportService) GenerateCompanyPDFReport(ctx context.Context, tenantID, groupID uuid.UUID, template domain.ReportTemplate) ([]byte, string, error) {
+	if tenantID == uuid.Nil || groupID == uuid.Nil {
+		return nil, "", domain.ErrValidation
+	}
+	if s.targetGroupRepo == nil {
+		return nil, "", errors.New("target group repository non configurato")
+	}
+
+	if !template.IsValid() {
+		template = domain.ReportTemplateExecutive
+	}
+
+	// 1. Recupero metadati azienda / cartella scope
+	group, err := s.targetGroupRepo.GetByID(ctx, tenantID, groupID)
+	if err != nil {
+		return nil, "", err
+	}
+
+	// 2. Recupero branding e metadati del tenant
+	tenant, err := s.tenantRepo.GetByID(ctx, tenantID)
+	if err != nil {
+		return nil, "", err
+	}
+
+	// 3. Recupero tutti i target/IP associati all'azienda
+	targets, _, err := s.targetRepo.List(ctx, tenantID, domain.TargetFilter{
+		GroupID: &groupID,
+		Limit:   1000,
+	})
+	if err != nil {
+		return nil, "", err
+	}
+
+	// 4. Recupero report items / scansioni storiche per l'azienda
+	reportItems, _, err := s.reportRepo.List(ctx, tenantID, domain.ReportFilter{
+		GroupID: &groupID,
+		Limit:   1000,
+	})
+	if err != nil {
+		return nil, "", err
+	}
+
+	// 5. Raccolta findings di tutti gli host dell'azienda con deduplica
+	var allFindings []*domain.Finding
+	seenFinding := make(map[string]bool)
+	upHostsCount := 0
+
+	for _, item := range reportItems {
+		if item.SummaryStats.UpHosts > 0 {
+			upHostsCount += item.SummaryStats.UpHosts
+		}
+		if item.Status != domain.ScanStatusCompleted {
+			continue
+		}
+
+		itemFindings, _, err := s.findingRepo.List(ctx, tenantID, domain.FindingFilter{
+			ScanID: &item.ScanID,
+			Limit:  1000,
+		})
+		if err == nil {
+			for _, f := range itemFindings {
+				key := fmt.Sprintf("%s:%d:%s", f.HostIP, f.Port, getFindingDedupKey(f))
+				if !seenFinding[key] {
+					seenFinding[key] = true
+					allFindings = append(allFindings, f)
+				}
+			}
+		}
+	}
+
+	if upHostsCount > len(targets) {
+		upHostsCount = len(targets)
+	}
+
+	// Calcolo conteggi severità aggregati
+	critCount, highCount, medCount, lowCount, infoCount := 0, 0, 0, 0, 0
+	for _, f := range allFindings {
+		switch f.Severity {
+		case domain.SeverityCritical:
+			critCount++
+		case domain.SeverityHigh:
+			highCount++
+		case domain.SeverityMedium:
+			medCount++
+		case domain.SeverityLow:
+			lowCount++
+		case domain.SeverityInfo:
+			infoCount++
+		}
+	}
+
+	// 6. Preparazione contesto sintetico per l'Azienda
+	now := time.Now().UTC()
+	companyDesc := fmt.Sprintf("Dossier di Sicurezza Aziendale Consolidato (%d IP/Target censiti)", len(targets))
+	if group.Description != nil && *group.Description != "" {
+		companyDesc = fmt.Sprintf("%s | %s", *group.Description, companyDesc)
+	}
+
+	companyTarget := &domain.Target{
+		ID:          group.ID,
+		TenantID:    tenantID,
+		GroupID:     &groupID,
+		Type:        domain.TargetType("COMPANY_SCOPE"),
+		Value:       group.Name,
+		Description: &companyDesc,
+	}
+
+	companyProfile := &domain.ScanProfile{
+		ID:       uuid.Nil,
+		Name:     "Audit Consolidato Perimetrale Aziendale",
+		NmapArgs: fmt.Sprintf("Consolidato su %d target dell'azienda", len(targets)),
+	}
+
+	// Calcolo tempistiche consolidate per valorizzare Data Avvio e Durata Totale
+	var earliestStarted *time.Time
+	var latestCompleted *time.Time
+	totalDurationSec := 0.0
+
+	for _, item := range reportItems {
+		if item.StartedAt != nil {
+			if earliestStarted == nil || item.StartedAt.Before(*earliestStarted) {
+				t := *item.StartedAt
+				earliestStarted = &t
+			}
+		}
+		if item.CompletedAt != nil {
+			if latestCompleted == nil || item.CompletedAt.After(*latestCompleted) {
+				t := *item.CompletedAt
+				latestCompleted = &t
+			}
+		}
+		totalDurationSec += float64(item.SummaryStats.DurationSeconds)
+	}
+
+	if earliestStarted == nil {
+		t := group.CreatedAt
+		earliestStarted = &t
+	}
+	if latestCompleted == nil {
+		latestCompleted = &now
+	}
+
+	companyScan := &domain.Scan{
+		ID:          group.ID,
+		TenantID:    tenantID,
+		TargetID:    group.ID,
+		Status:      domain.ScanStatusCompleted,
+		TriggerType: domain.TriggerManual,
+		StartedAt:   earliestStarted,
+		CompletedAt: latestCompleted,
+		SummaryStats: domain.ScanSummaryStats{
+			TotalHosts:      len(targets),
+			UpHosts:         upHostsCount,
+			DownHosts:       len(targets) - upHostsCount,
+			CriticalCount:   critCount,
+			HighCount:       highCount,
+			MediumCount:     medCount,
+			LowCount:        lowCount,
+			InfoCount:       infoCount,
+			DurationSeconds: totalDurationSec,
+		},
+		CreatedAt: group.CreatedAt,
+	}
+
+	reportData := report.PDFReportData{
+		Tenant:      tenant,
+		Scan:        companyScan,
+		Target:      companyTarget,
+		Profile:     companyProfile,
+		Findings:    allFindings,
+		Template:    template,
+		GeneratedAt: now,
+	}
+
+	pdfBytes, err := s.pdfGenerator.Generate(reportData)
+	if err != nil {
+		return nil, "", fmt.Errorf("generazione del documento PDF aziendale fallita: %w", err)
+	}
+
+	safeName := sanitizeFilename(group.Name)
+	filename := fmt.Sprintf("report_azienda_%s_%s_%s.pdf", template, safeName, now.Format("20060102_150405"))
+	return pdfBytes, filename, nil
+}
+
+// GenerateCompanyCSVReport compila il report CSV consolidato per l'intera Azienda
+func (s *reportService) GenerateCompanyCSVReport(ctx context.Context, tenantID, groupID uuid.UUID) ([]byte, string, error) {
+	if tenantID == uuid.Nil || groupID == uuid.Nil {
+		return nil, "", domain.ErrValidation
+	}
+	if s.targetGroupRepo == nil {
+		return nil, "", errors.New("target group repository non configurato")
+	}
+
+	group, err := s.targetGroupRepo.GetByID(ctx, tenantID, groupID)
+	if err != nil {
+		return nil, "", err
+	}
+
+	reportItems, _, err := s.reportRepo.List(ctx, tenantID, domain.ReportFilter{
+		GroupID: &groupID,
+		Limit:   1000,
+	})
+	if err != nil {
+		return nil, "", err
+	}
+
+	var allFindings []*domain.Finding
+	seenFinding := make(map[string]bool)
+
+	for _, item := range reportItems {
+		if item.Status != domain.ScanStatusCompleted {
+			continue
+		}
+		itemFindings, _, err := s.findingRepo.List(ctx, tenantID, domain.FindingFilter{
+			ScanID: &item.ScanID,
+			Limit:  1000,
+		})
+		if err == nil {
+			for _, f := range itemFindings {
+				key := fmt.Sprintf("%s:%d:%s", f.HostIP, f.Port, getFindingDedupKey(f))
+				if !seenFinding[key] {
+					seenFinding[key] = true
+					allFindings = append(allFindings, f)
+				}
+			}
+		}
+	}
+
+	csvBytes, err := report.GenerateCSV(allFindings)
+	if err != nil {
+		return nil, "", fmt.Errorf("generazione del report CSV aziendale fallita: %w", err)
+	}
+
+	now := time.Now().UTC()
+	safeName := sanitizeFilename(group.Name)
+	filename := fmt.Sprintf("findings_azienda_%s_%s.csv", safeName, now.Format("20060102_150405"))
+	return csvBytes, filename, nil
+}
+
+func sanitizeFilename(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	var b strings.Builder
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			b.WriteRune(r)
+		} else if r == ' ' {
+			b.WriteRune('_')
+		}
+	}
+	res := b.String()
+	if res == "" {
+		return "company"
+	}
+	return res
+}
+
+func getFindingDedupKey(f *domain.Finding) string {
+	if f.CVEID != nil && *f.CVEID != "" {
+		return *f.CVEID
+	}
+	if f.ServiceName != nil && *f.ServiceName != "" {
+		return *f.ServiceName
+	}
+	return f.Protocol
+}
+

@@ -10,6 +10,7 @@ import (
 
 	"nextgen-cybersec/internal/domain"
 	"nextgen-cybersec/internal/scanner"
+	"nextgen-cybersec/pkg/validator"
 )
 
 // OrchestratorClient astrae l'orchestratore per consentire dependency injection e mocking nei test
@@ -108,6 +109,11 @@ func (s *scanService) StartScan(ctx context.Context, tenantID, targetID, profile
 	}
 	if isBlacklisted {
 		return nil, domain.ErrTargetBlacklisted
+	}
+
+	// 1.1 Verifica perimetro di sicurezza interno e deny-list (FR-01.4)
+	if err := validator.CheckTargetScope(target.Value, false); err != nil {
+		return nil, err
 	}
 
 	// 2. Verifica esistenza del profilo di scansione
@@ -296,6 +302,11 @@ func (s *scanService) StartGroupScan(ctx context.Context, tenantID, groupID, pro
 		// Controllo blacklist globale/tenant
 		isBL, err := s.targetRepo.IsBlacklisted(ctx, tenantID, target.Value)
 		if err != nil || isBL {
+			continue
+		}
+
+		// Controllo perimetro di sicurezza e deny-list interna
+		if err := validator.CheckTargetScope(target.Value, false); err != nil {
 			continue
 		}
 

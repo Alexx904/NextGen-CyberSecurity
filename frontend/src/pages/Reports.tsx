@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import {
   FileText,
   FileCode,
@@ -10,64 +9,44 @@ import {
   ShieldCheck,
   AlertTriangle,
   Clock,
-  ExternalLink,
-  ChevronLeft,
-  ChevronRight,
   ChevronDown,
   ChevronUp,
-  Folder,
-  FolderOpen,
-  Activity,
   AlertCircle,
-  List,
   Copy,
   Check,
   Building,
+  Layers,
 } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { reportsApi } from '../api/reports';
 import { ApiResponse } from '../types/auth';
 import { TargetGroupNode } from '../types/target';
 import { ReportItem, ReportFilterParams, ReportTemplate, ReportFormat } from '../types/report';
-import { SeverityLevel, ScanStatus } from '../types/scan';
 
 export const Reports: React.FC = () => {
-  // Modalità di visualizzazione: Raggruppata per Cartella/Azienda Scope vs Archivio Cronologico Lineare
+  // Modalità di visualizzazione: Raggruppata per Azienda (default) vs Archivio Cronologico Lineare
   const [viewMode, setViewMode] = useState<'grouped' | 'flat'>('grouped');
 
-  // Stato dati report
+  // Stato dati report e aziende
   const [reports, setReports] = useState<ReportItem[]>([]);
   const [groupsTree, setGroupsTree] = useState<TargetGroupNode[]>([]);
-  const [total, setTotal] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   // Stato filtri di ricerca
   const [search, setSearch] = useState<string>('');
   const [severityFilter, setSeverityFilter] = useState<string>('');
-  const [targetTypeFilter, setTargetTypeFilter] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<string>('');
-  const [dateFrom, setDateFrom] = useState<string>('');
-  const [dateTo, setDateTo] = useState<string>('');
-
-  // Paginazione per vista lineare
-  const [page, setPage] = useState<number>(1);
-  const [pageSize, setPageSize] = useState<number>(10);
 
   // Accordion stato gruppi: Set degli ID collassati (vuoto = tutti espansi)
   const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<string>>(new Set());
 
-  // Copia IP
+  // Copia IP feedback
   const [copiedIP, setCopiedIP] = useState<string | null>(null);
 
   // Stato operazioni di download attive
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
-  const [downloadingFormat, setDownloadingFormat] = useState<string | null>(null);
   const [downloadSuccessMsg, setDownloadSuccessMsg] = useState<string | null>(null);
   const [downloadErrorMsg, setDownloadErrorMsg] = useState<string | null>(null);
-
-  // Template globale di preferenza
-  const [preferredTemplate, setPreferredTemplate] = useState<ReportTemplate>('executive');
 
   // Caricamento dati dal backend (report + metadati cartelle/aziende)
   const fetchData = useCallback(async (silent = false) => {
@@ -75,8 +54,8 @@ export const Reports: React.FC = () => {
     setError(null);
 
     const isGrouped = viewMode === 'grouped';
-    const effectiveLimit = isGrouped ? 100 : pageSize;
-    const effectiveOffset = isGrouped ? 0 : (page - 1) * pageSize;
+    const effectiveLimit = isGrouped ? 100 : 10;
+    const effectiveOffset = 0;
 
     const params: ReportFilterParams = {
       limit: effectiveLimit,
@@ -85,10 +64,6 @@ export const Reports: React.FC = () => {
 
     if (search.trim()) params.search = search.trim();
     if (severityFilter) params.severity = severityFilter;
-    if (targetTypeFilter) params.target_type = targetTypeFilter;
-    if (statusFilter) params.status = statusFilter;
-    if (dateFrom) params.date_from = dateFrom;
-    if (dateTo) params.date_to = dateTo;
 
     try {
       const [reportsData, groupsRes] = await Promise.all([
@@ -97,7 +72,6 @@ export const Reports: React.FC = () => {
       ]);
 
       setReports(reportsData.items || []);
-      setTotal(reportsData.total || 0);
 
       if (groupsRes?.data?.data) {
         setGroupsTree(groupsRes.data.data);
@@ -105,33 +79,36 @@ export const Reports: React.FC = () => {
     } catch (err: any) {
       setError(err.message || 'Errore durante il recupero dei report.');
       setReports([]);
-      setTotal(0);
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [viewMode, page, pageSize, search, severityFilter, targetTypeFilter, statusFilter, dateFrom, dateTo]);
+  }, [viewMode, search, severityFilter]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // Gestione del download con feedback di caricamento
-  const handleDownload = async (scanId: string, format: ReportFormat, template: ReportTemplate = 'executive') => {
-    setDownloadingId(scanId);
-    setDownloadingFormat(`${format}_${template}`);
+  // Gestione del download del Documento Consolidato Aziendale (tutti gli IP dell'azienda)
+  const handleCompanyDownload = async (
+    groupId: string,
+    companyName: string,
+    format: ReportFormat,
+    template: ReportTemplate = 'executive'
+  ) => {
+    setDownloadingId(groupId);
     setDownloadSuccessMsg(null);
     setDownloadErrorMsg(null);
 
     try {
-      await reportsApi.download(scanId, format, template, {
+      await reportsApi.downloadCompany(groupId, companyName, format, template, {
         onSuccess: () => {
           setDownloadSuccessMsg(
-            `Download completato con successo (${format.toUpperCase()} ${format === 'pdf' ? template : ''})`
+            `Documento di ${companyName} scaricato con successo (${format.toUpperCase()} ${format === 'pdf' ? template : ''})`
           );
           setTimeout(() => setDownloadSuccessMsg(null), 4000);
         },
         onError: (err) => {
-          setDownloadErrorMsg(err.message || 'Download del report fallito.');
+          setDownloadErrorMsg(err.message || `Download del report di ${companyName} fallito.`);
           setTimeout(() => setDownloadErrorMsg(null), 5000);
         },
       });
@@ -140,7 +117,6 @@ export const Reports: React.FC = () => {
       setTimeout(() => setDownloadErrorMsg(null), 5000);
     } finally {
       setDownloadingId(null);
-      setDownloadingFormat(null);
     }
   };
 
@@ -151,205 +127,13 @@ export const Reports: React.FC = () => {
     setTimeout(() => setCopiedIP(null), 2000);
   };
 
-  // Reset dei filtri
+  // Reset filtri
   const handleResetFilters = () => {
     setSearch('');
     setSeverityFilter('');
-    setTargetTypeFilter('');
-    setStatusFilter('');
-    setDateFrom('');
-    setDateTo('');
-    setPage(1);
   };
 
-  const activeFiltersCount = useMemo(() => {
-    let count = 0;
-    if (search.trim()) count++;
-    if (severityFilter) count++;
-    if (targetTypeFilter) count++;
-    if (statusFilter) count++;
-    if (dateFrom) count++;
-    if (dateTo) count++;
-    return count;
-  }, [search, severityFilter, targetTypeFilter, statusFilter, dateFrom, dateTo]);
-
-  // Metriche sintetiche aggregate della vista corrente
-  const kpiStats = useMemo(() => {
-    if (!reports || reports.length === 0) {
-      return { avgScore: 100, avgGrade: 'A', highRiskCount: 0, totalUpHosts: 0 };
-    }
-    let totalScore = 0;
-    let highRisk = 0;
-    let upHosts = 0;
-
-    reports.forEach((r) => {
-      totalScore += r.posture_score;
-      if (r.max_severity === 'CRITICAL' || r.max_severity === 'HIGH') {
-        highRisk++;
-      }
-      upHosts += r.summary_stats.up_hosts || 0;
-    });
-
-    const avgScore = Math.round(totalScore / reports.length);
-    let avgGrade = 'A';
-    if (avgScore < 25) avgGrade = 'F';
-    else if (avgScore < 50) avgGrade = 'D';
-    else if (avgScore < 75) avgGrade = 'C';
-    else if (avgScore < 90) avgGrade = 'B';
-
-    return { avgScore, avgGrade, highRiskCount: highRisk, totalUpHosts: upHosts };
-  }, [reports]);
-
-  // Raggruppamento per Cartella / Azienda Cliente Scope
-  const groupedCompanyReports = useMemo(() => {
-    const gMap = new Map<string, TargetGroupNode>();
-    function recurse(nodes: TargetGroupNode[]) {
-      for (const n of nodes) {
-        gMap.set(n.id, n);
-        if (n.children && n.children.length > 0) {
-          recurse(n.children);
-        }
-      }
-    }
-    recurse(groupsTree);
-
-    // Mappa cartella -> target -> reports
-    const folderMap = new Map<
-      string,
-      {
-        id: string;
-        name: string;
-        color_tag: string;
-        targets: Map<
-          string,
-          {
-            targetId: string;
-            targetValue: string;
-            targetType: 'IP' | 'CIDR' | 'RANGE' | 'FQDN';
-            reports: ReportItem[];
-          }
-        >;
-      }
-    >();
-
-    // Pre-popola cartelle note da Target Groups
-    gMap.forEach((gNode, gId) => {
-      folderMap.set(gId, {
-        id: gId,
-        name: gNode.name,
-        color_tag: gNode.color_tag || '#06b6d4',
-        targets: new Map(),
-      });
-    });
-
-    // Inizializza Root / Bersagli Non Assegnati
-    folderMap.set('unassigned', {
-      id: 'unassigned',
-      name: 'Bersagli Non Assegnati (Root)',
-      color_tag: '#64748b',
-      targets: new Map(),
-    });
-
-    // Popola i report
-    reports.forEach((report) => {
-      const gId = report.group_id || 'unassigned';
-      if (!folderMap.has(gId)) {
-        folderMap.set(gId, {
-          id: gId,
-          name: report.group_name || 'Cartella Scope',
-          color_tag: '#06b6d4',
-          targets: new Map(),
-        });
-      }
-
-      const folder = folderMap.get(gId)!;
-      if (!folder.targets.has(report.target_id)) {
-        folder.targets.set(report.target_id, {
-          targetId: report.target_id,
-          targetValue: report.target_value,
-          targetType: report.target_type,
-          reports: [],
-        });
-      }
-
-      folder.targets.get(report.target_id)!.reports.push(report);
-    });
-
-    const result = Array.from(folderMap.values())
-      .map((f) => {
-        const targetList = Array.from(f.targets.values()).map((t) => {
-          // Ordina i report del target dal più recente al più vecchio
-          const sortedReports = [...t.reports].sort((a, b) => {
-            const timeA = new Date(a.completed_at || a.created_at).getTime();
-            const timeB = new Date(b.completed_at || b.created_at).getTime();
-            return timeB - timeA;
-          });
-          return {
-            ...t,
-            reports: sortedReports,
-            latestReport: sortedReports[0] || null,
-          };
-        });
-
-        // Ordina target per valore IP
-        targetList.sort((a, b) => a.targetValue.localeCompare(b.targetValue));
-
-        const allReportsInFolder = targetList.flatMap((t) => t.reports);
-        const totalAudits = allReportsInFolder.length;
-
-        // Posture Score medio per l'azienda
-        let avgScore = 100;
-        let avgGrade = 'A';
-        let maxSev: SeverityLevel = 'INFO';
-        const sevPriority: Record<SeverityLevel, number> = {
-          CRITICAL: 5,
-          HIGH: 4,
-          MEDIUM: 3,
-          LOW: 2,
-          INFO: 1,
-        };
-
-        if (totalAudits > 0) {
-          const sumScore = allReportsInFolder.reduce((acc, r) => acc + r.posture_score, 0);
-          avgScore = Math.round(sumScore / totalAudits);
-          if (avgScore < 25) avgGrade = 'F';
-          else if (avgScore < 50) avgGrade = 'D';
-          else if (avgScore < 75) avgGrade = 'C';
-          else if (avgScore < 90) avgGrade = 'B';
-
-          let topSevScore = 0;
-          for (const r of allReportsInFolder) {
-            const curP = sevPriority[r.max_severity] || 1;
-            if (curP > topSevScore) {
-              topSevScore = curP;
-              maxSev = r.max_severity;
-            }
-          }
-        }
-
-        return {
-          id: f.id,
-          name: f.name,
-          color_tag: f.color_tag,
-          targetList,
-          totalAudits,
-          avgScore,
-          avgGrade,
-          maxSeverity: maxSev,
-        };
-      })
-      .filter((f) => f.targetList.length > 0 || f.totalAudits > 0);
-
-    result.sort((a, b) => {
-      if (a.id === 'unassigned') return 1;
-      if (b.id === 'unassigned') return -1;
-      return a.name.localeCompare(b.name);
-    });
-
-    return result;
-  }, [groupsTree, reports]);
-
-  // Gestione espansione accordion
+  // Accordion toggle per azienda
   const toggleGroupCollapse = (groupId: string) => {
     setCollapsedGroupIds((prev) => {
       const next = new Set(prev);
@@ -362,915 +146,750 @@ export const Reports: React.FC = () => {
     });
   };
 
-  const expandAllGroups = () => {
-    setCollapsedGroupIds(new Set());
+  // Espandi tutti / Comprimi tutti
+  const handleExpandAll = () => setCollapsedGroupIds(new Set());
+  const handleCollapseAll = () => {
+    const allIds = new Set<string>();
+    function recurse(nodes: TargetGroupNode[]) {
+      for (const n of nodes) {
+        allIds.add(n.id);
+        if (n.children && n.children.length > 0) recurse(n.children);
+      }
+    }
+    recurse(groupsTree);
+    allIds.add('unassigned');
+    setCollapsedGroupIds(allIds);
   };
 
-  const collapseAllGroups = () => {
-    setCollapsedGroupIds(new Set(groupedCompanyReports.map((g) => g.id)));
-  };
+  // Aggregazione e preparazione delle Aziende Clienti con i rispettivi report consolidati
+  const companyDataList = useMemo(() => {
+    const gMap = new Map<string, TargetGroupNode>();
+    function recurse(nodes: TargetGroupNode[]) {
+      for (const n of nodes) {
+        gMap.set(n.id, n);
+        if (n.children && n.children.length > 0) {
+          recurse(n.children);
+        }
+      }
+    }
+    recurse(groupsTree);
 
-  // Formattatori
-  const formatDate = (dateStr?: string): string => {
-    if (!dateStr) return 'N/D';
-    const d = new Date(dateStr);
-    return isNaN(d.getTime()) ? 'N/D' : d.toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' });
-  };
+    // Mappa groupId -> lista di report
+    const groupReportsMap = new Map<string, ReportItem[]>();
+    reports.forEach((r) => {
+      const gId = r.group_id || 'unassigned';
+      if (!groupReportsMap.has(gId)) {
+        groupReportsMap.set(gId, []);
+      }
+      groupReportsMap.get(gId)!.push(r);
+    });
 
-  const formatDuration = (seconds?: number): string => {
-    if (seconds === undefined || seconds === null) return 'N/D';
-    if (seconds < 60) return `${Math.round(seconds)}s`;
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.round(seconds % 60);
-    return `${mins}m ${secs}s`;
-  };
+    const result: Array<{
+      id: string;
+      name: string;
+      description?: string | null;
+      color_tag: string;
+      targets: Array<{ targetId: string; targetValue: string; targetType: string }>;
+      reports: ReportItem[];
+      totalTargets: number;
+      postureScore: number;
+      postureGrade: string;
+      criticalCount: number;
+      highCount: number;
+      mediumCount: number;
+      lowCount: number;
+      infoCount: number;
+      latestCompletedAt?: string;
+    }> = [];
 
-  const getPostureColor = (score: number) => {
-    if (score >= 90) return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30';
-    if (score >= 75) return 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30';
-    if (score >= 50) return 'text-amber-400 bg-amber-500/10 border-amber-500/30';
-    if (score >= 25) return 'text-orange-400 bg-orange-500/10 border-orange-500/30';
-    return 'text-rose-400 bg-rose-500/10 border-rose-500/30';
-  };
+    // Processa tutti i gruppi/aziende registrati
+    gMap.forEach((gNode, gId) => {
+      const companyReports = groupReportsMap.get(gId) || [];
+      const targetsMap = new Map<string, { targetId: string; targetValue: string; targetType: string }>();
 
-  const getSeverityBadge = (sev: SeverityLevel) => {
-    switch (sev) {
-      case 'CRITICAL':
-        return 'bg-red-500/20 text-red-400 border-red-500/30';
-      case 'HIGH':
-        return 'bg-orange-500/20 text-orange-400 border-orange-500/30';
-      case 'MEDIUM':
-        return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
-      case 'LOW':
-        return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
-      case 'INFO':
+      let crit = 0;
+      let high = 0;
+      let med = 0;
+      let low = 0;
+      let info = 0;
+      let latestTime: number | null = null;
+      let totalScore = 0;
+
+      companyReports.forEach((r) => {
+        if (!targetsMap.has(r.target_id)) {
+          targetsMap.set(r.target_id, {
+            targetId: r.target_id,
+            targetValue: r.target_value,
+            targetType: r.target_type,
+          });
+        }
+        crit += r.summary_stats.critical_count || 0;
+        high += r.summary_stats.high_count || 0;
+        med += r.summary_stats.medium_count || 0;
+        low += r.summary_stats.low_count || 0;
+        info += r.summary_stats.info_count || 0;
+        totalScore += r.posture_score;
+
+        const t = new Date(r.completed_at || r.created_at).getTime();
+        if (latestTime === null || t > latestTime) {
+          latestTime = t;
+        }
+      });
+
+      // Se non ci sono report ma gNode ha conteggi dal backend
+      if (companyReports.length === 0 && gNode.severity_counts) {
+        crit = gNode.severity_counts['CRITICAL'] || 0;
+        high = gNode.severity_counts['HIGH'] || 0;
+        med = gNode.severity_counts['MEDIUM'] || 0;
+        low = gNode.severity_counts['LOW'] || 0;
+        info = gNode.severity_counts['INFO'] || 0;
+      }
+
+      // Calcola Posture Score & Grade per l'Azienda
+      let postureScore = companyReports.length > 0 ? Math.round(totalScore / companyReports.length) : 100;
+      if (companyReports.length === 0) {
+        const deduction = crit * 25 + high * 15 + med * 5 + low * 1;
+        postureScore = Math.max(0, 100 - deduction);
+      }
+
+      let postureGrade = 'A';
+      if (postureScore < 25) postureGrade = 'F';
+      else if (postureScore < 50) postureGrade = 'D';
+      else if (postureScore < 75) postureGrade = 'C';
+      else if (postureScore < 90) postureGrade = 'B';
+
+      result.push({
+        id: gId,
+        name: gNode.name,
+        description: gNode.description,
+        color_tag: gNode.color_tag || '#06b6d4',
+        targets: Array.from(targetsMap.values()),
+        reports: companyReports,
+        totalTargets: Math.max(gNode.direct_target_count || 0, targetsMap.size),
+        postureScore,
+        postureGrade,
+        criticalCount: crit,
+        highCount: high,
+        mediumCount: med,
+        lowCount: low,
+        infoCount: info,
+        latestCompletedAt: latestTime ? new Date(latestTime).toISOString() : undefined,
+      });
+    });
+
+    // Filtra per ricerca e severità
+    return result.filter((comp) => {
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        const matchName = comp.name.toLowerCase().includes(q);
+        const matchDesc = comp.description ? comp.description.toLowerCase().includes(q) : false;
+        const matchIP = comp.targets.some((t) => t.targetValue.toLowerCase().includes(q));
+        if (!matchName && !matchDesc && !matchIP) return false;
+      }
+
+      if (severityFilter) {
+        if (severityFilter === 'CRITICAL' && comp.criticalCount === 0) return false;
+        if (severityFilter === 'HIGH' && comp.highCount === 0 && comp.criticalCount === 0) return false;
+        if (severityFilter === 'MEDIUM' && comp.mediumCount === 0 && comp.highCount === 0 && comp.criticalCount === 0) return false;
+      }
+
+      return true;
+    });
+  }, [groupsTree, reports, search, severityFilter]);
+
+  // Metriche sintetiche aggregate delle aziende
+  const kpiStats = useMemo(() => {
+    if (companyDataList.length === 0) {
+      return { totalCompanies: 0, avgScore: 100, avgGrade: 'A', totalTargets: 0, highRiskCompanies: 0 };
+    }
+
+    let sumScore = 0;
+    let totalT = 0;
+    let highRisk = 0;
+
+    companyDataList.forEach((c) => {
+      sumScore += c.postureScore;
+      totalT += c.totalTargets;
+      if (c.criticalCount > 0 || c.highCount > 0) {
+        highRisk++;
+      }
+    });
+
+    const avgScore = Math.round(sumScore / companyDataList.length);
+    let avgGrade = 'A';
+    if (avgScore < 25) avgGrade = 'F';
+    else if (avgScore < 50) avgGrade = 'D';
+    else if (avgScore < 75) avgGrade = 'C';
+    else if (avgScore < 90) avgGrade = 'B';
+
+    return {
+      totalCompanies: companyDataList.length,
+      avgScore,
+      avgGrade,
+      totalTargets: totalT,
+      highRiskCompanies: highRisk,
+    };
+  }, [companyDataList]);
+
+  const getGradeBadge = (grade: string) => {
+    switch (grade) {
+      case 'A':
+        return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40';
+      case 'B':
+        return 'bg-cyan-500/15 text-cyan-400 border-cyan-500/40';
+      case 'C':
+        return 'bg-amber-500/15 text-amber-400 border-amber-500/40';
+      case 'D':
+        return 'bg-orange-500/15 text-orange-400 border-orange-500/40';
+      case 'F':
       default:
-        return 'bg-slate-500/20 text-slate-400 border-slate-500/30';
+        return 'bg-rose-500/15 text-rose-400 border-rose-500/40';
     }
   };
-
-  const getStatusBadge = (status: ScanStatus) => {
-    switch (status) {
-      case 'COMPLETED':
-        return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
-      case 'RUNNING':
-        return 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20 animate-pulse';
-      case 'FAILED':
-        return 'bg-rose-500/10 text-rose-400 border-rose-500/20';
-      case 'CANCELLED':
-        return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
-      default:
-        return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
-    }
-  };
-
-  const totalPages = Math.ceil(total / pageSize) || 1;
 
   return (
     <div className="space-y-6">
-      {/* Intestazione Pagina */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center space-x-3">
-          <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.15)]">
-            <FileText className="w-6 h-6" />
+      {/* Toast Feedback Notifiche */}
+      {downloadSuccessMsg && (
+        <div className="p-3.5 rounded-xl border border-emerald-500/40 bg-emerald-950/40 text-emerald-200 text-xs flex items-center justify-between shadow-lg animate-in fade-in">
+          <div className="flex items-center space-x-2">
+            <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span className="font-medium">{downloadSuccessMsg}</span>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-              <span>Hub Centralizzato Reportistica</span>
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 font-mono">
-                White-Label
-              </span>
-            </h1>
-            <p className="text-sm text-slate-400 mt-0.5">
-              Archivio storico degli audit, download PDF (Executive & Tecnico) ed esportazioni CSV per azienda e singolo IP.
-            </p>
+          <button
+            onClick={() => setDownloadSuccessMsg(null)}
+            className="text-emerald-400 hover:text-white"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {downloadErrorMsg && (
+        <div className="p-3.5 rounded-xl border border-rose-800/50 bg-rose-950/40 text-rose-300 text-xs flex items-center justify-between shadow-lg animate-in fade-in">
+          <div className="flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            <span>{downloadErrorMsg}</span>
+          </div>
+          <button
+            onClick={() => setDownloadErrorMsg(null)}
+            className="text-rose-400 hover:text-white"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Header Pagina */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <div className="flex items-center space-x-3">
+            <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
+              <Building className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight text-white flex items-center space-x-2.5">
+                <span>Dossier & Report Aziendali Consolidati</span>
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 font-medium">
+                  Per Azienda
+                </span>
+              </h2>
+              <p className="text-sm text-slate-400 mt-0.5">
+                Generazione white-label consolidata per Azienda Cliente. Ogni documento racchiude l'audit completo di tutti gli IP e nodi del perimetro.
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Azioni Globali */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* Switcher Modalità: Vista per Azienda vs Archivio Lineare */}
-          <div className="flex items-center bg-[#111726] border border-cyber-border rounded-lg p-1 text-xs">
+        <div className="flex items-center space-x-2 self-start md:self-auto">
+          {/* Selettore modalità */}
+          <div className="p-1 rounded-xl bg-slate-900 border border-cyber-border flex items-center space-x-1 text-xs">
             <button
               onClick={() => setViewMode('grouped')}
-              className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md transition-colors ${
+              className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center space-x-1.5 ${
                 viewMode === 'grouped'
-                  ? 'bg-cyan-500/20 text-cyan-300 font-semibold border border-cyan-500/40 shadow-sm'
+                  ? 'bg-cyan-500 text-slate-950 shadow-[0_0_12px_rgba(6,182,212,0.3)]'
                   : 'text-slate-400 hover:text-white'
               }`}
-              title="Organizza i report per Cartella / Azienda Cliente ed ispeziona ogni IP"
             >
               <Building className="w-3.5 h-3.5" />
               <span>Per Azienda</span>
             </button>
             <button
               onClick={() => setViewMode('flat')}
-              className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md transition-colors ${
+              className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center space-x-1.5 ${
                 viewMode === 'flat'
-                  ? 'bg-cyan-500/20 text-cyan-300 font-semibold border border-cyan-500/40 shadow-sm'
+                  ? 'bg-cyan-500 text-slate-950 shadow-[0_0_12px_rgba(6,182,212,0.3)]'
                   : 'text-slate-400 hover:text-white'
               }`}
-              title="Visualizzazione tabellare cronologica classica"
             >
-              <List className="w-3.5 h-3.5" />
+              <Clock className="w-3.5 h-3.5" />
               <span>Cronologico</span>
             </button>
           </div>
 
-          {/* Selettore Template Predefinito */}
-          <div className="flex items-center bg-[#111726] border border-cyber-border rounded-lg p-1 text-xs">
-            <span className="text-slate-400 px-2 font-medium hidden md:inline">PDF:</span>
-            <button
-              onClick={() => setPreferredTemplate('executive')}
-              className={`px-2.5 py-1 rounded-md transition-colors ${
-                preferredTemplate === 'executive'
-                  ? 'bg-cyan-500/20 text-cyan-300 font-semibold border border-cyan-500/40'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-              title="Template manageriale sintetico con Posture Index, KRIs e priorità"
-            >
-              Executive
-            </button>
-            <button
-              onClick={() => setPreferredTemplate('technical')}
-              className={`px-2.5 py-1 rounded-md transition-colors ${
-                preferredTemplate === 'technical'
-                  ? 'bg-purple-500/20 text-purple-300 font-semibold border border-purple-500/40'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-              title="Template tecnico esteso con dettagli porte, censimento e raw banner"
-            >
-              Tecnico
-            </button>
-          </div>
-
           <button
-            onClick={() => fetchData(false)}
+            onClick={() => fetchData()}
             disabled={loading}
-            className="flex items-center space-x-2 px-3 py-1.5 bg-[#111726] hover:bg-slate-800 border border-cyber-border rounded-lg text-slate-300 hover:text-white transition-all text-xs font-medium"
-            title="Aggiorna elenco report"
+            className="p-2 rounded-xl bg-slate-900 border border-cyber-border text-slate-400 hover:text-cyan-400 hover:border-cyan-500/40 transition-colors disabled:opacity-50"
+            title="Ricarica report"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-cyan-400' : ''}`} />
-            <span className="hidden sm:inline">Aggiorna</span>
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>
 
-      {/* Banner di notifica per download riuscito o fallito */}
-      {downloadSuccessMsg && (
-        <div className="p-3.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-sm flex items-center justify-between animate-in fade-in">
-          <div className="flex items-center space-x-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>{downloadSuccessMsg}</span>
+      {/* KPI Cards di Riepilogo Posture */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="p-4 rounded-xl border border-cyber-border bg-cyber-card/60 relative overflow-hidden">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-400">Aziende Monitorate</span>
+            <Building className="w-4 h-4 text-cyan-400" />
           </div>
-          <button onClick={() => setDownloadSuccessMsg(null)} className="text-emerald-400 hover:text-white">
-            <X className="w-4 h-4" />
-          </button>
+          <div className="mt-2 text-2xl font-bold font-mono text-white">
+            {kpiStats.totalCompanies}
+          </div>
+          <div className="mt-1 text-[11px] text-slate-500">Perimetri e cartelle censite</div>
+        </div>
+
+        <div className="p-4 rounded-xl border border-cyber-border bg-cyber-card/60 relative overflow-hidden">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-400">Posture Score Medio</span>
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+          </div>
+          <div className="mt-2 flex items-baseline space-x-2">
+            <span className="text-2xl font-bold font-mono text-white">{kpiStats.avgScore}/100</span>
+            <span className={`text-xs px-2 py-0.5 rounded font-mono font-bold border ${getGradeBadge(kpiStats.avgGrade)}`}>
+              GRADE {kpiStats.avgGrade}
+            </span>
+          </div>
+          <div className="mt-1 text-[11px] text-slate-500">Media ponderata su tutti i clienti</div>
+        </div>
+
+        <div className="p-4 rounded-xl border border-cyber-border bg-cyber-card/60 relative overflow-hidden">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-400">IP Totali Censiti</span>
+            <Layers className="w-4 h-4 text-indigo-400" />
+          </div>
+          <div className="mt-2 text-2xl font-bold font-mono text-indigo-300">
+            {kpiStats.totalTargets}
+          </div>
+          <div className="mt-1 text-[11px] text-slate-500">Bersagli compresi nei report</div>
+        </div>
+
+        <div className="p-4 rounded-xl border border-cyber-border bg-cyber-card/60 relative overflow-hidden">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-400">Aziende ad Alto Rischio</span>
+            <AlertTriangle className="w-4 h-4 text-rose-400" />
+          </div>
+          <div className="mt-2 text-2xl font-bold font-mono text-rose-400">
+            {kpiStats.highRiskCompanies}
+          </div>
+          <div className="mt-1 text-[11px] text-slate-500">Con vulnerabilità Critiche o Alte</div>
+        </div>
+      </div>
+
+      {/* Toolbar Filtri & Ricerca */}
+      <div className="p-3.5 rounded-xl border border-cyber-border bg-cyber-card/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="relative flex-1 max-w-md">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+            <Search className="w-4 h-4" />
+          </div>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Cerca per Azienda, descrizione o IP..."
+            className="w-full pl-9 pr-8 py-2 bg-slate-950 border border-cyber-border rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-500 hover:text-slate-300"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <select
+            value={severityFilter}
+            onChange={(e) => setSeverityFilter(e.target.value)}
+            className="px-3 py-2 bg-slate-950 border border-cyber-border rounded-lg text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
+          >
+            <option value="">Tutte le severità</option>
+            <option value="CRITICAL">Critica (Score &lt; 50)</option>
+            <option value="HIGH">Alta (Score &lt; 75)</option>
+            <option value="MEDIUM">Media</option>
+          </select>
+
+          {viewMode === 'grouped' && (
+            <div className="flex items-center space-x-1 pl-2 border-l border-cyber-border">
+              <button
+                onClick={handleExpandAll}
+                className="px-2 py-1.5 rounded bg-slate-900 border border-cyber-border text-[11px] text-slate-400 hover:text-white"
+                title="Espandi tutte le aziende"
+              >
+                Espandi tutti
+              </button>
+              <button
+                onClick={handleCollapseAll}
+                className="px-2 py-1.5 rounded bg-slate-900 border border-cyber-border text-[11px] text-slate-400 hover:text-white"
+                title="Comprimi tutte le aziende"
+              >
+                Comprimi tutti
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Loading & Error States */}
+      {loading && (
+        <div className="p-12 text-center text-slate-400 flex flex-col items-center justify-center space-y-3">
+          <RefreshCw className="w-6 h-6 animate-spin text-cyan-400" />
+          <span className="text-xs">Caricamento dossier e report aziendali...</span>
         </div>
       )}
-      {downloadErrorMsg && (
-        <div className="p-3.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-sm flex items-center justify-between animate-in fade-in">
-          <div className="flex items-center space-x-2">
-            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-            <span>{downloadErrorMsg}</span>
-          </div>
-          <button onClick={() => setDownloadErrorMsg(null)} className="text-rose-400 hover:text-white">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
 
-      {/* KPI Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Totale Report */}
-        <div className="p-4 rounded-xl border border-cyber-border bg-[#111726]/60 backdrop-blur-md flex items-center space-x-4">
-          <div className="p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
-            <FileText className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xs font-medium text-slate-400">Report Disponibili</div>
-            <div className="text-2xl font-bold text-white mt-0.5">{total}</div>
-          </div>
-        </div>
-
-        {/* Postura Media */}
-        <div className="p-4 rounded-xl border border-cyber-border bg-[#111726]/60 backdrop-blur-md flex items-center space-x-4">
-          <div className={`p-3 rounded-lg border ${getPostureColor(kpiStats.avgScore)}`}>
-            <ShieldCheck className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xs font-medium text-slate-400">Postura Media (Vista)</div>
-            <div className="flex items-center space-x-2 mt-0.5">
-              <span className="text-2xl font-bold text-white">{kpiStats.avgScore}</span>
-              <span className="text-xs text-slate-400">/100</span>
-              <span className={`text-xs px-2 py-0.5 rounded-md font-bold border ${getPostureColor(kpiStats.avgScore)}`}>
-                GRADE {kpiStats.avgGrade}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Report ad Alto Rischio */}
-        <div className="p-4 rounded-xl border border-cyber-border bg-[#111726]/60 backdrop-blur-md flex items-center space-x-4">
-          <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400">
-            <AlertTriangle className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xs font-medium text-slate-400">Audit ad Alto Rischio</div>
-            <div className="text-2xl font-bold text-white mt-0.5">{kpiStats.highRiskCount}</div>
-          </div>
-        </div>
-
-        {/* Host Monitorati */}
-        <div className="p-4 rounded-xl border border-cyber-border bg-[#111726]/60 backdrop-blur-md flex items-center space-x-4">
-          <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-            <Activity className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xs font-medium text-slate-400">Host Operativi Censiti</div>
-            <div className="text-2xl font-bold text-white mt-0.5">{kpiStats.totalUpHosts}</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Toolbar Filtri Istantanei */}
-      <div className="p-4 rounded-xl border border-cyber-border bg-[#111726]/70 backdrop-blur-md space-y-3">
-        <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center">
-          {/* Ricerca Testuale */}
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Cerca per azienda, target IP, subnet CIDR o profilo..."
-              className="w-full pl-9 pr-3 py-2 bg-[#0a0d14] border border-cyber-border rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50"
-            />
-            {search && (
-              <button
-                onClick={() => {
-                  setSearch('');
-                  setPage(1);
-                }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-          {/* Filtro Severità Massima */}
-          <div className="w-full sm:w-44">
-            <select
-              value={severityFilter}
-              onChange={(e) => {
-                setSeverityFilter(e.target.value);
-                setPage(1);
-              }}
-              className="w-full px-3 py-2 bg-[#0a0d14] border border-cyber-border rounded-lg text-xs text-slate-300 focus:outline-none focus:border-cyan-500/50"
-            >
-              <option value="">Severità (Tutte)</option>
-              <option value="CRITICAL">Solo Critiche</option>
-              <option value="HIGH">Solo Alte</option>
-              <option value="MEDIUM">Medie</option>
-              <option value="LOW">Basse</option>
-              <option value="INFO">Informative</option>
-            </select>
-          </div>
-
-          {/* Filtro Tipologia Target */}
-          <div className="w-full sm:w-36">
-            <select
-              value={targetTypeFilter}
-              onChange={(e) => {
-                setTargetTypeFilter(e.target.value);
-                setPage(1);
-              }}
-              className="w-full px-3 py-2 bg-[#0a0d14] border border-cyber-border rounded-lg text-xs text-slate-300 focus:outline-none focus:border-cyan-500/50"
-            >
-              <option value="">Tipo Target (Tutti)</option>
-              <option value="IP">IP Singolo</option>
-              <option value="CIDR">Subnet CIDR</option>
-              <option value="RANGE">Range IP</option>
-              <option value="FQDN">Dominio FQDN</option>
-            </select>
-          </div>
-
-          {/* Filtro Stato Scansione */}
-          <div className="w-full sm:w-36">
-            <select
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
-                setPage(1);
-              }}
-              className="w-full px-3 py-2 bg-[#0a0d14] border border-cyber-border rounded-lg text-xs text-slate-300 focus:outline-none focus:border-cyan-500/50"
-            >
-              <option value="">Stato (Tutti)</option>
-              <option value="COMPLETED">Completata</option>
-              <option value="RUNNING">In Corso</option>
-              <option value="FAILED">Fallita</option>
-              <option value="CANCELLED">Annullata</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Seconda riga: Date, controlli espansione ed eventuale Reset */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800/80">
-          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
-            <div className="flex items-center space-x-1.5">
-              <span>Dal:</span>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => {
-                  setDateFrom(e.target.value);
-                  setPage(1);
-                }}
-                className="px-2 py-1 bg-[#0a0d14] border border-cyber-border rounded text-slate-300 focus:outline-none focus:border-cyan-500/50"
-              />
-            </div>
-            <div className="flex items-center space-x-1.5">
-              <span>Al:</span>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => {
-                  setDateTo(e.target.value);
-                  setPage(1);
-                }}
-                className="px-2 py-1 bg-[#0a0d14] border border-cyber-border rounded text-slate-300 focus:outline-none focus:border-cyan-500/50"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-3 text-xs">
-            {viewMode === 'grouped' && groupedCompanyReports.length > 0 && (
-              <div className="flex items-center space-x-2 text-slate-400">
-                <button
-                  type="button"
-                  onClick={expandAllGroups}
-                  className="hover:text-cyan-400 transition-colors"
-                >
-                  Espandi tutti
-                </button>
-                <span>·</span>
-                <button
-                  type="button"
-                  onClick={collapseAllGroups}
-                  className="hover:text-cyan-400 transition-colors"
-                >
-                  Comprimi tutti
-                </button>
-              </div>
-            )}
-
-            {activeFiltersCount > 0 && (
-              <button
-                onClick={handleResetFilters}
-                className="flex items-center space-x-1 text-xs text-cyan-400 hover:text-cyan-300 underline font-medium"
-              >
-                <X className="w-3.5 h-3.5" />
-                <span>Azzera {activeFiltersCount} filtri</span>
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Contenuto Principale */}
-      {loading ? (
-        <div className="p-16 text-center text-slate-400 flex flex-col items-center justify-center space-y-3 rounded-xl border border-cyber-border bg-[#111726]/60">
-          <RefreshCw className="w-8 h-8 animate-spin text-cyan-400" />
-          <p className="text-sm">Caricamento dell'archivio report di sicurezza...</p>
-        </div>
-      ) : error ? (
-        <div className="p-12 text-center text-rose-400 flex flex-col items-center justify-center space-y-3 rounded-xl border border-cyber-border bg-[#111726]/60">
-          <AlertCircle className="w-8 h-8 text-rose-500" />
-          <p className="text-sm font-medium">{error}</p>
+      {error && !loading && (
+        <div className="p-6 rounded-xl border border-rose-800/40 bg-rose-950/20 text-center space-y-3">
+          <AlertCircle className="w-8 h-8 text-rose-400 mx-auto" />
+          <div className="text-sm font-semibold text-rose-200">Impossibile caricare i report</div>
+          <div className="text-xs text-rose-300/80">{error}</div>
           <button
-            onClick={() => fetchData(false)}
-            className="px-4 py-1.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-lg text-xs"
+            onClick={() => fetchData()}
+            className="px-3 py-1.5 rounded-lg bg-rose-900/40 hover:bg-rose-900 text-rose-200 text-xs font-medium"
           >
             Riprova
           </button>
         </div>
-      ) : reports.length === 0 ? (
-        <div className="p-16 text-center text-slate-400 flex flex-col items-center justify-center space-y-3 rounded-xl border border-cyber-border bg-[#111726]/60">
-          <FileText className="w-10 h-10 text-slate-600" />
-          <p className="text-base font-semibold text-white">Nessun report trovato</p>
-          <p className="text-xs text-slate-500 max-w-sm">
-            Non sono presenti report corrispondenti ai filtri impostati o non è ancora stata completata alcuna scansione.
-          </p>
-          {activeFiltersCount > 0 && (
-            <button
-              onClick={handleResetFilters}
-              className="mt-2 px-3 py-1.5 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-lg text-xs transition-colors"
-            >
-              Azzera filtri
-            </button>
-          )}
-        </div>
-      ) : viewMode === 'grouped' ? (
-        /* VISTA RAGGRUPPATA PER CARTELLA / AZIENDA CLIENTE */
-        <div className="space-y-4">
-          {groupedCompanyReports.map((company) => {
-            const isExpanded = !collapsedGroupIds.has(company.id);
+      )}
 
-            return (
-              <div
-                key={company.id}
-                className="rounded-xl border border-cyber-border/80 bg-[#111726]/75 shadow-lg overflow-hidden transition-all duration-200"
+      {/* Vista Raggruppata per Azienda Cliente (Default, Consolidato) */}
+      {!loading && !error && viewMode === 'grouped' && (
+        <div className="space-y-4">
+          {companyDataList.length === 0 ? (
+            <div className="p-12 rounded-2xl border border-cyber-border bg-cyber-card/40 text-center space-y-3">
+              <Building className="w-10 h-10 text-slate-600 mx-auto" />
+              <div className="text-sm font-semibold text-white">Nessuna Azienda trovata</div>
+              <p className="text-xs text-slate-400 max-w-md mx-auto">
+                Non sono presenti aziende o report che corrispondono ai filtri selezionati. Crea una nuova cartella/azienda in Target o reimposta i filtri.
+              </p>
+              <button
+                onClick={handleResetFilters}
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs"
               >
-                {/* Header Accordion Gruppo / Azienda */}
+                Reimposta filtri
+              </button>
+            </div>
+          ) : (
+            companyDataList.map((company) => {
+              const isCollapsed = collapsedGroupIds.has(company.id);
+              const isDownloadingThis = downloadingId === company.id;
+
+              return (
                 <div
-                  onClick={() => toggleGroupCollapse(company.id)}
-                  className="px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 cursor-pointer hover:bg-slate-800/40 transition-colors select-none"
+                  key={company.id}
+                  className="rounded-2xl border border-cyber-border bg-cyber-card/70 overflow-hidden shadow-xl transition-all"
                 >
-                  <div className="flex items-center space-x-3.5">
+                  {/* Header Card Azienda Cliente */}
+                  <div className="p-5 border-b border-cyber-border flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-900/40">
                     <div
-                      className="p-2.5 rounded-lg border flex items-center justify-center"
-                      style={{
-                        backgroundColor: `${company.color_tag}15`,
-                        borderColor: `${company.color_tag}40`,
-                        color: company.color_tag,
-                      }}
+                      onClick={() => toggleGroupCollapse(company.id)}
+                      className="flex items-start space-x-3.5 cursor-pointer flex-1"
                     >
-                      {isExpanded ? <FolderOpen className="w-5 h-5" /> : <Folder className="w-5 h-5" />}
+                      <div
+                        className="p-2.5 rounded-xl border mt-0.5 shrink-0"
+                        style={{
+                          backgroundColor: `${company.color_tag}20`,
+                          borderColor: `${company.color_tag}50`,
+                          color: company.color_tag,
+                        }}
+                      >
+                        <Building className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center space-x-2.5 flex-wrap">
+                          <h3 className="text-base font-bold text-white hover:text-cyan-300 transition-colors">
+                            {company.name}
+                          </h3>
+                          <span
+                            className="px-2 py-0.5 rounded text-[11px] font-medium border"
+                            style={{
+                              backgroundColor: `${company.color_tag}15`,
+                              borderColor: `${company.color_tag}40`,
+                              color: company.color_tag,
+                            }}
+                          >
+                            {company.totalTargets} IP censiti
+                          </span>
+                        </div>
+                        {company.description && (
+                          <p className="text-xs text-slate-400 mt-1 line-clamp-1">
+                            {company.description}
+                          </p>
+                        )}
+                        <div className="flex items-center space-x-4 mt-2 text-[11px] text-slate-500">
+                          {company.latestCompletedAt ? (
+                            <span className="flex items-center space-x-1">
+                              <Clock className="w-3 h-3 text-slate-400" />
+                              <span>
+                                Ultimo audit: {new Date(company.latestCompletedAt).toLocaleDateString('it-IT', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </span>
+                            </span>
+                          ) : (
+                            <span className="italic text-slate-500">In attesa di primo audit di sicurezza</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
-                    <div>
-                      <div className="flex items-center space-x-2.5">
-                        <span className="font-bold text-white text-base tracking-wide">{company.name}</span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-mono bg-slate-900 border border-slate-700 text-slate-300">
-                          {company.targetList.length} {company.targetList.length === 1 ? 'target' : 'target'}
+                    {/* Posture Score & Azioni di Download Consolidato per Azienda */}
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-4 shrink-0">
+                      {/* Posture Badge Aziendale */}
+                      <div className="flex items-center space-x-2.5 sm:px-3 sm:py-1.5 sm:rounded-xl sm:bg-slate-950 sm:border sm:border-cyber-border">
+                        <div className="text-right">
+                          <div className="text-[10px] text-slate-400 font-semibold uppercase">Security Posture</div>
+                          <div className="text-sm font-bold font-mono text-white">
+                            {company.postureScore}/100
+                          </div>
+                        </div>
+                        <span
+                          className={`px-2 py-0.5 rounded text-xs font-mono font-bold border ${getGradeBadge(
+                            company.postureGrade
+                          )}`}
+                        >
+                          GRADE {company.postureGrade}
                         </span>
                       </div>
-                      <div className="flex items-center space-x-2 text-xs text-slate-400 mt-0.5">
-                        <span className="text-cyan-400 font-semibold">{company.totalAudits} report totali</span>
-                        <span>·</span>
-                        <span>Scope cliente isolato</span>
+
+                      {/* 1-Click Documento Consolidato Aziendale */}
+                      <div className="flex items-center space-x-2">
+                        {/* Executive PDF */}
+                        <button
+                          onClick={() => handleCompanyDownload(company.id, company.name, 'pdf', 'executive')}
+                          disabled={isDownloadingThis}
+                          className="px-3 py-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 font-medium text-xs flex items-center space-x-1.5 transition-all disabled:opacity-50"
+                          title="Scarica Report PDF Executive per l'intera Azienda"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-cyan-400" />
+                          <span>Executive PDF</span>
+                        </button>
+
+                        {/* Tecnico PDF */}
+                        <button
+                          onClick={() => handleCompanyDownload(company.id, company.name, 'pdf', 'technical')}
+                          disabled={isDownloadingThis}
+                          className="px-3 py-1.5 rounded-lg border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 font-medium text-xs flex items-center space-x-1.5 transition-all disabled:opacity-50"
+                          title="Scarica Report PDF Tecnico per l'intera Azienda"
+                        >
+                          <FileCode className="w-3.5 h-3.5 text-purple-400" />
+                          <span>Tecnico PDF</span>
+                        </button>
+
+                        {/* CSV */}
+                        <button
+                          onClick={() => handleCompanyDownload(company.id, company.name, 'csv', 'executive')}
+                          disabled={isDownloadingThis}
+                          className="px-3 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 font-medium text-xs flex items-center space-x-1.5 transition-all disabled:opacity-50"
+                          title="Scarica Evidenze CSV per l'intera Azienda"
+                        >
+                          <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>CSV</span>
+                        </button>
+
+                        {/* Chevron Collapse */}
+                        <button
+                          onClick={() => toggleGroupCollapse(company.id)}
+                          className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors ml-1"
+                          title={isCollapsed ? 'Espandi dettagli perimetro' : 'Comprimi perimetro'}
+                        >
+                          {isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+                        </button>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-3 sm:self-center">
-                    {/* Posture Score medio azienda */}
-                    <div className="flex items-center space-x-2">
-                      <span className="text-xs text-slate-400 hidden md:inline">Posture Score:</span>
-                      <div className={`px-2.5 py-1 rounded-lg border font-mono text-xs font-bold ${getPostureColor(company.avgScore)}`}>
-                        <span>{company.avgScore}/100</span>
-                        <span className="ml-1 px-1 rounded bg-slate-950/40 text-[10px]">GRADE {company.avgGrade}</span>
+                  {/* Dettagli Espansi: Elenco IP inclusi nel Report Aziendale & Finding Summary */}
+                  {!isCollapsed && (
+                    <div className="p-5 space-y-4 animate-in fade-in bg-slate-950/40">
+                      {/* Breakdown Vulnerabilità dell'Azienda */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl border border-cyber-border bg-slate-900/60 text-xs">
+                        <div className="flex items-center space-x-2">
+                          <AlertTriangle className="w-4 h-4 text-amber-400" />
+                          <span className="font-semibold text-slate-200">
+                            Vulnerabilità Rilevate nel Perimetro Aziendale:
+                          </span>
+                        </div>
+                        <div className="flex items-center space-x-2 font-mono text-[11px]">
+                          <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                            {company.criticalCount} Critiche
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-orange-500/20 text-orange-300 border border-orange-500/40">
+                            {company.highCount} Alte
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                            {company.mediumCount} Medie
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/40">
+                            {company.lowCount} Basse
+                          </span>
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Max Severity Badge */}
-                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold border ${getSeverityBadge(company.maxSeverity)}`}>
-                      MAX: {company.maxSeverity}
-                    </span>
+                      {/* Lista IP inclusi nel documento dell'azienda */}
+                      <div>
+                        <div className="text-xs font-semibold text-slate-300 mb-2.5 flex items-center justify-between">
+                          <span>Bersagli e Indirizzi IP inclusi nel Documento Aziendale:</span>
+                          <span className="text-[11px] text-slate-500">
+                            (Il documento PDF e CSV racchiude tutti questi IP)
+                          </span>
+                        </div>
 
-                    {/* Freccia espansione */}
-                    <button
-                      type="button"
-                      className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors ml-1"
-                      aria-label={isExpanded ? 'Comprimi gruppo' : 'Espandi gruppo'}
-                    >
-                      {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Contenuto Accordion: Tabella Target IP e Report White-Label dedicati */}
-                {isExpanded && (
-                  <div className="border-t border-cyber-border/60 bg-[#0c101a]/90">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse text-xs">
-                        <thead>
-                          <tr className="border-b border-cyber-border/60 bg-[#0d121f]/90 text-slate-400 uppercase tracking-wider text-[11px] font-semibold">
-                            <th className="py-2.5 px-4">Target IP / Valore</th>
-                            <th className="py-2.5 px-4">Profilo Scansione</th>
-                            <th className="py-2.5 px-4 text-center">Security Posture</th>
-                            <th className="py-2.5 px-4">Vulnerabilità (Findings)</th>
-                            <th className="py-2.5 px-4 text-center">Host UP</th>
-                            <th className="py-2.5 px-4">Data Ultimo Audit</th>
-                            <th className="py-2.5 px-4 text-center">Stato</th>
-                            <th className="py-2.5 px-4 text-right">Download White-Label</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-cyber-border/30">
-                          {company.targetList.map((target) => {
-                            const rep = target.latestReport;
-                            if (!rep) return null;
-                            const isCurrentItemDownloading = downloadingId === rep.scan_id;
-
-                            return (
-                              <tr
-                                key={target.targetId}
-                                className="hover:bg-slate-800/25 transition-colors group"
+                        {company.targets.length === 0 ? (
+                          <div className="p-4 rounded-xl border border-slate-800 bg-slate-900/40 text-center text-xs text-slate-400">
+                            Nessun IP con scansioni storiche. Assegna bersagli a questa azienda nella sezione Target.
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">
+                            {company.targets.map((tgt) => (
+                              <div
+                                key={tgt.targetId}
+                                className="p-2.5 rounded-xl border border-cyber-border bg-slate-900/50 flex items-center justify-between text-xs hover:border-slate-700 transition-colors"
                               >
-                                {/* Target IP e pulsante copia */}
-                                <td className="py-3 px-4">
-                                  <div className="flex items-center space-x-2">
-                                    <span className="font-mono font-bold text-white group-hover:text-cyan-300 transition-colors">
-                                      {target.targetValue}
-                                    </span>
-                                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700 uppercase">
-                                      {target.targetType}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleCopy(target.targetValue)}
-                                      className="text-slate-500 hover:text-slate-300 p-0.5 rounded transition-colors"
-                                      title="Copia valore IP"
-                                    >
-                                      {copiedIP === target.targetValue ? (
-                                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                                      ) : (
-                                        <Copy className="w-3.5 h-3.5" />
-                                      )}
-                                    </button>
-                                  </div>
-                                  {target.reports.length > 1 && (
-                                    <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                                      {target.reports.length} report archiviati per questo IP
-                                    </div>
-                                  )}
-                                </td>
-
-                                {/* Profilo & Trigger */}
-                                <td className="py-3 px-4">
-                                  <div className="flex flex-col">
-                                    <span className="text-slate-200 font-medium">{rep.profile_name}</span>
-                                    <span className="text-[10px] text-slate-500 uppercase mt-0.5">
-                                      {rep.trigger_type === 'SCHEDULED' ? 'Pianificata' : 'Manuale'}
-                                    </span>
-                                  </div>
-                                </td>
-
-                                {/* Posture Score */}
-                                <td className="py-3 px-4 text-center">
-                                  <div className="inline-flex items-center space-x-2 px-2 py-0.5 rounded-lg border font-mono font-semibold">
-                                    <span className={getPostureColor(rep.posture_score).split(' ')[0]}>
-                                      {rep.posture_score}
-                                    </span>
-                                    <span className="text-slate-500">/</span>
-                                    <span className={`text-[10px] px-1 rounded ${getPostureColor(rep.posture_score)}`}>
-                                      {rep.posture_grade}
-                                    </span>
-                                  </div>
-                                </td>
-
-                                {/* Findings */}
-                                <td className="py-3 px-4">
-                                  <div className="flex flex-col space-y-1">
-                                    <div className="flex items-center space-x-1.5">
-                                      <span className={`text-[10px] px-2 py-0.5 rounded font-bold border ${getSeverityBadge(rep.max_severity)}`}>
-                                        MAX: {rep.max_severity}
-                                      </span>
-                                    </div>
-                                    <div className="flex items-center space-x-2 text-[10px] text-slate-400 font-mono">
-                                      {rep.summary_stats.critical_count > 0 && (
-                                        <span className="text-red-400 font-bold">{rep.summary_stats.critical_count}C</span>
-                                      )}
-                                      {rep.summary_stats.high_count > 0 && (
-                                        <span className="text-orange-400 font-bold">{rep.summary_stats.high_count}H</span>
-                                      )}
-                                      {rep.summary_stats.medium_count > 0 && (
-                                        <span className="text-amber-400">{rep.summary_stats.medium_count}M</span>
-                                      )}
-                                      {rep.summary_stats.low_count > 0 && (
-                                        <span className="text-blue-400">{rep.summary_stats.low_count}L</span>
-                                      )}
-                                      {rep.summary_stats.critical_count === 0 &&
-                                        rep.summary_stats.high_count === 0 &&
-                                        rep.summary_stats.medium_count === 0 &&
-                                        rep.summary_stats.low_count === 0 && (
-                                          <span className="text-emerald-400">Pulito (0 vulns)</span>
-                                        )}
-                                    </div>
-                                  </div>
-                                </td>
-
-                                {/* Host Monitorati */}
-                                <td className="py-3 px-4 text-center">
-                                  <div className="font-mono text-slate-300">
-                                    {rep.summary_stats.up_hosts || 1}
-                                    <span className="text-slate-500 text-[10px]">
-                                      {rep.summary_stats.total_hosts > 1 ? ` / ${rep.summary_stats.total_hosts}` : ' host'} UP
-                                    </span>
-                                  </div>
-                                </td>
-
-                                {/* Data & Durata */}
-                                <td className="py-3 px-4">
-                                  <div className="flex flex-col text-slate-300">
-                                    <span>{formatDate(rep.completed_at || rep.created_at)}</span>
-                                    <span className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
-                                      <Clock className="w-3 h-3" />
-                                      {formatDuration(rep.summary_stats.duration_seconds)}
-                                    </span>
-                                  </div>
-                                </td>
-
-                                {/* Stato */}
-                                <td className="py-3 px-4 text-center">
-                                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${getStatusBadge(rep.status)}`}>
-                                    {rep.status}
+                                <div className="flex items-center space-x-2">
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-800 text-cyan-400 border border-slate-700">
+                                    {tgt.targetType}
                                   </span>
-                                </td>
-
-                                {/* Azioni di Esportazione 1-Click White-Label */}
-                                <td className="py-3 px-4 text-right">
-                                  <div className="flex items-center justify-end space-x-1.5">
-                                    {/* Scarica PDF Executive */}
-                                    <button
-                                      onClick={() => handleDownload(rep.scan_id, 'pdf', 'executive')}
-                                      disabled={isCurrentItemDownloading || rep.status !== 'COMPLETED'}
-                                      className={`p-1.5 rounded-lg border transition-all text-cyan-400 bg-cyan-500/10 border-cyan-500/30 hover:bg-cyan-500/20 ${
-                                        isCurrentItemDownloading && downloadingFormat === 'pdf_executive' ? 'animate-pulse' : ''
-                                      } disabled:opacity-40 disabled:cursor-not-allowed`}
-                                      title="Scarica Report PDF Executive per questo IP (Sintesi per Leadership)"
-                                    >
-                                      <FileText className="w-3.5 h-3.5" />
-                                    </button>
-
-                                    {/* Scarica PDF Tecnico */}
-                                    <button
-                                      onClick={() => handleDownload(rep.scan_id, 'pdf', 'technical')}
-                                      disabled={isCurrentItemDownloading || rep.status !== 'COMPLETED'}
-                                      className={`p-1.5 rounded-lg border transition-all text-purple-400 bg-purple-500/10 border-purple-500/30 hover:bg-purple-500/20 ${
-                                        isCurrentItemDownloading && downloadingFormat === 'pdf_technical' ? 'animate-pulse' : ''
-                                      } disabled:opacity-40 disabled:cursor-not-allowed`}
-                                      title="Scarica Report PDF Tecnico Deep-Dive per questo IP (Porte & Banner)"
-                                    >
-                                      <FileCode className="w-3.5 h-3.5" />
-                                    </button>
-
-                                    {/* Scarica CSV */}
-                                    <button
-                                      onClick={() => handleDownload(rep.scan_id, 'csv')}
-                                      disabled={isCurrentItemDownloading || rep.status !== 'COMPLETED'}
-                                      className={`p-1.5 rounded-lg border transition-all text-emerald-400 bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/20 ${
-                                        isCurrentItemDownloading && downloadingFormat?.startsWith('csv') ? 'animate-pulse' : ''
-                                      } disabled:opacity-40 disabled:cursor-not-allowed`}
-                                      title="Esporta Finding di questo IP in CSV Tabellare (RFC 4180)"
-                                    >
-                                      <FileSpreadsheet className="w-3.5 h-3.5" />
-                                    </button>
-
-                                    {/* Dettaglio Scansione */}
-                                    <Link
-                                      to={`/scans/${rep.scan_id}`}
-                                      className="p-1.5 rounded-lg border border-slate-700 bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
-                                      title="Apri Dettaglio Scansione Operativa"
-                                    >
-                                      <ExternalLink className="w-3.5 h-3.5" />
-                                    </Link>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
+                                  <span className="font-mono font-medium text-slate-100">
+                                    {tgt.targetValue}
+                                  </span>
+                                </div>
+                                <button
+                                  onClick={() => handleCopy(tgt.targetValue)}
+                                  className="p-1 rounded text-slate-500 hover:text-slate-300"
+                                  title="Copia IP"
+                                >
+                                  {copiedIP === tgt.targetValue ? (
+                                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                  ) : (
+                                    <Copy className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
-      ) : (
-        /* VISTA ARCHIVIO CRONOLOGICO LINEARE (FLAT TABLE) */
-        <div className="rounded-xl border border-cyber-border bg-[#111726]/60 backdrop-blur-md overflow-hidden">
+      )}
+
+      {/* Vista Cronologica Lineare (Audit Runs Storiche) */}
+      {!loading && !error && viewMode === 'flat' && (
+        <div className="rounded-2xl border border-cyber-border bg-cyber-card/70 overflow-hidden shadow-xl">
+          <div className="p-4 border-b border-cyber-border bg-slate-900/40 flex items-center justify-between">
+            <div className="text-xs font-semibold text-slate-200">
+              Storico Cronologico Esecuzioni di Scansione
+            </div>
+            <div className="text-xs text-slate-400">
+              {reports.length} report registrati
+            </div>
+          </div>
+
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="border-b border-cyber-border bg-[#0d121f]/80 text-slate-400 font-semibold uppercase tracking-wider">
-                  <th className="py-3 px-4">Target / Scope</th>
-                  <th className="py-3 px-4">Profilo Scansione</th>
-                  <th className="py-3 px-4 text-center">Security Posture</th>
-                  <th className="py-3 px-4">Vulnerabilità (Findings)</th>
-                  <th className="py-3 px-4 text-center">Host Monitorati</th>
-                  <th className="py-3 px-4">Data Audit</th>
-                  <th className="py-3 px-4 text-center">Stato</th>
-                  <th className="py-3 px-4 text-right">Download White-Label</th>
+                <tr className="border-b border-cyber-border bg-slate-950/80 text-slate-400 font-mono text-[11px] uppercase tracking-wider">
+                  <th className="py-3 px-4">Azienda Scope</th>
+                  <th className="py-3 px-4">Bersaglio / IP</th>
+                  <th className="py-3 px-4">Profilo Audit</th>
+                  <th className="py-3 px-4">Data Esecuzione</th>
+                  <th className="py-3 px-4">Posture Score</th>
+                  <th className="py-3 px-4 text-right">Download Dossier</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-cyber-border/40">
-                {reports.map((item) => {
-                  const isCurrentItemDownloading = downloadingId === item.scan_id;
-
-                  return (
-                    <tr
-                      key={item.scan_id}
-                      className="hover:bg-slate-800/30 transition-colors group"
-                    >
-                      {/* Target & Cartella */}
-                      <td className="py-3.5 px-4">
-                        <div className="flex flex-col">
-                          <div className="flex items-center space-x-2">
-                            <span className="font-mono font-medium text-white group-hover:text-cyan-300 transition-colors">
-                              {item.target_value}
-                            </span>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                              {item.target_type}
-                            </span>
-                          </div>
-                          {item.group_name && (
-                            <div className="flex items-center space-x-1 text-[11px] text-slate-400 mt-1">
-                              <Folder className="w-3 h-3 text-cyan-400" />
-                              <span>{item.group_name}</span>
-                            </div>
-                          )}
-                        </div>
+                {reports.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-slate-500 italic">
+                      Nessun report presente nello storico.
+                    </td>
+                  </tr>
+                ) : (
+                  reports.map((r) => (
+                    <tr key={r.scan_id} className="hover:bg-slate-900/50 transition-colors">
+                      <td className="py-3 px-4 font-medium text-white">
+                        {r.group_name || 'Non Assegnato'}
                       </td>
-
-                      {/* Profilo & Trigger */}
-                      <td className="py-3.5 px-4">
-                        <div className="flex flex-col">
-                          <span className="text-slate-200 font-medium">{item.profile_name}</span>
-                          <span className="text-[10px] text-slate-500 uppercase mt-0.5">
-                            {item.trigger_type === 'SCHEDULED' ? 'Pianificata (Cron)' : 'Manuale On-Demand'}
-                          </span>
-                        </div>
+                      <td className="py-3 px-4 font-mono text-cyan-400">
+                        {r.target_value}
                       </td>
-
-                      {/* Posture Score Badge */}
-                      <td className="py-3.5 px-4 text-center">
-                        <div className="inline-flex items-center space-x-2 px-2.5 py-1 rounded-lg border font-mono font-semibold">
-                          <span className={getPostureColor(item.posture_score).split(' ')[0]}>
-                            {item.posture_score}
-                          </span>
-                          <span className="text-slate-500">/</span>
-                          <span className={`text-[10px] px-1 rounded ${getPostureColor(item.posture_score)}`}>
-                            {item.posture_grade}
-                          </span>
-                        </div>
+                      <td className="py-3 px-4 text-slate-300">
+                        {r.profile_name}
                       </td>
-
-                      {/* Vulnerabilità e Max Severity */}
-                      <td className="py-3.5 px-4">
-                        <div className="flex flex-col space-y-1">
-                          <div className="flex items-center space-x-1.5">
-                            <span className={`text-[10px] px-2 py-0.5 rounded font-bold border ${getSeverityBadge(item.max_severity)}`}>
-                              MAX: {item.max_severity}
-                            </span>
-                          </div>
-                          {/* Conteggi sintetici */}
-                          <div className="flex items-center space-x-2 text-[10px] text-slate-400 font-mono">
-                            {item.summary_stats.critical_count > 0 && (
-                              <span className="text-red-400 font-bold">{item.summary_stats.critical_count}C</span>
-                            )}
-                            {item.summary_stats.high_count > 0 && (
-                              <span className="text-orange-400 font-bold">{item.summary_stats.high_count}H</span>
-                            )}
-                            {item.summary_stats.medium_count > 0 && (
-                              <span className="text-amber-400">{item.summary_stats.medium_count}M</span>
-                            )}
-                            {item.summary_stats.low_count > 0 && (
-                              <span className="text-blue-400">{item.summary_stats.low_count}L</span>
-                            )}
-                            {item.summary_stats.critical_count === 0 &&
-                              item.summary_stats.high_count === 0 &&
-                              item.summary_stats.medium_count === 0 &&
-                              item.summary_stats.low_count === 0 && (
-                                <span className="text-emerald-400">Pulito (0 vulns)</span>
-                              )}
-                          </div>
-                        </div>
+                      <td className="py-3 px-4 text-slate-400">
+                        {new Date(r.completed_at || r.created_at).toLocaleDateString('it-IT', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
                       </td>
-
-                      {/* Host Monitorati */}
-                      <td className="py-3.5 px-4 text-center">
-                        <div className="font-mono text-slate-300">
-                          {item.summary_stats.up_hosts || 1}
-                          <span className="text-slate-500 text-[10px]">
-                            {item.summary_stats.total_hosts > 1 ? ` / ${item.summary_stats.total_hosts}` : ' host'} UP
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Data & Durata */}
-                      <td className="py-3.5 px-4">
-                        <div className="flex flex-col text-slate-300">
-                          <span>{formatDate(item.completed_at || item.created_at)}</span>
-                          <span className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
-                            <Clock className="w-3 h-3" />
-                            {formatDuration(item.summary_stats.duration_seconds)}
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Stato Scansione */}
-                      <td className="py-3.5 px-4 text-center">
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${getStatusBadge(item.status)}`}>
-                          {item.status}
+                      <td className="py-3 px-4">
+                        <span className={`px-2 py-0.5 rounded text-xs font-mono font-bold border ${getGradeBadge(r.posture_grade)}`}>
+                          {r.posture_score}/100 ({r.posture_grade})
                         </span>
                       </td>
-
-                      {/* Azioni di Esportazione 1-Click */}
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end space-x-1.5">
-                          {/* Scarica PDF Executive */}
-                          <button
-                            onClick={() => handleDownload(item.scan_id, 'pdf', 'executive')}
-                            disabled={isCurrentItemDownloading || item.status !== 'COMPLETED'}
-                            className={`p-1.5 rounded-lg border transition-all text-cyan-400 bg-cyan-500/10 border-cyan-500/30 hover:bg-cyan-500/20 ${
-                              isCurrentItemDownloading && downloadingFormat === 'pdf_executive' ? 'animate-pulse' : ''
-                            } disabled:opacity-40 disabled:cursor-not-allowed`}
-                            title="Scarica Report PDF Executive (Sintesi per Leadership)"
-                          >
-                            <FileText className="w-3.5 h-3.5" />
-                          </button>
-
-                          {/* Scarica PDF Tecnico */}
-                          <button
-                            onClick={() => handleDownload(item.scan_id, 'pdf', 'technical')}
-                            disabled={isCurrentItemDownloading || item.status !== 'COMPLETED'}
-                            className={`p-1.5 rounded-lg border transition-all text-purple-400 bg-purple-500/10 border-purple-500/30 hover:bg-purple-500/20 ${
-                              isCurrentItemDownloading && downloadingFormat === 'pdf_technical' ? 'animate-pulse' : ''
-                            } disabled:opacity-40 disabled:cursor-not-allowed`}
-                            title="Scarica Report PDF Tecnico Deep-Dive (Dettaglio Porte & Banner)"
-                          >
-                            <FileCode className="w-3.5 h-3.5" />
-                          </button>
-
-                          {/* Scarica CSV */}
-                          <button
-                            onClick={() => handleDownload(item.scan_id, 'csv')}
-                            disabled={isCurrentItemDownloading || item.status !== 'COMPLETED'}
-                            className={`p-1.5 rounded-lg border transition-all text-emerald-400 bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/20 ${
-                              isCurrentItemDownloading && downloadingFormat?.startsWith('csv') ? 'animate-pulse' : ''
-                            } disabled:opacity-40 disabled:cursor-not-allowed`}
-                            title="Esporta Finding in CSV Tabellare (RFC 4180)"
-                          >
-                            <FileSpreadsheet className="w-3.5 h-3.5" />
-                          </button>
-
-                          {/* Dettaglio Scansione */}
-                          <Link
-                            to={`/scans/${item.scan_id}`}
-                            className="p-1.5 rounded-lg border border-slate-700 bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
-                            title="Apri Dettaglio Scansione Operativa"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </Link>
-                        </div>
+                      <td className="py-3 px-4 text-right">
+                        {r.group_id ? (
+                          <div className="flex items-center justify-end space-x-1.5">
+                            <button
+                              onClick={() => handleCompanyDownload(r.group_id!, r.group_name || 'Azienda', 'pdf', 'executive')}
+                              className="p-1.5 rounded hover:bg-slate-800 text-cyan-400 hover:text-cyan-300"
+                              title="Scarica Executive PDF Aziendale"
+                            >
+                              <FileText className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleCompanyDownload(r.group_id!, r.group_name || 'Azienda', 'pdf', 'technical')}
+                              className="p-1.5 rounded hover:bg-slate-800 text-purple-400 hover:text-purple-300"
+                              title="Scarica Tecnico PDF Aziendale"
+                            >
+                              <FileCode className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleCompanyDownload(r.group_id!, r.group_name || 'Azienda', 'csv', 'executive')}
+                              className="p-1.5 rounded hover:bg-slate-800 text-emerald-400 hover:text-emerald-300"
+                              title="Scarica CSV Aziendale"
+                            >
+                              <FileSpreadsheet className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-slate-500 text-[11px] italic">Non associato ad azienda</span>
+                        )}
                       </td>
                     </tr>
-                  );
-                })}
+                  ))
+                )}
               </tbody>
             </table>
           </div>
-
-          {/* Paginazione */}
-          {total > 0 && (
-            <div className="p-3.5 border-t border-cyber-border bg-[#0d121f]/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
-              <div className="flex items-center space-x-2">
-                <span>Righe per pagina:</span>
-                <select
-                  value={pageSize}
-                  onChange={(e) => {
-                    setPageSize(Number(e.target.value));
-                    setPage(1);
-                  }}
-                  className="bg-[#0a0d14] border border-cyber-border rounded px-2 py-0.5 text-slate-300 focus:outline-none"
-                >
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                </select>
-                <span>
-                  Visualizzati {(page - 1) * pageSize + 1} - {Math.min(page * pageSize, total)} di {total} report
-                </span>
-              </div>
-
-              <div className="flex items-center space-x-1.5">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page <= 1}
-                  className="p-1 rounded border border-cyber-border bg-[#0a0d14] text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-800"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <span className="px-2 font-mono">
-                  Pagina {page} di {totalPages}
-                </span>
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page >= totalPages}
-                  className="p-1 rounded border border-cyber-border bg-[#0a0d14] text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-800"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>

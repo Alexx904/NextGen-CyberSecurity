@@ -6,6 +6,16 @@ import { DebugProvider } from '../context/DebugContext';
 import { apiClient } from '../api/client';
 import { debugLogger } from '../utils/debugLogger';
 
+vi.mock('recharts', async (importOriginal) => {
+  const original = await importOriginal<typeof import('recharts')>();
+  return {
+    ...original,
+    ResponsiveContainer: ({ children }: { children: React.ReactNode }) => (
+      <div style={{ width: 400, height: 300 }}>{children}</div>
+    ),
+  };
+});
+
 // Mock MockEventSource
 class MockEventSource {
   public url: string;
@@ -78,7 +88,10 @@ describe('ScanDetail Live Real-Time Monitoring & Progressive Findings', () => {
 
   const renderComponent = (initialPath = `/scans/${scanId}`) => {
     return render(
-      <MemoryRouter initialEntries={[initialPath]}>
+      <MemoryRouter
+        initialEntries={[initialPath]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
         <DebugProvider>
           <Routes>
             <Route path="/scans/:id" element={<ScanDetail />} />

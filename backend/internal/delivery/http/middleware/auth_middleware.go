@@ -9,12 +9,30 @@ import (
 	"nextgen-cybersec/pkg/auth"
 )
 
-// Authenticate intercetta la richiesta HTTP, estrae e valida il token Bearer JWT.
-// Supporta l'estrazione primaria da header 'Authorization: Bearer <token>' e, come fallback,
-// dal parametro query '?token=<token>' (per download diretti di file ed esportazioni).
-func Authenticate(tokenManager auth.TokenManager) func(next http.Handler) http.Handler {
+// Authenticate intercetta la richiesta HTTP, estrae e valida il token Bearer JWT o uno StreamTicket monouso.
+// Supporta in via prioritaria '?ticket=<ticket>' per connessioni real-time (SSE e WebSocket),
+// l'header standard 'Authorization: Bearer <token>' per API REST, e '?token=<token>' come fallback legacy.
+func Authenticate(tokenManager auth.TokenManager, ticketStore ...auth.StreamTicketStore) func(next http.Handler) http.Handler {
+	var ts auth.StreamTicketStore
+	if len(ticketStore) > 0 {
+		ts = ticketStore[0]
+	}
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// 1. Controllo primario stream-ticket monouso via query param '?ticket=<ticket>'
+			if queryTicket := r.URL.Query().Get("ticket"); strings.TrimSpace(queryTicket) != "" && ts != nil {
+				claims, err := ts.ConsumeTicket(strings.TrimSpace(queryTicket))
+				if err != nil {
+					response.Error(w, http.StatusUnauthorized, "INVALID_STREAM_TICKET", "Stream ticket non valido, scaduto o già utilizzato")
+					return
+				}
+				ctx := WithUserClaims(r.Context(), claims)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+
+			// 2. Controllo header Authorization: Bearer <token>
 			var tokenStr string
 			authHeader := r.Header.Get("Authorization")
 			if authHeader != "" {

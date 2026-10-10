@@ -70,6 +70,7 @@ export interface ScanErrorPayload {
 }
 
 export type ScanProfileCategory =
+  | 'ALL_IN_ONE'
   | 'PEN_TEST'
   | 'SYSTEM_FLAWS'
   | 'WEB_APP'

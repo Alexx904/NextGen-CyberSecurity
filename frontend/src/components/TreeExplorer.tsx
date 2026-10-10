@@ -5,7 +5,6 @@ import {
   ChevronRight,
   ChevronDown,
   Plus,
-  Play,
   Edit2,
   Trash2,
   RefreshCw,
@@ -16,14 +15,14 @@ import {
 } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { ApiResponse } from '../types/auth';
-import { TargetGroup, TargetGroupNode } from '../types/target';
+import { TargetGroup, TargetGroupNode, TargetItem } from '../types/target';
 import { GroupModal } from './GroupModal';
-import { GroupScanModal } from './GroupScanModal';
 
 interface TreeExplorerProps {
   selectedGroupId: string | null;
   onSelectGroup: (groupId: string | null, groupNode?: TargetGroupNode | null) => void;
   onGroupsLoaded?: (groups: TargetGroupNode[]) => void;
+  targets?: TargetItem[];
   className?: string;
 }
 
@@ -57,6 +56,7 @@ export const TreeExplorer: React.FC<TreeExplorerProps> = ({
   selectedGroupId,
   onSelectGroup,
   onGroupsLoaded,
+  targets,
   className = '',
 }) => {
   const [treeData, setTreeData] = useState<TargetGroupNode[]>([]);
@@ -70,9 +70,6 @@ export const TreeExplorer: React.FC<TreeExplorerProps> = ({
   const [isGroupModalOpen, setIsGroupModalOpen] = useState<boolean>(false);
   const [groupToEdit, setGroupToEdit] = useState<TargetGroup | null>(null);
   const [defaultParentId, setDefaultParentId] = useState<string | null>(null);
-
-  // Modale Scansione Ricorsiva
-  const [scanModalGroup, setScanModalGroup] = useState<TargetGroupNode | null>(null);
 
   // Modale Eliminazione
   const [groupToDelete, setGroupToDelete] = useState<TargetGroupNode | null>(null);
@@ -154,11 +151,6 @@ export const TreeExplorer: React.FC<TreeExplorerProps> = ({
     setIsGroupModalOpen(true);
   };
 
-  const handleOpenScan = (group: TargetGroupNode, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setScanModalGroup(group);
-  };
-
   const handleOpenDelete = (group: TargetGroupNode, e: React.MouseEvent) => {
     e.stopPropagation();
     setGroupToDelete(group);
@@ -193,10 +185,31 @@ export const TreeExplorer: React.FC<TreeExplorerProps> = ({
 
   const allFlatGroups = useMemo(() => flattenTree(treeData), [treeData]);
 
-  // Calcolo totale complessivo target
+  // Calcolo dinamico e reattivo dei bersagli per ciascun nodo (NFR-REL: sempre sincronizzato con la tabella)
+  const getDynamicTargetCount = useCallback(
+    (node: TargetGroupNode): number => {
+      if (!targets) return node.target_count || 0;
+      const descendantIds = new Set(getGroupAndDescendantIds(node));
+      return targets.filter((t) => t.group_id && descendantIds.has(t.group_id)).length;
+    },
+    [targets]
+  );
+
+  const getDynamicDirectCount = useCallback(
+    (node: TargetGroupNode): number => {
+      if (!targets) return node.direct_target_count || 0;
+      return targets.filter((t) => t.group_id === node.id).length;
+    },
+    [targets]
+  );
+
+  // Calcolo totale complessivo target dinamico
   const totalScopeTargets = useMemo(() => {
+    if (targets) {
+      return targets.filter((t) => t.group_id).length;
+    }
     return treeData.reduce((acc, n) => acc + (n.target_count || 0), 0);
-  }, [treeData]);
+  }, [treeData, targets]);
 
   const renderRiskBadge = (risk: string) => {
     switch (risk?.toUpperCase()) {
@@ -295,13 +308,19 @@ export const TreeExplorer: React.FC<TreeExplorerProps> = ({
             {/* Risk Badge */}
             {renderRiskBadge(node.aggregate_risk)}
 
-            {/* Target count badge */}
-            <span
-              className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-900 border border-cyber-border text-slate-400"
-              title={`${node.target_count} target totali (${node.direct_target_count} diretti)`}
-            >
-              {node.target_count}
-            </span>
+            {/* Target count badge dinamico */}
+            {(() => {
+              const totalCount = getDynamicTargetCount(node);
+              const directCount = getDynamicDirectCount(node);
+              return (
+                <span
+                  className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-900 border border-cyber-border text-slate-400"
+                  title={`${totalCount} target totali (${directCount} diretti)`}
+                >
+                  {totalCount}
+                </span>
+              );
+            })()}
 
             {/* Quick Actions (Visibili all'hover o se selezionato) */}
             <div className="hidden group-hover:flex items-center space-x-0.5 bg-slate-900/90 rounded px-1 border border-cyber-border/80 ml-1">
@@ -313,16 +332,6 @@ export const TreeExplorer: React.FC<TreeExplorerProps> = ({
                 title="Nuova sottocartella"
               >
                 <Plus className="w-3 h-3" />
-              </button>
-
-              {/* Scansiona cartella */}
-              <button
-                type="button"
-                onClick={(e) => handleOpenScan(node, e)}
-                className="p-1 rounded text-slate-400 hover:text-emerald-400 hover:bg-slate-800 transition-colors"
-                title="Avvia scansione ricorsiva cartella"
-              >
-                <Play className="w-3 h-3" />
               </button>
 
               {/* Modifica */}
@@ -475,19 +484,7 @@ export const TreeExplorer: React.FC<TreeExplorerProps> = ({
         existingGroups={allFlatGroups}
       />
 
-      {/* Modale Scansione Ricorsiva Cartella */}
-      {scanModalGroup && (
-        <GroupScanModal
-          isOpen={!!scanModalGroup}
-          onClose={() => setScanModalGroup(null)}
-          groupId={scanModalGroup.id}
-          groupName={scanModalGroup.name}
-          targetCount={scanModalGroup.target_count}
-          onScanStarted={() => {
-            fetchTree(true);
-          }}
-        />
-      )}
+
 
       {/* Dialog Conferma Eliminazione Cartella */}
       {groupToDelete && (

@@ -74,6 +74,13 @@ func (s *targetService) CreateTarget(ctx context.Context, input CreateTargetInpu
 		}
 	}
 
+	// 2.1 Verifica perimetro di sicurezza interno e deny-list per target operativi (FR-01.4)
+	if !input.IsBlacklisted {
+		if err := validator.CheckTargetScope(info.CleanValue, false); err != nil {
+			return nil, err
+		}
+	}
+
 	// 3. Controllo blacklist: un target operativo non può collidere con le blacklist del tenant
 	if !input.IsBlacklisted {
 		isBL, err := s.targetRepo.IsBlacklisted(ctx, input.TenantID, info.CleanValue)

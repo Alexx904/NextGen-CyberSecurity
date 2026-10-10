@@ -11,6 +11,7 @@ vi.mock('../api/reports', () => ({
   reportsApi: {
     list: vi.fn(),
     download: vi.fn(),
+    downloadCompany: vi.fn(),
   },
 }));
 
@@ -140,7 +141,7 @@ describe('Reports Page - Multi-Company Scope & Target IP Inspection', () => {
 
   it('renders company scope groups with posture metrics and specific target IPs', async () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Reports />
       </MemoryRouter>
     );
@@ -164,7 +165,7 @@ describe('Reports Page - Multi-Company Scope & Target IP Inspection', () => {
 
   it('allows collapsing and expanding company accordions', async () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Reports />
       </MemoryRouter>
     );
@@ -190,13 +191,13 @@ describe('Reports Page - Multi-Company Scope & Target IP Inspection', () => {
 
   it('allows switching to flat chronological archive view', async () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Reports />
       </MemoryRouter>
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Per Azienda')).toBeDefined();
+      expect(screen.getAllByText('Per Azienda').length).toBeGreaterThan(0);
     });
 
     // Clicca sul pulsante Cronologico
@@ -213,7 +214,7 @@ describe('Reports Page - Multi-Company Scope & Target IP Inspection', () => {
 
   it('triggers 1-click download when clicking download button', async () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Reports />
       </MemoryRouter>
     );
@@ -226,10 +227,13 @@ describe('Reports Page - Multi-Company Scope & Target IP Inspection', () => {
     const downloadExecutiveButtons = screen.getAllByTitle(/Scarica Report PDF Executive/i);
     expect(downloadExecutiveButtons.length).toBeGreaterThan(0);
 
-    fireEvent.click(downloadExecutiveButtons[0]);
+    await waitFor(async () => {
+      fireEvent.click(downloadExecutiveButtons[0]);
+    });
 
-    expect(reportsApi.download).toHaveBeenCalledWith(
-      'scan-alfa-01',
+    expect(reportsApi.downloadCompany).toHaveBeenCalledWith(
+      'group-alfa',
+      'Azienda Alfa S.r.l.',
       'pdf',
       'executive',
       expect.any(Object)

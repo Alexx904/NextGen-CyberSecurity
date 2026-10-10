@@ -4,6 +4,7 @@ import { debugLogger } from '../utils/debugLogger';
 
 export interface UseSSEOptions {
   url: string | null;
+  ticket?: string;
   enabled?: boolean;
   eventNames?: string[];
   onEvent?: (eventType: string, data: any) => void;
@@ -31,6 +32,7 @@ const DEFAULT_EVENT_NAMES = [
 
 export function useSSE({
   url,
+  ticket,
   enabled = true,
   eventNames = DEFAULT_EVENT_NAMES,
   onEvent,
@@ -65,13 +67,18 @@ export function useSSE({
       return;
     }
 
-    // Costruzione URL con iniezione token JWT se assente
+    // Costruzione URL con iniezione stream-ticket prioritario o token JWT di fallback
     let finalUrl = url;
-    if (!finalUrl.includes('token=')) {
-      const token = getStoredAccessToken();
-      if (token) {
+    if (!finalUrl.includes('token=') && !finalUrl.includes('ticket=')) {
+      if (ticket) {
         const separator = finalUrl.includes('?') ? '&' : '?';
-        finalUrl = `${finalUrl}${separator}token=${encodeURIComponent(token)}`;
+        finalUrl = `${finalUrl}${separator}ticket=${encodeURIComponent(ticket)}`;
+      } else {
+        const token = getStoredAccessToken();
+        if (token) {
+          const separator = finalUrl.includes('?') ? '&' : '?';
+          finalUrl = `${finalUrl}${separator}token=${encodeURIComponent(token)}`;
+        }
       }
     }
 

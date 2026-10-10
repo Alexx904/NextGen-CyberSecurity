@@ -60,6 +60,7 @@ type ScanSummaryStats struct {
 type ScanProfileCategory string
 
 const (
+	ProfileCategoryAllInOne    ScanProfileCategory = "ALL_IN_ONE"
 	ProfileCategoryPenTest     ScanProfileCategory = "PEN_TEST"
 	ProfileCategorySystemFlaws ScanProfileCategory = "SYSTEM_FLAWS"
 	ProfileCategoryWebApp      ScanProfileCategory = "WEB_APP"

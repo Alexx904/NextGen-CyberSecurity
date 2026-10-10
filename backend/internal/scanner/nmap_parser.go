@@ -26,6 +26,12 @@ type ParsedService struct {
 	RawBanner   string   `json:"raw_banner,omitempty"`
 }
 
+// ParsedScript rappresenta il risultato dell'esecuzione di uno script NSE Nmap (es. vulnerabilità vuln o ssl)
+type ParsedScript struct {
+	ID     string `json:"id"`
+	Output string `json:"output"`
+}
+
 // ParsedPort rappresenta una singola porta analizzata
 type ParsedPort struct {
 	PortID   int            `json:"port_id"`
@@ -33,6 +39,7 @@ type ParsedPort struct {
 	State    string         `json:"state"` // open, closed, filtered, unfiltered
 	Reason   string         `json:"reason,omitempty"`
 	Service  *ParsedService `json:"service,omitempty"`
+	Scripts  []ParsedScript `json:"scripts,omitempty"`
 }
 
 // ParsedOS racchiude il risultato del fingerprinting del sistema operativo
@@ -43,17 +50,18 @@ type ParsedOS struct {
 
 // ParsedHost rappresenta un singolo host bersaglio rilevato nella scansione
 type ParsedHost struct {
-	IP              string       `json:"ip"`
-	IsIPv6          bool         `json:"is_ipv6"`
-	MAC             string       `json:"mac,omitempty"`
-	Vendor          string       `json:"vendor,omitempty"`
-	Hostnames       []string     `json:"hostnames,omitempty"`
-	PrimaryHostname string       `json:"primary_hostname,omitempty"`
-	Status          string       `json:"status"` // up, down
-	StatusReason    string       `json:"status_reason,omitempty"`
-	LatencyMs       float64      `json:"latency_ms,omitempty"`
-	OS              *ParsedOS    `json:"os,omitempty"`
-	Ports           []ParsedPort `json:"ports,omitempty"`
+	IP              string         `json:"ip"`
+	IsIPv6          bool           `json:"is_ipv6"`
+	MAC             string         `json:"mac,omitempty"`
+	Vendor          string         `json:"vendor,omitempty"`
+	Hostnames       []string       `json:"hostnames,omitempty"`
+	PrimaryHostname string         `json:"primary_hostname,omitempty"`
+	Status          string         `json:"status"` // up, down
+	StatusReason    string         `json:"status_reason,omitempty"`
+	LatencyMs       float64        `json:"latency_ms,omitempty"`
+	OS              *ParsedOS      `json:"os,omitempty"`
+	Ports           []ParsedPort   `json:"ports,omitempty"`
+	HostScripts     []ParsedScript `json:"host_scripts,omitempty"`
 }
 
 // ScanRunStats racchiude le metriche generali di completamento della scansione
@@ -192,11 +200,17 @@ type xmlState struct {
 	Reason string `xml:"reason,attr"`
 }
 
+type xmlScript struct {
+	ID     string `xml:"id,attr"`
+	Output string `xml:"output,attr"`
+}
+
 type xmlPort struct {
-	Protocol string     `xml:"protocol,attr"`
-	PortID   int        `xml:"portid,attr"`
-	State    xmlState   `xml:"state"`
-	Service  xmlService `xml:"service"`
+	Protocol string      `xml:"protocol,attr"`
+	PortID   int         `xml:"portid,attr"`
+	State    xmlState    `xml:"state"`
+	Service  xmlService  `xml:"service"`
+	Scripts  []xmlScript `xml:"script"`
 }
 
 type xmlOSMatch struct {
@@ -211,12 +225,13 @@ type xmlTimes struct {
 }
 
 type xmlHost struct {
-	Status    xmlStatus     `xml:"status"`
-	Addresses []xmlAddress  `xml:"address"`
-	Hostnames []xmlHostname `xml:"hostnames>hostname"`
-	Ports     []xmlPort     `xml:"ports>port"`
-	OSMatches []xmlOSMatch  `xml:"os>osmatch"`
-	Times     xmlTimes      `xml:"times"`
+	Status      xmlStatus     `xml:"status"`
+	Addresses   []xmlAddress  `xml:"address"`
+	Hostnames   []xmlHostname `xml:"hostnames>hostname"`
+	Ports       []xmlPort     `xml:"ports>port"`
+	OSMatches   []xmlOSMatch  `xml:"os>osmatch"`
+	Times       xmlTimes      `xml:"times"`
+	HostScripts []xmlScript   `xml:"hostscript>script"`
 }
 
 type xmlFinished struct {
@@ -339,7 +354,27 @@ func convertXMLHost(xh *xmlHost) ParsedHost {
 			}
 		}
 
+		if len(p.Scripts) > 0 {
+			parsedPort.Scripts = make([]ParsedScript, 0, len(p.Scripts))
+			for _, sc := range p.Scripts {
+				parsedPort.Scripts = append(parsedPort.Scripts, ParsedScript{
+					ID:     sc.ID,
+					Output: sc.Output,
+				})
+			}
+		}
+
 		host.Ports = append(host.Ports, parsedPort)
+	}
+
+	if len(xh.HostScripts) > 0 {
+		host.HostScripts = make([]ParsedScript, 0, len(xh.HostScripts))
+		for _, sc := range xh.HostScripts {
+			host.HostScripts = append(host.HostScripts, ParsedScript{
+				ID:     sc.ID,
+				Output: sc.Output,
+			})
+		}
 	}
 
 	return host

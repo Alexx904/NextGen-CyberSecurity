@@ -136,6 +136,12 @@ export const NetworkDiscovery: React.FC = () => {
   const [groupOptions, setGroupOptions] = useState<FlattenedGroup[]>([]);
   const [targetGroupId, setTargetGroupId] = useState<string>('');
 
+  // Creazione nuova cartella durante l'importazione
+  const [importMode, setImportMode] = useState<'select' | 'create'>('select');
+  const [newFolderName, setNewFolderName] = useState<string>('');
+  const [newFolderDesc, setNewFolderDesc] = useState<string>('');
+  const [newFolderColor, setNewFolderColor] = useState<string>('#06b6d4');
+
   // Stato modale importazione & feedback
   const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
   const [isImporting, setIsImporting] = useState<boolean>(false);
@@ -292,6 +298,10 @@ export const NetworkDiscovery: React.FC = () => {
   const handleOpenImportModal = () => {
     setImportError(null);
     setImportResult(null);
+    setImportMode('select');
+    setNewFolderName('');
+    setNewFolderDesc('');
+    setNewFolderColor('#06b6d4');
     setIsImportModalOpen(true);
   };
 
@@ -300,6 +310,42 @@ export const NetworkDiscovery: React.FC = () => {
 
     setIsImporting(true);
     setImportError(null);
+
+    let finalGroupId: string | null = targetGroupId ? targetGroupId : null;
+
+    if (importMode === 'create') {
+      const trimmedName = newFolderName.trim();
+      if (!trimmedName) {
+        setImportError('Inserisci il nome della nuova cartella / azienda');
+        setIsImporting(false);
+        return;
+      }
+
+      try {
+        const createRes = await apiClient.post<ApiResponse<TargetGroupNode>>('/target-groups', {
+          name: trimmedName,
+          description: newFolderDesc.trim() || undefined,
+          color_tag: newFolderColor,
+        });
+
+        if (createRes.data?.success && createRes.data.data) {
+          finalGroupId = createRes.data.data.id;
+          fetchGroups();
+        } else {
+          setImportError(createRes.data?.error?.message || 'Impossibile creare la nuova cartella');
+          setIsImporting(false);
+          return;
+        }
+      } catch (err: any) {
+        setImportError(
+          err.response?.data?.error?.message ||
+          err.message ||
+          'Errore durante la creazione della nuova cartella'
+        );
+        setIsImporting(false);
+        return;
+      }
+    }
 
     const devicesToImport = discoveryResult.devices
       .filter((d) => selectedIPs.has(d.ip))
@@ -311,7 +357,7 @@ export const NetworkDiscovery: React.FC = () => {
 
     try {
       const res = await discoveryApi.importTargets({
-        group_id: targetGroupId ? targetGroupId : null,
+        group_id: finalGroupId,
         devices: devicesToImport,
       });
       setImportResult(res);
@@ -794,31 +840,115 @@ export const NetworkDiscovery: React.FC = () => {
                   Target ufficiali monitorati per questa organizzazione.
                 </p>
 
-                {/* Selezione cartella Scope */}
-                <div className="space-y-1.5">
-                  <label htmlFor="target-group-select" className="block text-xs font-medium text-slate-400">
-                    Cartella di Destinazione (Gerarchia ad Albero)
+                {/* Scelta Modalità: Cartella Esistente vs Crea Nuova Cartella */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-medium text-slate-400">
+                    Destinazione Bersagli
                   </label>
-                  <div className="relative">
-                    <select
-                      id="target-group-select"
-                      value={targetGroupId}
-                      onChange={(e) => setTargetGroupId(e.target.value)}
-                      disabled={isImporting}
-                      className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
+                  <div className="grid grid-cols-2 gap-2 p-1 bg-slate-950 rounded-lg border border-cyber-border">
+                    <button
+                      type="button"
+                      onClick={() => setImportMode('select')}
+                      className={`py-1.5 px-3 rounded-md text-xs font-semibold transition-all ${
+                        importMode === 'select'
+                          ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
                     >
-                      <option value="">📁 Cartella Principale (Root / Senza Cartella)</option>
-                      {groupOptions.map((g) => (
-                        <option key={g.id} value={g.id}>
-                          {'\u00A0'.repeat(g.depth * 3) + (g.depth > 0 ? '↳ ' : '📁 ') + g.name}
-                        </option>
-                      ))}
-                    </select>
+                      Cartella Esistente
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImportMode('create')}
+                      className={`py-1.5 px-3 rounded-md text-xs font-semibold transition-all ${
+                        importMode === 'create'
+                          ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      + Nuova Cartella (Azienda)
+                    </button>
                   </div>
-                  <p className="text-[11px] text-slate-500">
-                    I dispositivi manterranno il Vendor OUI e l'Hostname censiti nella descrizione.
-                  </p>
                 </div>
+
+                {importMode === 'select' ? (
+                  /* Selezione cartella Scope Esistente */
+                  <div className="space-y-1.5">
+                    <label htmlFor="target-group-select" className="block text-xs font-medium text-slate-400">
+                      Cartella Scope (Gerarchia ad Albero)
+                    </label>
+                    <div className="relative">
+                      <select
+                        id="target-group-select"
+                        value={targetGroupId}
+                        onChange={(e) => setTargetGroupId(e.target.value)}
+                        disabled={isImporting}
+                        className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
+                      >
+                        <option value="">📁 Cartella Principale (Root / Senza Cartella)</option>
+                        {groupOptions.map((g) => (
+                          <option key={g.id} value={g.id}>
+                            {'\u00A0'.repeat(g.depth * 3) + (g.depth > 0 ? '↳ ' : '📁 ') + g.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                ) : (
+                  /* Creazione Istantanea Nuova Cartella */
+                  <div className="space-y-3 p-3.5 rounded-xl border border-cyber-border/80 bg-slate-900/50">
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-medium text-slate-300">
+                        Nome Cartella / Azienda *
+                      </label>
+                      <input
+                        type="text"
+                        value={newFolderName}
+                        onChange={(e) => setNewFolderName(e.target.value)}
+                        placeholder="es. ACME Corporation, Sede Centrale, Server DMZ..."
+                        className="w-full px-3 py-1.5 rounded-lg bg-slate-950 border border-cyber-border text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-medium text-slate-300">
+                        Descrizione (opzionale)
+                      </label>
+                      <input
+                        type="text"
+                        value={newFolderDesc}
+                        onChange={(e) => setNewFolderDesc(e.target.value)}
+                        placeholder="es. Rete uffici e postazioni lavoro..."
+                        className="w-full px-3 py-1.5 rounded-lg bg-slate-950 border border-cyber-border text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="block text-[11px] font-medium text-slate-300">
+                        Etichetta Colore
+                      </label>
+                      <div className="flex items-center space-x-2">
+                        {['#06b6d4', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'].map((color) => (
+                          <button
+                            key={color}
+                            type="button"
+                            onClick={() => setNewFolderColor(color)}
+                            className={`w-5 h-5 rounded-full transition-transform border ${
+                              newFolderColor === color
+                                ? 'scale-125 border-white ring-2 ring-cyan-500/50'
+                                : 'border-transparent opacity-70 hover:opacity-100 hover:scale-110'
+                            }`}
+                            style={{ backgroundColor: color }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <p className="text-[11px] text-slate-500">
+                  I dispositivi manterranno il Vendor OUI e l'Hostname censiti nella descrizione.
+                </p>
 
                 {importError && (
                   <div className="p-3 rounded-lg border border-rose-900/50 bg-rose-950/20 text-rose-300 text-xs flex items-center space-x-2">

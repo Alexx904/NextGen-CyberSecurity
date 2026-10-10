@@ -11,8 +11,10 @@ var (
 	ErrForbidden     = errors.New("permessi insufficienti per accedere alla risorsa")
 
 	// Errori specifici per Target
-	ErrTargetBlacklisted = errors.New("il target è presente nella blacklist e non può essere scansionato")
-	ErrTargetInvalid     = errors.New("formato del target non valido (IP, CIDR, Range o FQDN atteso)")
+	ErrTargetBlacklisted        = errors.New("il target è presente nella blacklist e non può essere scansionato")
+	ErrTargetInvalid            = errors.New("formato del target non valido (IP, CIDR, Range o FQDN atteso)")
+	ErrTargetInternalRestricted = errors.New("il target ricade nell'infrastruttura interna protetta o in un intervallo IP riservato")
+	ErrTargetScopeTooBroad      = errors.New("il range o subnet CIDR è eccessivamente ampio per una scansione singola (limite massimo /16)")
 
 	// Errori specifici per Scansioni e Schedulazioni
 	ErrScanNotFound           = errors.New("scansione non trovata")
