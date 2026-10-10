@@ -320,6 +320,78 @@
   - **File:** `backend/internal/service/attack_path_service.go`, `backend/internal/delivery/http/handler/attack_path_handler.go`
   - **DoD:** Servizio di aggregazione topologica per calcolo dei cammini di movimento laterale, analisi dei pivot tra reti interne, identificazione chokepoint di remediation ad alto impatto e registrazione endpoint REST `/api/v1/attack-paths/graph` e `/api/v1/attack-paths/chokepoints`.
 
+### EPIC 25: Milestone 2 · Visual Graph Explorer & Robustezza Suite
+- [x] **FEAT-M2-03 · Componente UI Visual Graph Explorer (Frontend React)**
+  - **File:** `frontend/src/types/attackPath.ts`, `frontend/src/api/attackPath.ts`, `frontend/src/components/graph/AttackPathGraph.tsx`, `frontend/src/pages/AttackPath.tsx`, `frontend/src/pages/AttackPath.test.tsx`
+  - **DoD:** Pagina `/attack-path` e canvas SVG interattivo con controlli zoom/pan, layout topologico per livelli di penetrazione, evidenziazione dinamica dei percorsi di attacco, identificazione visiva dei chokepoint con raccomandazioni di remediation, filtri CVSS e navigazione integrata nella sidebar (Milestone 2 completata al 100%).
+- [x] **ONBOARD-01 · Pipeline CI/CD GitHub Actions per Test & Build Automatici**
+  - **File:** `.github/workflows/ci.yml`
+  - **DoD:** Pipeline automatica per push e PR su main: job paralleli per Go test + lint e frontend npm test + vite build.
+- [x] **ONBOARD-02 · Automated Container E2E Test Runner**
+  - **File:** `scripts/run_e2e_docker.sh`, `scripts/run_e2e_docker.ps1`
+  - **DoD:** Runner unificato multipiattaforma per lanciare lo stack containerizzato ed eseguire la sequenza completa di test E2E.
+- [x] **ONBOARD-03 · Code-Splitting e Ottimizzazione Bundle Frontend (Vite manualChunks)**
+  - **File:** `frontend/vite.config.ts`, `frontend/src/App.tsx`
+  - **DoD:** Introduzione di `React.lazy` per le pagine e splitting dei vendor pesanti (`@xterm/xterm`, `recharts`, `lucide-react`), nessun chunk oltre i 500 kB.
+- [x] **ONBOARD-04 · Risoluzione Warning nei Test Vitest (act & Recharts container)**
+  - **File:** `frontend/src/tests/setup.ts`, `frontend/src/components/debug/DebugConsoleDrawer.test.tsx`, `frontend/src/pages/Reports.test.tsx`
+  - **DoD:** Pulizia di tutti i warning console dei test Vitest: 100% test verdi con 0 warning a terminale.
+- [x] **ONBOARD-05 · Test di Caratterizzazione per Scenari Limite Nmap & Rete**
+  - **File:** `backend/internal/scanner/nmap_runner_test.go`, `backend/internal/service/scan_orchestrator_test.go`
+  - **DoD:** Test isolati per simulare interruzione brusca (SIGKILL 137), payload troncato, payload binario corrotto e buffer stderr senza deadlock.
+
+### EPIC 26: Hardening Critico & Scanner Security Perimeter (SEC-P0)
+- [x] **SEC-P0-01 · Deny-List Target Interni & Risoluzione DNS Preventiva (FR-01.4)**
+  - **File:** `backend/pkg/validator/target_validator.go`, `backend/internal/service/scan_orchestrator.go`, `backend/internal/service/discovery_service.go`
+  - **DoD:** Blocco preventivo delle scansioni verso target locali, cloud metadata (169.254.169.254) o hostname interni con protezione anti-rebinding DNS.
+- [x] **SEC-P0-02 · Stream-Ticket Monouso per Connessioni Real-Time SSE e WebSocket (NFR-SEC-04)**
+  - **File:** `backend/pkg/auth/stream_ticket.go`, `backend/internal/delivery/http/handler/auth_handler.go`, `frontend/src/hooks/useSSE.ts`, `frontend/src/components/WebTerminalModal.tsx`
+  - **DoD:** Sostituzione dei JWT a lungo termine nelle query string SSE/WS con stream-ticket usa-e-getta (TTL 30s) revocabili.
+- [x] **SEC-P0-03 · Sanitizzazione e Argomenti Tipizzati Nmap con Delimitatore `--` (NFR-SEC-01)**
+  - **File:** `backend/internal/scanner/profiles.go`, `backend/internal/scanner/nmap_runner.go`
+  - **DoD:** Inserimento del delimitatore `--` prima del target per impedire flag injection via nomi ostili; allowlist tipizzata di flag, porte e script autorizzati.
+- [x] **SEC-P0-04 · Disabilitazione `vulners` Esterno di Default & Modalità Offline Conforme (NFR-REL-03)**
+  - **File:** `backend/internal/scanner/profiles.go`, `backend/internal/service/cve_correlator.go`
+  - **DoD:** Disabilitazione dello script esterno `vulners` per evitare leak di metadati di rete; utilizzo di `--script "vuln and safe"` locale e database CVE offline.
+- [x] **SEC-P0-05 · Redazione Completa Credenziali & Token nella Debug Console (NFR-DEV-01)**
+  - **File:** `frontend/src/utils/debugLogger.ts`, `frontend/src/utils/markdownExporter.ts`
+  - **DoD:** Mascheramento preventivo `[REDACTED]` per qualsiasi token, bearer header o credenziale sia a schermo che nell'esportatore "Copia per AI".
+- [x] **SEC-P0-06 · Remote Server-Side Rollback Timer per Firewall iptables (NFR-REL-04)**
+  - **File:** `backend/internal/service/firewall_service.go`
+  - **DoD:** Timer di ripristino automatico anti-lockout gestito direttamente sull'host remoto tramite `nohup` e `iptables-restore`.
+
+### EPIC 27: Scanner Engine Overhaul & Profiling Accuracy (SEC-P1)
+- [x] **SEC-P1-01 · Profilo Scansione UDP Specialistico & Tuning Porte Critiche**
+  - **File:** `backend/internal/scanner/profiles.go`, `frontend/src/components/NewScanModal.tsx`
+  - **DoD:** Nuovo profilo specialistico `Specialized UDP Critical Services` (`-sU -p U:53,69,123,161,514,623,5353 -T4`) separato dalle code TCP.
+- [x] **SEC-P1-02 · Correzione & Ricalibrazione Profili Nmap**
+  - **File:** `backend/internal/scanner/profiles.go`, `backend/internal/scanner/nmap_parser.go`
+  - **DoD:** Rimossa porta 69 (UDP) da Legacy Protocols TCP; reverse DNS resolution abilitata per LAN Discovery; gestione accurata di porte `filtered/unfiltered`.
+- [x] **SEC-P1-03 · Tassonomia di Invasività Profili (`SAFE` vs `INTRUSIVE`)**
+  - **File:** `backend/internal/domain/scan.go`, `backend/internal/delivery/http/handler/scan_handler.go`, `frontend/src/components/NewScanModal.tsx`
+  - **DoD:** Tassonomia semantica (`SAFE`, `INTRUSIVE`, `DANGEROUS`) con badge visivo nella UI e blocco con checkbox di consenso obbligatorio prima del lancio.
+- [x] **SEC-P1-04 · Arricchimento Modello Dati Finding (`confidence`, `detection_method`, `cpe`)**
+  - **File:** `backend/internal/domain/finding.go`, `backend/internal/repository/migrations/000007_scanner_overhaul_findings.up.sql`, `frontend/src/types/scan.ts`
+  - **DoD:** Aggiunta campi `confidence` (`CONFIRMED`, `PROBABLE`, `UNVERIFIED`), `detection_method` (`nse`, `banner`, `nvd_keyword`) e CPE normalizzato.
+- [x] **SEC-P1-05 · Container Capabilities Hardening & `NMAP_PRIVILEGED`**
+  - **File:** `docker-compose.yml`, `backend/Dockerfile`
+  - **DoD:** Concessione minima `CAP_NET_RAW` per SYN scan (rimosso `CAP_NET_ADMIN`), abilitazione env `NMAP_PRIVILEGED=1`.
+- [x] **SEC-P1-06 · Aggiornamento Libreria PDF (`go-pdf/fpdf`) e Manutenzione Dipendenze**
+  - **File:** `backend/go.mod`, `backend/pkg/report/pdf_generator.go`
+  - **DoD:** Migrazione dal package deprecato `jung-kurt/gofpdf` al fork supportato `github.com/go-pdf/fpdf v0.9.0`.
+
+### EPIC 28: Attack Path Refinement & Advanced Orchestration (SEC-P2)
+- [x] **SEC-P2-01 · Coerenza CVSS/Severity & Archi Inferiti con Confidence nel Grafo Attack Path**
+  - **File:** `backend/internal/service/attack_path_service.go`, `frontend/src/components/graph/AttackPathGraph.tsx`
+  - **DoD:** Punteggi CVSS rigorosamente allineati ai livelli di severità; archi `PIVOTS_TO` marcati come inferiti con badge percentuale, linea tratteggiata e tooltip euristico.
+- [x] **SEC-P2-02 · Formula Rischio Cumulativo Probabilistica & Bound su Cammini**
+  - **File:** `backend/internal/service/attack_path_service.go`
+  - **DoD:** Formula combinata probabilistica $1 - \prod(1 - p_i)$, bound combinatorio a 50 percorsi e profondità 6 nodi.
+- [x] **SEC-P2-03 · Diff tra Scansioni (Vulnerabilità Nuove, Risolte, Persistenti)**
+  - **File:** `backend/internal/service/scan_orchestrator.go`, `backend/internal/delivery/http/handler/scan_handler.go`, `backend/internal/domain/finding.go`
+  - **DoD:** Endpoint `GET /api/v1/scans/{id}/diff` che calcola in tempo reale il delta findings tra la scansione attuale e la precedente per il medesimo target (`NEW`, `RESOLVED`, `PERSISTENT`).
+
+
 
 
 

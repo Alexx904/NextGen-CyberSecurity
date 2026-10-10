@@ -413,6 +413,7 @@ type ProfileResponse struct {
 	Description    *string `json:"description,omitempty"`
 	TimeoutSeconds int     `json:"timeout_seconds"`
 	Category       string  `json:"category"`
+	Invasiveness   string  `json:"invasiveness"`
 	IsCustom       bool    `json:"is_custom"`
 	TenantID       *string `json:"tenant_id,omitempty"`
 }
@@ -520,6 +521,10 @@ func (h *ScanHandler) ListProfiles(w http.ResponseWriter, r *http.Request) {
 			tStr := p.TenantID.String()
 			tenantIDStr = &tStr
 		}
+		invStr := string(p.Invasiveness)
+		if invStr == "" {
+			invStr = string(domain.InvasivenessSafe)
+		}
 		items = append(items, ProfileResponse{
 			ID:             p.ID.String(),
 			Name:           p.Name,
@@ -527,6 +532,7 @@ func (h *ScanHandler) ListProfiles(w http.ResponseWriter, r *http.Request) {
 			Description:    p.Description,
 			TimeoutSeconds: p.TimeoutSeconds,
 			Category:       string(p.Category),
+			Invasiveness:   invStr,
 			IsCustom:       p.IsCustom,
 			TenantID:       tenantIDStr,
 		})
@@ -581,6 +587,11 @@ func (h *ScanHandler) CreateProfile(w http.ResponseWriter, r *http.Request) {
 		tenantIDStr = &tStr
 	}
 
+	invStr := string(profile.Invasiveness)
+	if invStr == "" {
+		invStr = string(domain.InvasivenessSafe)
+	}
+
 	response.JSON(w, http.StatusCreated, ProfileResponse{
 		ID:             profile.ID.String(),
 		Name:           profile.Name,
@@ -588,6 +599,7 @@ func (h *ScanHandler) CreateProfile(w http.ResponseWriter, r *http.Request) {
 		Description:    profile.Description,
 		TimeoutSeconds: profile.TimeoutSeconds,
 		Category:       string(profile.Category),
+		Invasiveness:   invStr,
 		IsCustom:       profile.IsCustom,
 		TenantID:       tenantIDStr,
 	})
