@@ -69,6 +69,24 @@ const (
 	ProfileCategoryCustom      ScanProfileCategory = "CUSTOM"
 )
 
+// InvasivenessLevel classifica il livello di impatto e invasività della scansione sulla rete (SEC-P1-03)
+type InvasivenessLevel string
+
+const (
+	InvasivenessSafe      InvasivenessLevel = "SAFE"
+	InvasivenessIntrusive InvasivenessLevel = "INTRUSIVE"
+	InvasivenessDangerous InvasivenessLevel = "DANGEROUS"
+)
+
+func (i InvasivenessLevel) IsValid() bool {
+	switch i {
+	case InvasivenessSafe, InvasivenessIntrusive, InvasivenessDangerous:
+		return true
+	default:
+		return false
+	}
+}
+
 // ScanProfile definisce la configurazione dei flag di scansione Nmap preimpostati o custom
 type ScanProfile struct {
 	ID             uuid.UUID           `json:"id" db:"id"`
@@ -77,6 +95,7 @@ type ScanProfile struct {
 	Description    *string             `json:"description,omitempty" db:"description"`
 	TimeoutSeconds int                 `json:"timeout_seconds" db:"timeout_seconds"`
 	Category       ScanProfileCategory `json:"category" db:"category"`
+	Invasiveness   InvasivenessLevel   `json:"invasiveness" db:"invasiveness"`
 	IsCustom       bool                `json:"is_custom" db:"is_custom"`
 	TenantID       *uuid.UUID          `json:"tenant_id,omitempty" db:"tenant_id"`
 	CreatedAt      time.Time           `json:"created_at" db:"created_at"`
@@ -168,11 +187,53 @@ type Schedule struct {
 	UpdatedAt      time.Time  `json:"updated_at" db:"updated_at"`
 }
 
+// ScanDiffStatus classifica lo stato differenziale di un finding tra due scansioni temporali (SEC-P2-03)
+type ScanDiffStatus string
+
+const (
+	DiffStatusNew        ScanDiffStatus = "NEW"
+	DiffStatusResolved   ScanDiffStatus = "RESOLVED"
+	DiffStatusPersistent ScanDiffStatus = "PERSISTENT"
+)
+
+// FindingDiffItem rappresenta un finding con il relativo stato comparativo tra la scansione corrente e la precedente
+type FindingDiffItem struct {
+	FindingKey      string            `json:"finding_key"`
+	Status          ScanDiffStatus    `json:"status"`
+	HostIP          string            `json:"host_ip"`
+	Port            int               `json:"port"`
+	Protocol        string            `json:"protocol"`
+	PortState       string            `json:"port_state,omitempty"`
+	ServiceName     *string           `json:"service_name,omitempty"`
+	CVEID           *string           `json:"cve_id,omitempty"`
+	CVSSScore       *float64          `json:"cvss_score,omitempty"`
+	Severity        SeverityLevel     `json:"severity"`
+	Confidence      FindingConfidence `json:"confidence,omitempty"`
+	DetectionMethod DetectionMethod   `json:"detection_method,omitempty"`
+	Remediation     *string           `json:"remediation,omitempty"`
+	CurrentScanID   uuid.UUID         `json:"current_scan_id"`
+	PreviousScanID  *uuid.UUID        `json:"previous_scan_id,omitempty"`
+}
+
+// ScanDiffResult contiene il report differenziale completo tra due scansioni successive sullo stesso target
+type ScanDiffResult struct {
+	CurrentScanID   uuid.UUID         `json:"current_scan_id"`
+	PreviousScanID  *uuid.UUID        `json:"previous_scan_id,omitempty"`
+	TargetID        uuid.UUID         `json:"target_id"`
+	TargetValue     string            `json:"target_value"`
+	GeneratedAt     time.Time         `json:"generated_at"`
+	TotalNew        int               `json:"total_new"`
+	TotalResolved   int               `json:"total_resolved"`
+	TotalPersistent int               `json:"total_persistent"`
+	Items           []FindingDiffItem `json:"items"`
+}
+
 // ScanRepository definisce l'interfaccia di persistenza per le scansioni
 type ScanRepository interface {
 	GetByID(ctx context.Context, tenantID, id uuid.UUID) (*Scan, error)
 	List(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]*Scan, int, error)
 	GetActiveByTarget(ctx context.Context, tenantID, targetID uuid.UUID) (*Scan, error)
+	GetPreviousCompletedByTarget(ctx context.Context, tenantID, targetID, excludeScanID uuid.UUID) (*Scan, error)
 	Create(ctx context.Context, scan *Scan) error
 	Update(ctx context.Context, scan *Scan) error
 }

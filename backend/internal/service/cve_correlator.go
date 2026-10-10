@@ -268,18 +268,34 @@ func (c *CVECorrelator) CorrelatePort(
 	}
 
 	// Se non vi è alcun servizio associato alla porta, emettiamo un finding base INFO
+	portState := port.State
+	if portState == "" {
+		portState = "open"
+	}
+
+	var cpePtr *string
+	if port.Service != nil && len(port.Service.CPEs) > 0 {
+		norm := NormalizeCPETo23(port.Service.CPEs[0])
+		if norm != "" {
+			cpePtr = &norm
+		}
+	}
+
 	if port.Service == nil {
 		return []*domain.Finding{
 			{
-				ID:        uuid.New(),
-				ScanID:    scanID,
-				TenantID:  tenantID,
-				HostIP:    host.IP,
-				Hostname:  hostname,
-				Port:      port.PortID,
-				Protocol:  port.Protocol,
-				Severity:  domain.SeverityInfo,
-				CreatedAt: now,
+				ID:              uuid.New(),
+				ScanID:          scanID,
+				TenantID:        tenantID,
+				HostIP:          host.IP,
+				Hostname:        hostname,
+				Port:            port.PortID,
+				Protocol:        port.Protocol,
+				PortState:       portState,
+				Severity:        domain.SeverityInfo,
+				Confidence:      domain.ConfidenceConfirmed,
+				DetectionMethod: domain.DetectionMethodPortState,
+				CreatedAt:       now,
 			},
 		}, nil
 	}
@@ -319,19 +335,23 @@ func (c *CVECorrelator) CorrelatePort(
 
 		return []*domain.Finding{
 			{
-				ID:             uuid.New(),
-				ScanID:         scanID,
-				TenantID:       tenantID,
-				HostIP:         host.IP,
-				Hostname:       hostname,
-				Port:           port.PortID,
-				Protocol:       port.Protocol,
-				ServiceName:    serviceName,
-				ServiceVersion: serviceVersion,
-				Severity:       sev,
-				RawBanner:      rawBanner,
-				Remediation:    remText,
-				CreatedAt:      now,
+				ID:              uuid.New(),
+				ScanID:          scanID,
+				TenantID:        tenantID,
+				HostIP:          host.IP,
+				Hostname:        hostname,
+				Port:            port.PortID,
+				Protocol:        port.Protocol,
+				PortState:       portState,
+				ServiceName:     serviceName,
+				ServiceVersion:  serviceVersion,
+				Severity:        sev,
+				Confidence:      domain.ConfidenceConfirmed,
+				DetectionMethod: domain.DetectionMethodBanner,
+				CPE:             cpePtr,
+				RawBanner:       rawBanner,
+				Remediation:     remText,
+				CreatedAt:       now,
 			},
 		}, nil
 	}
@@ -361,21 +381,25 @@ func (c *CVECorrelator) CorrelatePort(
 		remediation := GenerateRemediation(sNameStr, sVerStr, cveID, sev)
 
 		f := &domain.Finding{
-			ID:             uuid.New(),
-			ScanID:         scanID,
-			TenantID:       tenantID,
-			HostIP:         host.IP,
-			Hostname:       hostname,
-			Port:           port.PortID,
-			Protocol:       port.Protocol,
-			ServiceName:    serviceName,
-			ServiceVersion: serviceVersion,
-			CVEID:          &cveID,
-			CVSSScore:      cve.CVSSScore,
-			Severity:       sev,
-			RawBanner:      rawBanner,
-			Remediation:    &remediation,
-			CreatedAt:      now,
+			ID:              uuid.New(),
+			ScanID:          scanID,
+			TenantID:        tenantID,
+			HostIP:          host.IP,
+			Hostname:        hostname,
+			Port:            port.PortID,
+			Protocol:        port.Protocol,
+			PortState:       portState,
+			ServiceName:     serviceName,
+			ServiceVersion:  serviceVersion,
+			CVEID:           &cveID,
+			CVSSScore:       cve.CVSSScore,
+			Severity:        sev,
+			Confidence:      domain.ConfidenceProbable,
+			DetectionMethod: domain.DetectionMethodBanner,
+			CPE:             cpePtr,
+			RawBanner:       rawBanner,
+			Remediation:     &remediation,
+			CreatedAt:       now,
 		}
 		findings = append(findings, f)
 	}
@@ -451,21 +475,24 @@ func (c *CVECorrelator) correlateScriptList(
 				rem := fmt.Sprintf("Mitigazione prescrittiva per %s rilevata dallo script Nmap '%s': applicare tempestivamente le patch di sicurezza o isolare il servizio con regole firewall.", idCopy, sc.ID)
 				bannerCopy := sc.Output
 				findings = append(findings, &domain.Finding{
-					ID:             uuid.New(),
-					ScanID:         scanID,
-					TenantID:       tenantID,
-					HostIP:         host.IP,
-					Hostname:       hostname,
-					Port:           portID,
-					Protocol:       protocol,
-					ServiceName:    serviceName,
-					ServiceVersion: serviceVersion,
-					CVEID:          &idCopy,
-					CVSSScore:      &score,
-					Severity:       sev,
-					RawBanner:      &bannerCopy,
-					Remediation:    &rem,
-					CreatedAt:      now,
+					ID:              uuid.New(),
+					ScanID:          scanID,
+					TenantID:        tenantID,
+					HostIP:          host.IP,
+					Hostname:        hostname,
+					Port:            portID,
+					Protocol:        protocol,
+					PortState:       "open",
+					ServiceName:     serviceName,
+					ServiceVersion:  serviceVersion,
+					CVEID:           &idCopy,
+					CVSSScore:       &score,
+					Severity:        sev,
+					Confidence:      domain.ConfidenceConfirmed,
+					DetectionMethod: domain.DetectionMethodNSE,
+					RawBanner:       &bannerCopy,
+					Remediation:     &rem,
+					CreatedAt:       now,
 				})
 			}
 		} else {
@@ -479,20 +506,23 @@ func (c *CVECorrelator) correlateScriptList(
 			bannerCopy := sc.Output
 			rem := fmt.Sprintf("Vulnerabilità rilevata dallo script Nmap '%s': verificare la configurazione del servizio e applicare le patch raccomandate dal vendor.", sc.ID)
 			findings = append(findings, &domain.Finding{
-				ID:             uuid.New(),
-				ScanID:         scanID,
-				TenantID:       tenantID,
-				HostIP:         host.IP,
-				Hostname:       hostname,
-				Port:           portID,
-				Protocol:       protocol,
-				ServiceName:    &scriptIDCopy,
-				ServiceVersion: serviceVersion,
-				CVSSScore:      &score,
-				Severity:       sev,
-				RawBanner:      &bannerCopy,
-				Remediation:    &rem,
-				CreatedAt:      now,
+				ID:              uuid.New(),
+				ScanID:          scanID,
+				TenantID:        tenantID,
+				HostIP:          host.IP,
+				Hostname:        hostname,
+				Port:            portID,
+				Protocol:        protocol,
+				PortState:       "open",
+				ServiceName:     &scriptIDCopy,
+				ServiceVersion:  serviceVersion,
+				CVSSScore:       &score,
+				Severity:        sev,
+				Confidence:      domain.ConfidenceConfirmed,
+				DetectionMethod: domain.DetectionMethodNSE,
+				RawBanner:       &bannerCopy,
+				Remediation:     &rem,
+				CreatedAt:       now,
 			})
 		}
 	}

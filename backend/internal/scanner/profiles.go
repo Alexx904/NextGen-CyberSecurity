@@ -27,117 +27,140 @@ const (
 	ProfileFullWebStack     ProfileType = "Full Web Stack Deep Versioning"
 	ProfileFastPingSweep    ProfileType = "Fast Ping & Host Sweep (LAN)"
 	ProfileLegacyProtocols  ProfileType = "Legacy & Insecure Protocol Check"
+	ProfileSpecializedUDP   ProfileType = "Specialized UDP Critical Services"
 )
 
 // ProfileConfig racchiude le specifiche operative di un profilo di scansione Nmap
 type ProfileConfig struct {
-	Name        string                     `json:"name"`
-	Args        []string                   `json:"args"`
-	Timeout     time.Duration              `json:"timeout"`
-	Description string                     `json:"description"`
-	Category    domain.ScanProfileCategory `json:"category"`
+	Name         string                     `json:"name"`
+	Args         []string                   `json:"args"`
+	Timeout      time.Duration              `json:"timeout"`
+	Description  string                     `json:"description"`
+	Category     domain.ScanProfileCategory `json:"category"`
+	Invasiveness domain.InvasivenessLevel   `json:"invasiveness"`
 }
 
 // GetDefaultProfiles restituisce i profili di scansione di default preimpostati nel sistema
 func GetDefaultProfiles() map[ProfileType]ProfileConfig {
 	return map[ProfileType]ProfileConfig{
 		ProfileAllInOne360: {
-			Name:        string(ProfileAllInOne360),
-			Args:        []string{"-sS", "-sV", "-O", "--script=vuln", "-T4", "--open"},
-			Timeout:     90 * time.Minute,
-			Description: "Scansione generalista completa a 360°: mappatura host vivi, scansione porte standard, identificazione versioni demoni (sV), fingerprinting OS (O) e controllo vulnerabilità note (--script=vuln)",
-			Category:    domain.ProfileCategoryAllInOne,
+			Name:         string(ProfileAllInOne360),
+			Args:         []string{"-sS", "-sV", "-O", "--script=vuln", "-T4", "--open"},
+			Timeout:      90 * time.Minute,
+			Description:  "Scansione generalista completa a 360°: mappatura host vivi, scansione porte standard, identificazione versioni demoni (sV), fingerprinting OS (O) e controllo vulnerabilità note (--script=vuln)",
+			Category:     domain.ProfileCategoryAllInOne,
+			Invasiveness: domain.InvasivenessIntrusive,
 		},
 		ProfileFastDiscovery: {
-			Name:        string(ProfileFastDiscovery),
-			Args:        []string{"-T4", "-F"},
-			Timeout:     15 * time.Minute, // 900 secondi
-			Description: "Discovery rapida degli host attivi e delle top 100 porte TCP",
-			Category:    domain.ProfileCategoryDiscovery,
+			Name:         string(ProfileFastDiscovery),
+			Args:         []string{"-T4", "-F"},
+			Timeout:      15 * time.Minute, // 900 secondi
+			Description:  "Discovery rapida degli host attivi e delle top 100 porte TCP",
+			Category:     domain.ProfileCategoryDiscovery,
+			Invasiveness: domain.InvasivenessSafe,
 		},
 		ProfileStandardScan: {
-			Name:        string(ProfileStandardScan),
-			Args:        []string{"-sV", "-T4"},
-			Timeout:     60 * time.Minute, // 3600 secondi
-			Description: "Scansione standard delle top 1000 porte TCP con rilevamento versioni dei servizi",
-			Category:    domain.ProfileCategorySystemFlaws,
+			Name:         string(ProfileStandardScan),
+			Args:         []string{"-sV", "-T4"},
+			Timeout:      60 * time.Minute, // 3600 secondi
+			Description:  "Scansione standard delle top 1000 porte TCP con rilevamento versioni dei servizi",
+			Category:     domain.ProfileCategorySystemFlaws,
+			Invasiveness: domain.InvasivenessSafe,
 		},
 		ProfileFullScan: {
-			Name:        string(ProfileFullScan),
-			Args:        []string{"-p-", "-sV", "-O", "-T4"},
-			Timeout:     240 * time.Minute, // 14400 secondi
-			Description: "Scansione completa su 65535 porte TCP, OS detection e rilevamento servizi approfondito",
-			Category:    domain.ProfileCategoryPenTest,
+			Name:         string(ProfileFullScan),
+			Args:         []string{"-p-", "-sV", "-O", "-T4"},
+			Timeout:      240 * time.Minute, // 14400 secondi
+			Description:  "Scansione completa su 65535 porte TCP, OS detection e rilevamento servizi approfondito",
+			Category:     domain.ProfileCategoryPenTest,
+			Invasiveness: domain.InvasivenessIntrusive,
 		},
 		ProfileLANDiscovery: {
-			Name:        string(ProfileLANDiscovery),
-			Args:        []string{"-sn", "-PE", "-PS21,22,80,443,445,8080,8443,3389,53,8000", "-PU53,137,161,5353", "-T4", "-n"},
-			Timeout:     2 * time.Minute, // 120 secondi
-			Description: "Ricognizione LAN ultra-veloce con ping sweep affidabile e probe ICMP/SYN/UDP su porte standard",
-			Category:    domain.ProfileCategoryDiscovery,
+			Name:         string(ProfileLANDiscovery),
+			Args:         []string{"-sn", "-PE", "-PS21,22,80,443,445,8080,8443,3389,53,8000", "-PU53,137,161,5353", "-T4"},
+			Timeout:      2 * time.Minute, // 120 secondi
+			Description:  "Ricognizione LAN ultra-veloce con ping sweep affidabile, probe ICMP/SYN/UDP su porte standard e risoluzione reverse DNS",
+			Category:     domain.ProfileCategoryDiscovery,
+			Invasiveness: domain.InvasivenessSafe,
 		},
 		ProfileStealthSYN: {
-			Name:        string(ProfileStealthSYN),
-			Args:        []string{"-sS", "-Pn", "-T2", "--open"},
-			Timeout:     60 * time.Minute,
-			Description: "Ricognizione stealth a basso rumore con pacchetti SYN senza handshake TCP completo, elusione baseline firewall e solo porte aperte",
-			Category:    domain.ProfileCategoryPenTest,
+			Name:         string(ProfileStealthSYN),
+			Args:         []string{"-sS", "-Pn", "-T2", "--open"},
+			Timeout:      60 * time.Minute,
+			Description:  "Ricognizione stealth a basso rumore con pacchetti SYN senza handshake TCP completo, elusione baseline firewall e solo porte aperte",
+			Category:     domain.ProfileCategoryPenTest,
+			Invasiveness: domain.InvasivenessSafe,
 		},
 		ProfileFirewallBypass: {
-			Name:        string(ProfileFirewallBypass),
-			Args:        []string{"-sA", "-Pn", "-T3"},
-			Timeout:     30 * time.Minute,
-			Description: "Mappatura filtri firewall perimetrali e apparati IDS con pacchetti TCP ACK per verificare se i firewall sono stateful o stateless",
-			Category:    domain.ProfileCategoryPenTest,
+			Name:         string(ProfileFirewallBypass),
+			Args:         []string{"-sA", "-Pn", "-T3"},
+			Timeout:      30 * time.Minute,
+			Description:  "Mappatura filtri firewall perimetrali e apparati IDS con pacchetti TCP ACK per verificare se i firewall sono stateful o stateless",
+			Category:     domain.ProfileCategoryPenTest,
+			Invasiveness: domain.InvasivenessIntrusive,
 		},
 		ProfileSystemFlawsOS: {
-			Name:        string(ProfileSystemFlawsOS),
-			Args:        []string{"-sV", "-O", "--version-intensity", "7", "--script=vuln", "-T4"},
-			Timeout:     60 * time.Minute,
-			Description: "Rilevamento dettagliato del sistema operativo, fingerprinting demoni di sistema e script attivi di vulnerabilità Nmap (--script=vuln)",
-			Category:    domain.ProfileCategorySystemFlaws,
+			Name:         string(ProfileSystemFlawsOS),
+			Args:         []string{"-sV", "-O", "--version-intensity", "7", "--script=vuln", "-T4"},
+			Timeout:      60 * time.Minute,
+			Description:  "Rilevamento dettagliato del sistema operativo, fingerprinting demoni di sistema e script attivi di vulnerabilità Nmap (--script=vuln)",
+			Category:     domain.ProfileCategorySystemFlaws,
+			Invasiveness: domain.InvasivenessIntrusive,
 		},
 		ProfileCriticalServices: {
-			Name:        string(ProfileCriticalServices),
-			Args:        []string{"-sV", "-p", "21,22,23,25,53,80,110,135,139,143,443,445,1433,1521,3306,3389,5432,5900,6379,8080,8443", "--script=vuln", "-T4"},
-			Timeout:     30 * time.Minute,
-			Description: "Audit mirato sui vettori critici più colpite da exploit remoti e vulnerabilità note RCE/PrivEsc (--script=vuln)",
-			Category:    domain.ProfileCategorySystemFlaws,
+			Name:         string(ProfileCriticalServices),
+			Args:         []string{"-sV", "-p", "21,22,23,25,53,80,110,135,139,143,443,445,1433,1521,3306,3389,5432,5900,6379,8080,8443", "--script=vuln", "-T4"},
+			Timeout:      30 * time.Minute,
+			Description:  "Audit mirato sui vettori critici più colpite da exploit remoti e vulnerabilità note RCE/PrivEsc (--script=vuln)",
+			Category:     domain.ProfileCategorySystemFlaws,
+			Invasiveness: domain.InvasivenessIntrusive,
 		},
 		ProfileWebSurface: {
-			Name:        string(ProfileWebSurface),
-			Args:        []string{"-sV", "-p", "80,443,8000,8080,8443,8888,3000,5000,9000", "-T4", "--open"},
-			Timeout:     20 * time.Minute,
-			Description: "Rilevamento mirato di server HTTP/HTTPS, API REST, backend microservizi e reverse proxy applicativi (Nginx, Apache, Traefik)",
-			Category:    domain.ProfileCategoryWebApp,
+			Name:         string(ProfileWebSurface),
+			Args:         []string{"-sV", "-p", "80,443,8000,8080,8443,8888,3000,5000,9000", "-T4", "--open"},
+			Timeout:      20 * time.Minute,
+			Description:  "Rilevamento mirato di server HTTP/HTTPS, API REST, backend microservizi e reverse proxy applicativi (Nginx, Apache, Traefik)",
+			Category:     domain.ProfileCategoryWebApp,
+			Invasiveness: domain.InvasivenessSafe,
 		},
 		ProfileFullWebStack: {
-			Name:        string(ProfileFullWebStack),
-			Args:        []string{"-sV", "--version-all", "-p", "80,443,8008,8080,8443,9090,9443", "-T4"},
-			Timeout:     40 * time.Minute,
-			Description: "Versioning approfondito con interrogazione intensiva dei banner HTTP e intestazioni TLS per scovare componenti obsoleti",
-			Category:    domain.ProfileCategoryWebApp,
+			Name:         string(ProfileFullWebStack),
+			Args:         []string{"-sV", "--version-all", "-p", "80,443,8008,8080,8443,9090,9443", "-T4"},
+			Timeout:      40 * time.Minute,
+			Description:  "Versioning approfondito con interrogazione intensiva dei banner HTTP e intestazioni TLS per scovare componenti obsoleti",
+			Category:     domain.ProfileCategoryWebApp,
+			Invasiveness: domain.InvasivenessSafe,
 		},
 		ProfileFastPingSweep: {
-			Name:        string(ProfileFastPingSweep),
-			Args:        []string{"-sn", "-PE", "-PS22,80,443,445", "-T4", "-n"},
-			Timeout:     2 * time.Minute,
-			Description: "Ricognizione LAN ultra-rapida con ping sweep, ICMP echo e probe SYN senza port scan per mappare tutti gli host accesi",
-			Category:    domain.ProfileCategoryDiscovery,
+			Name:         string(ProfileFastPingSweep),
+			Args:         []string{"-sn", "-PE", "-PS22,80,443,445", "-T4"},
+			Timeout:      2 * time.Minute,
+			Description:  "Ricognizione LAN ultra-rapida con ping sweep, ICMP echo e probe SYN senza port scan per mappare tutti gli host accesi e resolver reverse DNS",
+			Category:     domain.ProfileCategoryDiscovery,
+			Invasiveness: domain.InvasivenessSafe,
 		},
 		ProfileLegacyProtocols: {
-			Name:        string(ProfileLegacyProtocols),
-			Args:        []string{"-sV", "-p", "21,23,69,79,110,143,512,513,514", "-T3"},
-			Timeout:     15 * time.Minute,
-			Description: "Verifica conformità e sicurezza per rilevare servizi in chiaro e protocolli legacy obsoleti (Telnet, FTP, TFTP, Rsh, Rlogin, POP3)",
-			Category:    domain.ProfileCategoryCompliance,
+			Name:         string(ProfileLegacyProtocols),
+			Args:         []string{"-sV", "-p", "21,23,79,110,143,512,513,514", "-T3"},
+			Timeout:      15 * time.Minute,
+			Description:  "Verifica conformità e sicurezza per rilevare servizi in chiaro e protocolli legacy obsoleti (Telnet, FTP, Finger, POP3, IMAP, Rexec, Rsh, Rlogin)",
+			Category:     domain.ProfileCategoryCompliance,
+			Invasiveness: domain.InvasivenessSafe,
+		},
+		ProfileSpecializedUDP: {
+			Name:         string(ProfileSpecializedUDP),
+			Args:         []string{"-sU", "-p", "U:53,69,123,161,514,623,5353", "-T4"},
+			Timeout:      20 * time.Minute,
+			Description:  "Audit mirato sui servizi UDP ad alto rischio: DNS (53), TFTP (69), NTP (123), SNMP (161), Syslog (514), IPMI (623) e mDNS (5353)",
+			Category:     domain.ProfileCategoryPenTest,
+			Invasiveness: domain.InvasivenessSafe,
 		},
 	}
 }
 
-// Regex per convalidare argomenti con parametri (es: -p80,443 o --top-ports 100 o --max-retries 2)
+// Regex per convalidare argomenti con parametri (es: -p80,443 o -p U:53,69 o --top-ports 100 o --max-retries 2)
 var (
-	validPortArgRegex       = regexp.MustCompile(`^-p([0-9]{1,5}(-[0-9]{1,5})?,?)+$|^-p-$`)
+	validPortArgRegex       = regexp.MustCompile(`^-p(([TU]:)?[0-9]{1,5}(-[0-9]{1,5})?,?)+$|^-p-$`)
 	validTimingArgRegex     = regexp.MustCompile(`^-T[0-5]$`)
 	validTopPortsRegex      = regexp.MustCompile(`^[0-9]{1,5}$`)
 	validRateRegex          = regexp.MustCompile(`^[0-9]+$`)

@@ -498,4 +498,62 @@ describe('NewScanModal Component - Guided & Professional Scan Customization', ()
     const profScriptMatches = screen.getAllByText('Script Vulnerabilità Nmap (--script=vuln)');
     expect(profScriptMatches.length).toBeGreaterThanOrEqual(1);
   });
+
+  it('displays invasiveness badge and gates launch for intrusive profiles (SEC-P1-03)', async () => {
+    // Mock profile with INTRUSIVE
+    const intrusiveProfile = {
+      id: 'prof-intrusive',
+      name: 'Full Deep Exploit Scan',
+      nmap_args: '-p- -sV --script=vuln -T4',
+      timeout_seconds: 7200,
+      category: 'ALL_IN_ONE' as const,
+      invasiveness: 'INTRUSIVE' as const,
+      is_custom: false,
+    };
+
+    (apiClient.get as any).mockImplementation((url: string) => {
+      if (url.includes('/target-groups')) {
+        return Promise.resolve({ data: { success: true, data: mockGroups } });
+      }
+      if (url.includes('/targets')) {
+        return Promise.resolve({ data: { success: true, data: { items: mockTargets } } });
+      }
+      if (url.includes('/scan-profiles')) {
+        return Promise.resolve({ data: { success: true, data: { items: [intrusiveProfile] } } });
+      }
+      return Promise.resolve({ data: { success: true, data: [] } });
+    });
+
+    render(
+      <NewScanModal
+        isOpen={true}
+        onClose={vi.fn()}
+        onScanLaunched={vi.fn()}
+        defaultGroupId="group-01"
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Full Deep Exploit Scan')).toBeTruthy();
+    });
+
+    // Seleziona il profilo
+    fireEvent.click(screen.getByText('Full Deep Exploit Scan'));
+
+    // Verifica badge INTRUSIVE
+    expect(screen.getByText('INTRUSIVE')).toBeTruthy();
+
+    // Verifica presenza del gate di autorizzazione
+    expect(screen.getByText(/Profilo Invasivo \/ Offensive/i)).toBeTruthy();
+
+    const submitBtn = screen.getByRole('button', { name: /Avvia Scansione Ora/i });
+    expect((submitBtn as HTMLButtonElement).disabled).toBe(true);
+
+    // Clicca sulla checkbox di conferma
+    const confirmCheckbox = screen.getByLabelText(/Confermo di possedere esplicita autorizzazione scritta/i);
+    fireEvent.click(confirmCheckbox);
+
+    // Ora il pulsante deve essere abilitato
+    expect((submitBtn as HTMLButtonElement).disabled).toBe(false);
+  });
 });

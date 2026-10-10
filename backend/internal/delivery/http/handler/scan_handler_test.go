@@ -31,6 +31,7 @@ type mockScanService struct {
 	listProfilesFunc        func(ctx context.Context, tenantID *uuid.UUID, category *domain.ScanProfileCategory) ([]*domain.ScanProfile, error)
 	createCustomProfileFunc func(ctx context.Context, tenantID uuid.UUID, name, nmapArgs string, description *string, timeoutSeconds int, category domain.ScanProfileCategory) (*domain.ScanProfile, error)
 	deleteCustomProfileFunc func(ctx context.Context, tenantID, id uuid.UUID) error
+	getScanDiffFunc         func(ctx context.Context, tenantID, scanID uuid.UUID) (*domain.ScanDiffResult, error)
 }
 
 func (m *mockScanService) CancelScan(ctx context.Context, tenantID, scanID uuid.UUID) error {
@@ -96,12 +97,20 @@ func (m *mockScanService) DeleteCustomProfile(ctx context.Context, tenantID, id 
 	return nil
 }
 
+func (m *mockScanService) GetScanDiff(ctx context.Context, tenantID, scanID uuid.UUID) (*domain.ScanDiffResult, error) {
+	if m.getScanDiffFunc != nil {
+		return m.getScanDiffFunc(ctx, tenantID, scanID)
+	}
+	return nil, nil
+}
+
 func setupScanRouter(h *handler.ScanHandler) *chi.Mux {
 	r := chi.NewRouter()
 	r.Get("/scans", h.List)
 	r.Get("/scans/{id}", h.GetByID)
 	r.Get("/scans/{id}/stream", h.Stream)
 	r.Get("/scans/{id}/findings", h.GetFindings)
+	r.Get("/scans/{id}/diff", h.GetDiff)
 	r.Post("/scans", h.Start)
 	r.Post("/scans/{id}/cancel", h.Cancel)
 	r.Get("/scan-profiles", h.ListProfiles)
@@ -653,3 +662,102 @@ func TestScanHandler_Stream(t *testing.T) {
 		}
 	})
 }
+
+func TestScanHandler_GetDiff(t *testing.T) {
+	tenantID := uuid.New()
+	scanID := uuid.New()
+	prevScanID := uuid.New()
+
+	t.Run("successo - restituisce 200 OK con payload ScanDiffResult", func(t *testing.T) {
+		svc := &mockScanService{
+			getScanDiffFunc: func(ctx context.Context, tID, sID uuid.UUID) (*domain.ScanDiffResult, error) {
+				return &domain.ScanDiffResult{
+					CurrentScanID:   scanID,
+					PreviousScanID:  &prevScanID,
+					TargetValue:     "192.168.1.10",
+					TotalNew:        1,
+					TotalPersistent: 1,
+					TotalResolved:   0,
+					Items: []domain.FindingDiffItem{
+						{
+							FindingKey:    "192.168.1.10:80:tcp:CVE-2023-1234",
+							Status:        domain.DiffStatusNew,
+							HostIP:        "192.168.1.10",
+							Port:          80,
+							Protocol:      "tcp",
+							Severity:      domain.SeverityHigh,
+							CurrentScanID: scanID,
+						},
+					},
+				}, nil
+			},
+		}
+
+		h := handler.NewScanHandler(svc, nil)
+		r := setupScanRouter(h)
+
+		req := httptest.NewRequest(http.MethodGet, "/scans/"+scanID.String()+"/diff", nil)
+		req = withSecOpsContext(req, tenantID)
+
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("atteso status 200, ottenuto %d", rec.Code)
+		}
+
+		var env response.Envelope
+		if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+			t.Fatalf("deserializzazione response fallita: %v", err)
+		}
+
+		dataBytes, _ := json.Marshal(env.Data)
+		var res domain.ScanDiffResult
+		if err := json.Unmarshal(dataBytes, &res); err != nil {
+			t.Fatalf("deserializzazione data fallita: %v", err)
+		}
+
+		if res.CurrentScanID != scanID {
+			t.Errorf("CurrentScanID atteso %v, ottenuto %v", scanID, res.CurrentScanID)
+		}
+		if res.TotalNew != 1 {
+			t.Errorf("TotalNew atteso 1, ottenuto %d", res.TotalNew)
+		}
+	})
+
+	t.Run("errore - scansione non trovata restituisce 404", func(t *testing.T) {
+		svc := &mockScanService{
+			getScanDiffFunc: func(ctx context.Context, tID, sID uuid.UUID) (*domain.ScanDiffResult, error) {
+				return nil, domain.ErrNotFound
+			},
+		}
+
+		h := handler.NewScanHandler(svc, nil)
+		r := setupScanRouter(h)
+
+		req := httptest.NewRequest(http.MethodGet, "/scans/"+scanID.String()+"/diff", nil)
+		req = withSecOpsContext(req, tenantID)
+
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("atteso status 404, ottenuto %d", rec.Code)
+		}
+	})
+
+	t.Run("errore - non autorizzato senza tenant restituisce 401", func(t *testing.T) {
+		svc := &mockScanService{}
+		h := handler.NewScanHandler(svc, nil)
+		r := setupScanRouter(h)
+
+		req := httptest.NewRequest(http.MethodGet, "/scans/"+scanID.String()+"/diff", nil)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("atteso status 401, ottenuto %d", rec.Code)
+		}
+	})
+}
+

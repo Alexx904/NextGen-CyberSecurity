@@ -118,56 +118,56 @@
   - DoD: Timer di rollback anti-lockout gestito direttamente sull'host remoto tramite watchdog distaccato `nohup` (ripristino garantito anche in caso di caduta connessione o crash del backend).
 
 ### Epic 25 · SEC-P1: Scanner Engine Overhaul & Profiling Accuracy (Priorità Alta)
-- [ ] **SEC-P1-01 · Profilo Scansione UDP Specialistico & Tuning Porte Critiche**
+- [~] **SEC-P1-01 · Profilo Scansione UDP Specialistico & Tuning Porte Critiche**
   - File: `backend/internal/scanner/profiles.go`, `frontend/src/components/NewScanModal.tsx`
   - Dipende da: SEC-P0-03
   - Test: Scanner test su argomenti UDP (`-sU -p U:53,69,123,161,514,623,5353`)
   - DoD: Profilo UDP dedicato separato dai profili TCP per tempi di scansione ottimali, con rilevamento mirato di SNMP, TFTP, Syslog, IPMI.
 
-- [ ] **SEC-P1-02 · Correzione & Ricalibrazione Profili Nmap**
+- [~] **SEC-P1-02 · Correzione & Ricalibrazione Profili Nmap**
   - File: `backend/internal/scanner/profiles.go`, `backend/internal/scanner/nmap_parser.go`
   - Dipende da: SEC-P0-03
   - Test: Test unitari su combinazioni profili e parsing stati porta
   - DoD: Correzione porta 69 (UDP) in Legacy Protocols, profilazione ACK scan con tipi di risultato `filtered/unfiltered` dedicati (non trasformati in falso positivo porta aperta), gestione Alive-Only consapevole quando presente `-Pn`, rimozione `-n` o arricchimento reverse DNS per LAN Discovery.
 
-- [ ] **SEC-P1-03 · Tassonomia di Invasività Profili (`SAFE` vs `INTRUSIVE`)**
+- [~] **SEC-P1-03 · Tassonomia di Invasività Profili (`SAFE` vs `INTRUSIVE`)**
   - File: `backend/internal/domain/scan.go`, `frontend/src/components/NewScanModal.tsx`
   - Dipende da: SEC-P1-02
   - Test: Validazione livello di rischio profilo ed esclusioni NSE
   - DoD: Classificazione operativa di ogni profilo (`SAFE`, `INTRUSIVE`, `DANGEROUS`), esclusione di categorie NSE intrusive dai default e gate con conferma esplicita per profili intrusivi.
 
-- [ ] **SEC-P1-04 · Arricchimento Modello Dati Finding (`confidence`, `detection_method`, `cpe`)**
+- [~] **SEC-P1-04 · Arricchimento Modello Dati Finding (`confidence`, `detection_method`, `cpe`)**
   - File: `backend/internal/domain/finding.go`, `backend/internal/repository/migrations/`, `frontend/src/types/scan.ts`
   - Dipende da: Nessuna
   - Test: Migration e test repository
   - DoD: Introduzione nei findings di `confidence` (`CONFIRMED`, `PROBABLE`, `UNVERIFIED`), `detection_method` (`nse`, `banner`, `nvd_keyword`) e tracciamento CPE normalizzato.
 
-- [ ] **SEC-P1-05 · Container Capabilities Hardening & `NMAP_PRIVILEGED`**
+- [~] **SEC-P1-05 · Container Capabilities Hardening & `NMAP_PRIVILEGED`**
   - File: `docker-compose.yml`, `backend/Dockerfile`
   - Dipende da: Nessuna
   - Test: Verifica container startup e capabilities
   - DoD: Rimozione di `NET_ADMIN` e configurazione esplicita di `NMAP_PRIVILEGED=1` nell'ambiente container; documentazione agent/probe locale per LAN Layer 2/ARP discovery in scenari non-Linux.
 
-- [ ] **SEC-P1-06 · Aggiornamento Libreria PDF (`go-pdf/fpdf`) e Manutenzione Dipendenze**
+- [~] **SEC-P1-06 · Aggiornamento Libreria PDF (`go-pdf/fpdf`) e Manutenzione Dipendenze**
   - File: `backend/go.mod`, `backend/pkg/report/pdf_generator.go`
   - Dipende da: Nessuna
   - Test: `go test ./pkg/report/...` (100% PASS)
   - DoD: Migrazione da `jung-kurt/gofpdf` (abbandonata) al fork supportato `github.com/go-pdf/fpdf`.
 
 ### Epic 26 · SEC-P2: Attack Path Refinement & Advanced Orchestration (Miglioramento Continuo)
-- [ ] **SEC-P2-01 · Coerenza CVSS/Severity & Archi Inferiti con Confidence nel Grafo Attack Path**
+- [~] **SEC-P2-01 · Coerenza CVSS/Severity & Archi Inferiti con Confidence nel Grafo Attack Path**
   - File: `backend/internal/service/attack_path_service.go`, `frontend/src/components/graph/AttackPathGraph.tsx`
   - Dipende da: Nessuna
   - Test: Unit test su assegnazione severità nodi e proprietà archi
   - DoD: Allineamento rigoroso tra score CVSS e severità dei nodi (es. CVSS 7.5 = HIGH, non CRITICAL); marcatura esplicita degli archi `PIVOTS_TO` e `TRUSTED_RELATION` con flag `inferred: true`, base dell'inferenza e score di confidenza.
 
-- [ ] **SEC-P2-02 · Formula Rischio Cumulativo Probabilistica & Bound su Cammini**
+- [~] **SEC-P2-02 · Formula Rischio Cumulativo Probabilistica & Bound su Cammini**
   - File: `backend/internal/service/attack_path_service.go`
   - Dipende da: SEC-P2-01
   - Test: Unit test su calcolo probabilistico $1 - \prod(1 - p_i)$
   - DoD: Sostituzione della somma algebrica pura con formulazione di rischio probabilistico combinato per evitare distorsioni su molte vulnerabilità minori; vincoli di profondità massima e tetto al numero di percorsi enumerati.
 
-- [ ] **SEC-P2-03 · Diff tra Scansioni (Vulnerabilità Nuove, Risolte, Persistenti)**
+- [~] **SEC-P2-03 · Diff tra Scansioni (Vulnerabilità Nuove, Risolte, Persistenti)**
   - File: `backend/internal/service/scan_orchestrator.go`, `backend/internal/domain/finding.go`
   - Dipende da: SEC-P1-04
   - Test: Service integration test su scansioni consecutive dello stesso target

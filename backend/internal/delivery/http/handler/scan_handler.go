@@ -622,3 +622,32 @@ func (h *ScanHandler) DeleteProfile(w http.ResponseWriter, r *http.Request) {
 		"message": "Profilo custom eliminato con successo",
 	})
 }
+
+// GetDiff gestisce GET /api/v1/scans/{id}/diff calcolando la progressione dei finding (NEW, RESOLVED, PERSISTENT) rispetto alla scansione precedente (SEC-P2-03)
+func (h *ScanHandler) GetDiff(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := middleware.GetTenantID(r.Context())
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "UNAUTHORIZED", "Identificativo tenant mancante o non valido")
+		return
+	}
+
+	idParam := chi.URLParam(r, "id")
+	scanID, err := uuid.Parse(idParam)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "INVALID_ID", "ID scansione non valido")
+		return
+	}
+
+	diff, err := h.scanService.GetScanDiff(r.Context(), tenantID, scanID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			response.Error(w, http.StatusNotFound, "NOT_FOUND", "Scansione non trovata")
+			return
+		}
+		response.Error(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Calcolo del diff di scansione fallito")
+		return
+	}
+
+	response.JSON(w, http.StatusOK, diff)
+}
+

@@ -121,3 +121,44 @@ func TestParseProfileArgs_VulnerabilityScript(t *testing.T) {
 	}
 }
 
+func TestSpecializedUDPProfile_ArgsAreSafe(t *testing.T) {
+	profiles := GetDefaultProfiles()
+	udpProfile, ok := profiles[ProfileSpecializedUDP]
+	if !ok {
+		t.Fatal("ProfileSpecializedUDP non trovato nei profili di default")
+	}
+
+	for _, arg := range udpProfile.Args {
+		if arg == "-p" {
+			continue
+		}
+		if !IsSafeArgument(arg) && !validPortArgRegex.MatchString("-p"+arg) {
+			t.Errorf("argomento in ProfileSpecializedUDP '%s' non è considerato sicuro", arg)
+		}
+	}
+
+	parsed, err := ParseProfileArgs("-sU -p U:53,69,123,161,514,623,5353 -T4")
+	if err != nil {
+		t.Fatalf("ParseProfileArgs fallito con argomenti UDP: %v", err)
+	}
+
+	safeArgs, err := BuildSafeArguments(parsed, "192.168.1.10")
+	if err != nil {
+		t.Fatalf("BuildSafeArguments fallito per UDP Profile: %v", err)
+	}
+
+	if len(safeArgs) < 5 {
+		t.Fatalf("troppi pochi argomenti generati: %v", safeArgs)
+	}
+}
+
+func TestDefaultProfiles_Invasiveness(t *testing.T) {
+	profiles := GetDefaultProfiles()
+	for pType, cfg := range profiles {
+		if !cfg.Invasiveness.IsValid() {
+			t.Errorf("profilo %s ha livello di invasività non valido: %s", pType, cfg.Invasiveness)
+		}
+	}
+}
+
+

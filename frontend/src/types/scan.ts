@@ -78,6 +78,8 @@ export type ScanProfileCategory =
   | 'COMPLIANCE'
   | 'CUSTOM';
 
+export type InvasivenessLevel = 'SAFE' | 'INTRUSIVE' | 'DANGEROUS';
+
 export interface ScanProfileItem {
   id: string;
   name: string;
@@ -85,8 +87,42 @@ export interface ScanProfileItem {
   description?: string;
   timeout_seconds: number;
   category: ScanProfileCategory;
+  invasiveness?: InvasivenessLevel;
   is_custom: boolean;
   tenant_id?: string;
   created_at?: string;
   updated_at?: string;
 }
+
+export type ScanDiffStatus = 'NEW' | 'RESOLVED' | 'PERSISTENT';
+
+export interface FindingDiffItem {
+  finding_key: string;
+  status: ScanDiffStatus;
+  host_ip: string;
+  port: number;
+  protocol: string;
+  port_state?: string;
+  service_name?: string;
+  cve_id?: string;
+  cvss_score?: number;
+  severity: SeverityLevel;
+  confidence?: string;
+  detection_method?: string;
+  remediation?: string;
+  current_scan_id: string;
+  previous_scan_id?: string;
+}
+
+export interface ScanDiffResult {
+  current_scan_id: string;
+  previous_scan_id?: string;
+  target_id: string;
+  target_value: string;
+  generated_at: string;
+  total_new: number;
+  total_resolved: number;
+  total_persistent: number;
+  items: FindingDiffItem[];
+}
+

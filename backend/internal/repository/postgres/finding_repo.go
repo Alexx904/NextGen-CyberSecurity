@@ -27,15 +27,16 @@ func NewFindingRepo(pool *pgxpool.Pool) *FindingRepo {
 // GetByID recupera un singolo finding garantendo l'isolamento tenant
 func (r *FindingRepo) GetByID(ctx context.Context, tenantID, id uuid.UUID) (*domain.Finding, error) {
 	query := `
-		SELECT id, scan_id, tenant_id, host_ip, hostname, port, protocol,
+		SELECT id, scan_id, tenant_id, host_ip, hostname, port, protocol, port_state,
 		       service_name, service_version, cve_id, cvss_score, severity,
+		       confidence, detection_method, cpe,
 		       raw_banner, remediation, created_at
 		FROM findings
 		WHERE tenant_id = $1 AND id = $2
 	`
 
 	var f domain.Finding
-	var severityStr string
+	var severityStr, confStr, detStr string
 
 	err := r.pool.QueryRow(ctx, query, tenantID, id).Scan(
 		&f.ID,
@@ -45,11 +46,15 @@ func (r *FindingRepo) GetByID(ctx context.Context, tenantID, id uuid.UUID) (*dom
 		&f.Hostname,
 		&f.Port,
 		&f.Protocol,
+		&f.PortState,
 		&f.ServiceName,
 		&f.ServiceVersion,
 		&f.CVEID,
 		&f.CVSSScore,
 		&severityStr,
+		&confStr,
+		&detStr,
+		&f.CPE,
 		&f.RawBanner,
 		&f.Remediation,
 		&f.CreatedAt,
@@ -62,6 +67,11 @@ func (r *FindingRepo) GetByID(ctx context.Context, tenantID, id uuid.UUID) (*dom
 	}
 
 	f.Severity = domain.SeverityLevel(severityStr)
+	f.Confidence = domain.FindingConfidence(confStr)
+	f.DetectionMethod = domain.DetectionMethod(detStr)
+	if f.PortState == "" {
+		f.PortState = "open"
+	}
 	return &f, nil
 }
 
@@ -120,8 +130,9 @@ func (r *FindingRepo) List(ctx context.Context, tenantID uuid.UUID, filter domai
 	}
 
 	query := fmt.Sprintf(`
-		SELECT id, scan_id, tenant_id, host_ip, hostname, port, protocol,
+		SELECT id, scan_id, tenant_id, host_ip, hostname, port, protocol, port_state,
 		       service_name, service_version, cve_id, cvss_score, severity,
+		       confidence, detection_method, cpe,
 		       raw_banner, remediation, created_at
 		FROM findings
 		WHERE %s
@@ -145,7 +156,7 @@ func (r *FindingRepo) List(ctx context.Context, tenantID uuid.UUID, filter domai
 	var findings []*domain.Finding
 	for rows.Next() {
 		var f domain.Finding
-		var severityStr string
+		var severityStr, confStr, detStr string
 
 		if err := rows.Scan(
 			&f.ID,
@@ -155,11 +166,15 @@ func (r *FindingRepo) List(ctx context.Context, tenantID uuid.UUID, filter domai
 			&f.Hostname,
 			&f.Port,
 			&f.Protocol,
+			&f.PortState,
 			&f.ServiceName,
 			&f.ServiceVersion,
 			&f.CVEID,
 			&f.CVSSScore,
 			&severityStr,
+			&confStr,
+			&detStr,
+			&f.CPE,
 			&f.RawBanner,
 			&f.Remediation,
 			&f.CreatedAt,
@@ -168,6 +183,11 @@ func (r *FindingRepo) List(ctx context.Context, tenantID uuid.UUID, filter domai
 		}
 
 		f.Severity = domain.SeverityLevel(severityStr)
+		f.Confidence = domain.FindingConfidence(confStr)
+		f.DetectionMethod = domain.DetectionMethod(detStr)
+		if f.PortState == "" {
+			f.PortState = "open"
+		}
 		findings = append(findings, &f)
 	}
 
@@ -188,10 +208,11 @@ func (r *FindingRepo) CreateBatch(ctx context.Context, findings []*domain.Findin
 	now := time.Now()
 
 	insertSQL := `
-		INSERT INTO findings (id, scan_id, tenant_id, host_ip, hostname, port, protocol,
+		INSERT INTO findings (id, scan_id, tenant_id, host_ip, hostname, port, protocol, port_state,
 		                       service_name, service_version, cve_id, cvss_score, severity,
+		                       confidence, detection_method, cpe,
 		                       raw_banner, remediation, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 	`
 
 	for _, f := range findings {
@@ -204,6 +225,15 @@ func (r *FindingRepo) CreateBatch(ctx context.Context, findings []*domain.Findin
 		if f.Severity == "" {
 			f.Severity = domain.SeverityInfo
 		}
+		if f.Confidence == "" {
+			f.Confidence = domain.ConfidenceConfirmed
+		}
+		if f.DetectionMethod == "" {
+			f.DetectionMethod = domain.DetectionMethodBanner
+		}
+		if f.PortState == "" {
+			f.PortState = "open"
+		}
 
 		batch.Queue(
 			insertSQL,
@@ -214,11 +244,15 @@ func (r *FindingRepo) CreateBatch(ctx context.Context, findings []*domain.Findin
 			f.Hostname,
 			f.Port,
 			f.Protocol,
+			f.PortState,
 			f.ServiceName,
 			f.ServiceVersion,
 			f.CVEID,
 			f.CVSSScore,
 			string(f.Severity),
+			string(f.Confidence),
+			string(f.DetectionMethod),
+			f.CPE,
 			f.RawBanner,
 			f.Remediation,
 			f.CreatedAt,

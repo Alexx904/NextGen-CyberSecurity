@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jung-kurt/gofpdf"
+	fpdf "github.com/go-pdf/fpdf"
 
 	"nextgen-cybersec/internal/domain"
 )
@@ -101,7 +101,7 @@ func (g *DefaultPDFGenerator) Generate(data PDFReportData) ([]byte, error) {
 // =============================================================================
 
 func (g *DefaultPDFGenerator) generateExecutive(data PDFReportData) ([]byte, error) {
-	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf := fpdf.New("P", "mm", "A4", "")
 	pdf.SetMargins(15, 15, 15)
 	pdf.SetAutoPageBreak(true, 15)
 	pdf.AliasNbPages("{nb}")
@@ -533,7 +533,7 @@ func estimateExecutiveCardHeight(f *domain.Finding) float64 {
 }
 
 // drawExecutivePriorityCard disegna una card compatta focalizzata su CVE, severità e remediation
-func drawExecutivePriorityCard(pdf *gofpdf.Fpdf, tr func(string) string, index int, f *domain.Finding, prR, prG, prB int) {
+func drawExecutivePriorityCard(pdf *fpdf.Fpdf, tr func(string) string, index int, f *domain.Finding, prR, prG, prB int) {
 	cardY := pdf.GetY()
 	cardW := 180.0
 	sevR, sevG, sevB := SeverityRGB(f.Severity)
@@ -613,7 +613,7 @@ func drawExecutivePriorityCard(pdf *gofpdf.Fpdf, tr func(string) string, index i
 // =============================================================================
 
 func (g *DefaultPDFGenerator) generateTechnical(data PDFReportData) ([]byte, error) {
-	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf := fpdf.New("P", "mm", "A4", "")
 	pdf.SetMargins(15, 15, 15)
 	pdf.SetAutoPageBreak(true, 15)
 	pdf.AliasNbPages("{nb}")
@@ -955,7 +955,7 @@ func (g *DefaultPDFGenerator) generateTechnical(data PDFReportData) ([]byte, err
 // =============================================================================
 
 // drawHeader disegna l'intestazione standard per le pagine interne con titolo documento dedicato
-func drawHeader(pdf *gofpdf.Fpdf, tr func(string) string, tenantName, reportTitle string, prR, prG, prB, accR, accG, accB int) {
+func drawHeader(pdf *fpdf.Fpdf, tr func(string) string, tenantName, reportTitle string, prR, prG, prB, accR, accG, accB int) {
 	pdf.SetY(10)
 	pdf.SetFont("Helvetica", "B", 8)
 	pdf.SetTextColor(prR, prG, prB)
@@ -972,7 +972,7 @@ func drawHeader(pdf *gofpdf.Fpdf, tr func(string) string, tenantName, reportTitl
 }
 
 // drawKPIBox disegna un singolo riquadro KPI sintetico
-func drawKPIBox(pdf *gofpdf.Fpdf, tr func(string) string, x, y, w, h float64, label, value string, r, g, b int) {
+func drawKPIBox(pdf *fpdf.Fpdf, tr func(string) string, x, y, w, h float64, label, value string, r, g, b int) {
 	pdf.SetFillColor(248, 250, 252)
 	pdf.SetDrawColor(226, 232, 240)
 	pdf.RoundedRect(x, y, w, h, 2, "1234", "FD")
@@ -988,7 +988,7 @@ func drawKPIBox(pdf *gofpdf.Fpdf, tr func(string) string, x, y, w, h float64, la
 }
 
 // drawFindingCard disegna una scheda tecnica completa per un finding con allineamento millimetrico uniforme
-func drawFindingCard(pdf *gofpdf.Fpdf, tr func(string) string, index int, f *domain.Finding, prR, prG, prB int) {
+func drawFindingCard(pdf *fpdf.Fpdf, tr func(string) string, index int, f *domain.Finding, prR, prG, prB int) {
 	cardY := pdf.GetY()
 	cardW := 180.0
 	sevR, sevG, sevB := SeverityRGB(f.Severity)
@@ -1093,7 +1093,7 @@ func drawFindingCard(pdf *gofpdf.Fpdf, tr func(string) string, index int, f *dom
 }
 
 // registerAndDrawLogo gestisce la decodifica base64 del logo e il posizionamento nel PDF
-func registerAndDrawLogo(pdf *gofpdf.Fpdf, logoStr string, x, y, maxW, maxH float64) bool {
+func registerAndDrawLogo(pdf *fpdf.Fpdf, logoStr string, x, y, maxW, maxH float64) bool {
 	if logoStr == "" {
 		return false
 	}
@@ -1121,7 +1121,7 @@ func registerAndDrawLogo(pdf *gofpdf.Fpdf, logoStr string, x, y, maxW, maxH floa
 	}
 
 	imageName := "logo_tenant"
-	opt := gofpdf.ImageOptions{
+	opt := fpdf.ImageOptions{
 		ImageType: imageType,
 		ReadDpi:   true,
 	}

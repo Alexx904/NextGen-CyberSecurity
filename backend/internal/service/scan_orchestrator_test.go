@@ -74,6 +74,21 @@ func (m *mockScanRepo) GetActiveByTarget(ctx context.Context, tenantID, targetID
 	return nil, nil
 }
 
+func (m *mockScanRepo) GetPreviousCompletedByTarget(ctx context.Context, tenantID, targetID, excludeScanID uuid.UUID) (*domain.Scan, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	var latest *domain.Scan
+	for _, s := range m.scans {
+		if s.TenantID == tenantID && s.TargetID == targetID && s.Status == domain.ScanStatusCompleted && s.ID != excludeScanID {
+			if latest == nil || (s.CompletedAt != nil && latest.CompletedAt != nil && s.CompletedAt.After(*latest.CompletedAt)) {
+				cp := *s
+				latest = &cp
+			}
+		}
+	}
+	return latest, nil
+}
+
 func (m *mockScanRepo) Update(ctx context.Context, scan *domain.Scan) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

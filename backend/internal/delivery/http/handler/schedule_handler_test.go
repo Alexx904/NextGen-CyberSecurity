@@ -114,6 +114,9 @@ func (m *mockScanRepoForSched) List(ctx context.Context, tenantID uuid.UUID, lim
 func (m *mockScanRepoForSched) GetActiveByTarget(ctx context.Context, tenantID, targetID uuid.UUID) (*domain.Scan, error) {
 	return nil, nil
 }
+func (m *mockScanRepoForSched) GetPreviousCompletedByTarget(ctx context.Context, tenantID, targetID, excludeScanID uuid.UUID) (*domain.Scan, error) {
+	return nil, nil
+}
 func (m *mockScanRepoForSched) Create(ctx context.Context, scan *domain.Scan) error {
 	return nil
 }

@@ -24,6 +24,7 @@ import {
   Cpu,
   Folder,
   Bug,
+  AlertTriangle,
 } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { ApiResponse } from '../types/auth';
@@ -319,6 +320,7 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
   const [selectedCronPreset, setSelectedCronPreset] = useState<string>('0 2 * * *');
   const [customCron, setCustomCron] = useState<string>('0 2 * * *');
 
+  const [intrusiveConfirmed, setIntrusiveConfirmed] = useState<boolean>(false);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1067,6 +1069,19 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
                                       CUSTOM
                                     </span>
                                   )}
+                                  {p.invasiveness && (
+                                    <span
+                                      className={`text-[9px] px-1.5 py-0.2 rounded border font-mono font-bold ${
+                                        p.invasiveness === 'SAFE'
+                                          ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                                          : p.invasiveness === 'INTRUSIVE'
+                                          ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                                          : 'bg-rose-500/10 text-rose-300 border-rose-500/30'
+                                      }`}
+                                    >
+                                      {p.invasiveness}
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="flex items-center space-x-2">
                                   <span className="text-[10px] text-slate-400 font-mono">
@@ -1570,6 +1585,40 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
             </>
           )}
 
+          {/* Gate di sicurezza e autorizzazione per profili intrusivi (SEC-P1-03 & FR-01.3) */}
+          {(() => {
+            const currentSelectedProfile = profiles.find((p) => p.id === selectedProfileId);
+            const isIntrusive = Boolean(
+              currentSelectedProfile &&
+              (currentSelectedProfile.invasiveness === 'INTRUSIVE' || currentSelectedProfile.invasiveness === 'DANGEROUS')
+            );
+
+            if (!isIntrusive) return null;
+
+            return (
+              <div className="p-3 rounded-xl border border-amber-500/40 bg-amber-500/10 space-y-2 text-xs animate-in fade-in">
+                <div className="flex items-center space-x-2 text-amber-300 font-semibold">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
+                  <span>Profilo Invasivo / Offensive (SEC-P1-03 & FR-01.3)</span>
+                </div>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  Questo profilo esegue rilevamenti intensivi, fingerprinting o script attivi Nmap di vulnerabilità (--script=vuln).
+                </p>
+                <label className="flex items-center space-x-2 cursor-pointer text-white pt-1">
+                  <input
+                    type="checkbox"
+                    checked={intrusiveConfirmed}
+                    onChange={(e) => setIntrusiveConfirmed(e.target.checked)}
+                    className="rounded border-slate-700 text-amber-500 focus:ring-0"
+                  />
+                  <span className="font-medium text-[11px]">
+                    Confermo di possedere esplicita autorizzazione scritta del proprietario ad eseguire scansioni intrusive su questo target.
+                  </span>
+                </label>
+              </div>
+            );
+          })()}
+
           {/* Footer Actions */}
           <div className="pt-3 flex items-center justify-end space-x-3 border-t border-cyber-border/60 shrink-0">
             <button
@@ -1580,23 +1629,40 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
             >
               Annulla
             </button>
-            <button
-              type="submit"
-              disabled={Boolean(submitting || !selectedGroupId || (selectedGroupInfo && selectedGroupInfo.targets.length === 0))}
-              className="px-5 py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-semibold transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1.5"
-            >
-              {activeTab === 'ON_DEMAND' ? (
-                <>
-                  <Play className="w-3.5 h-3.5" />
-                  <span>{submitting ? 'Avvio in corso...' : 'Avvia Scansione Ora'}</span>
-                </>
-              ) : (
-                <>
-                  <Calendar className="w-3.5 h-3.5" />
-                  <span>{submitting ? 'Salvataggio...' : 'Crea Pianificazione'}</span>
-                </>
-              )}
-            </button>
+            {(() => {
+              const currentSelectedProfile = profiles.find((p) => p.id === selectedProfileId);
+              const isIntrusive = Boolean(
+                currentSelectedProfile &&
+                (currentSelectedProfile.invasiveness === 'INTRUSIVE' || currentSelectedProfile.invasiveness === 'DANGEROUS')
+              );
+
+              const isDisabled = Boolean(
+                submitting ||
+                !selectedGroupId ||
+                (selectedGroupInfo && selectedGroupInfo.targets.length === 0) ||
+                (isIntrusive && !intrusiveConfirmed)
+              );
+
+              return (
+                <button
+                  type="submit"
+                  disabled={isDisabled}
+                  className="px-5 py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-semibold transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1.5"
+                >
+                  {activeTab === 'ON_DEMAND' ? (
+                    <>
+                      <Play className="w-3.5 h-3.5" />
+                      <span>{submitting ? 'Avvio in corso...' : 'Avvia Scansione Ora'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Calendar className="w-3.5 h-3.5" />
+                      <span>{submitting ? 'Salvataggio...' : 'Crea Pianificazione'}</span>
+                    </>
+                  )}
+                </button>
+              );
+            })()}
           </div>
         </form>
       </div>

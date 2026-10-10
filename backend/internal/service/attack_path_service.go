@@ -163,14 +163,14 @@ func (s *attackPathService) GenerateAttackGraph(ctx context.Context, tenantID uu
 		hostSeverity := string(domain.SeverityLow)
 		hostFindings := hostFindingsMap[host]
 
-		// Calcolo massima severità host
+		// Calcolo massima severità host allineata allo standard CVSS (SEC-P2-01)
 		maxCVSS := 0.0
 		for _, f := range hostFindings {
 			if f.CVSSScore != nil && *f.CVSSScore > maxCVSS {
 				maxCVSS = *f.CVSSScore
-				hostSeverity = string(f.Severity)
 			}
 		}
+		hostSeverity = domain.AttackSeverityFromCVSS(maxCVSS)
 
 		if !addedNodes[hostNodeID] {
 			graph.Nodes = append(graph.Nodes, domain.AttackNode{
@@ -187,12 +187,14 @@ func (s *attackPathService) GenerateAttackGraph(ctx context.Context, tenantID uu
 		// Se l'host è nel perimetro esterno, colleghiamolo dall'entrypoint
 		if sliceContains(externalHosts, host) {
 			graph.Edges = append(graph.Edges, domain.AttackEdge{
-				ID:     nextEdgeID(),
-				Source: entrypointNode.ID,
-				Target: hostNodeID,
-				Type:   domain.EdgeTypeNetworkAccess,
-				Label:  "Esposizione Rete Esterna",
-				Weight: 1.0,
+				ID:         nextEdgeID(),
+				Source:     entrypointNode.ID,
+				Target:     hostNodeID,
+				Type:       domain.EdgeTypeNetworkAccess,
+				Label:      "Esposizione Rete Esterna",
+				Weight:     1.0,
+				Inferred:   false,
+				Confidence: 1.0,
 			})
 		}
 
@@ -221,12 +223,14 @@ func (s *attackPathService) GenerateAttackGraph(ctx context.Context, tenantID uu
 
 					// Arco Host -> Service
 					graph.Edges = append(graph.Edges, domain.AttackEdge{
-						ID:     nextEdgeID(),
-						Source: hostNodeID,
-						Target: serviceNodeID,
-						Type:   domain.EdgeTypeNetworkAccess,
-						Label:  "Porta Aperta",
-						Weight: 1.0,
+						ID:         nextEdgeID(),
+						Source:     hostNodeID,
+						Target:     serviceNodeID,
+						Type:       domain.EdgeTypeNetworkAccess,
+						Label:      "Porta Aperta",
+						Weight:     1.0,
+						Inferred:   false,
+						Confidence: 1.0,
 					})
 				}
 			}
@@ -249,7 +253,7 @@ func (s *attackPathService) GenerateAttackGraph(ctx context.Context, tenantID uu
 						ID:       vulnNodeID,
 						Type:     domain.NodeTypeVulnerability,
 						Label:    vulnLabel,
-						Severity: string(f.Severity),
+						Severity: domain.AttackSeverityFromCVSS(cvss),
 						CVSS:     cvss,
 						Metadata: map[string]interface{}{
 							"cve_id":   *f.CVEID,
@@ -262,12 +266,14 @@ func (s *attackPathService) GenerateAttackGraph(ctx context.Context, tenantID uu
 
 					// Arco Service -> Vulnerability
 					graph.Edges = append(graph.Edges, domain.AttackEdge{
-						ID:     nextEdgeID(),
-						Source: serviceNodeID,
-						Target: vulnNodeID,
-						Type:   domain.EdgeTypeExploits,
-						Label:  fmt.Sprintf("Exploit CVSS %.1f", cvss),
-						Weight: math.Max(0.1, 10.0-cvss),
+						ID:         nextEdgeID(),
+						Source:     serviceNodeID,
+						Target:     vulnNodeID,
+						Type:       domain.EdgeTypeExploits,
+						Label:      fmt.Sprintf("Exploit CVSS %.1f", cvss),
+						Weight:     math.Max(0.1, 10.0-cvss),
+						Inferred:   false,
+						Confidence: 1.0,
 					})
 				}
 
@@ -296,19 +302,23 @@ func (s *attackPathService) GenerateAttackGraph(ctx context.Context, tenantID uu
 			}
 			intNodeID := fmt.Sprintf("host-%s", sanitizeID(intHost))
 
-			// Arco di Pivot
+			// Arco di Pivot (inferito da topologia di rete o accessi SSH)
 			graph.Edges = append(graph.Edges, domain.AttackEdge{
-				ID:     nextEdgeID(),
-				Source: pivotNodeID,
-				Target: intNodeID,
-				Type:   domain.EdgeTypePivotsTo,
-				Label:  "Lateral Movement / Pivot Rete",
-				Weight: 1.5,
+				ID:             nextEdgeID(),
+				Source:         pivotNodeID,
+				Target:         intNodeID,
+				Type:           domain.EdgeTypePivotsTo,
+				Label:          "Lateral Movement / Pivot Rete",
+				Weight:         1.5,
+				Inferred:       true,
+				InferenceBasis: "Subnet adjacency / Compromised host lateral pivot",
+				Confidence:     0.85,
 			})
 		}
 	}
 
-	// 4. Costruzione dei Percorsi di Attacco (Attack Paths)
+	// 4. Costruzione dei Percorsi di Attacco (Attack Paths con bound computazionale - SEC-P2-02)
+	const maxPaths = 50
 	nodeIndex := make(map[string]domain.AttackNode, len(graph.Nodes))
 	for _, n := range graph.Nodes {
 		nodeIndex[n.ID] = n
@@ -317,10 +327,16 @@ func (s *attackPathService) GenerateAttackGraph(ctx context.Context, tenantID uu
 	pathCounter := 1
 	// Percorsi diretti verso host esterni e relative vulnerabilità
 	for _, extHost := range externalHosts {
+		if len(graph.Paths) >= maxPaths {
+			break
+		}
 		extHostNodeID := fmt.Sprintf("host-%s", sanitizeID(extHost))
 		extFindings := hostFindingsMap[extHost]
 
 		for _, f := range extFindings {
+			if len(graph.Paths) >= maxPaths {
+				break
+			}
 			if f.CVEID == nil || (f.CVSSScore != nil && *f.CVSSScore < minCVSS) {
 				continue
 			}
@@ -353,6 +369,9 @@ func (s *attackPathService) GenerateAttackGraph(ctx context.Context, tenantID uu
 			// Se la vulnerabilità è critica (>= 7.0) e ci sono host interni, generiamo percorsi multi-hop
 			if f.CVSSScore != nil && *f.CVSSScore >= 7.0 {
 				for _, intHost := range internalHosts {
+					if len(graph.Paths) >= maxPaths {
+						break
+					}
 					if intHost == extHost {
 						continue
 					}

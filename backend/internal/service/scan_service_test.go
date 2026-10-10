@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -508,4 +509,180 @@ func TestScanService_StartGroupScan_SkipsBlacklistedAndActive(t *testing.T) {
 		t.Errorf("Target ID atteso %v, ottenuto %v", t3ID, scans[0].TargetID)
 	}
 }
+
+func TestScanService_GetScanDiff_NoPreviousScan(t *testing.T) {
+	tenantID := uuid.New()
+	targetID := uuid.New()
+	scanID := uuid.New()
+
+	scanRepo := newFullMockScanRepo()
+	_ = scanRepo.Create(context.Background(), &domain.Scan{
+		ID:       scanID,
+		TenantID: tenantID,
+		TargetID: targetID,
+		Status:   domain.ScanStatusCompleted,
+	})
+
+	findingRepo := newMockFindingRepo()
+	fID := uuid.New()
+	svcName := "http"
+	cve := "CVE-2023-1234"
+	findingRepo.findings[fID] = &domain.Finding{
+		ID:          fID,
+		ScanID:      scanID,
+		TenantID:    tenantID,
+		HostIP:      "192.168.1.10",
+		Port:        80,
+		Protocol:    "tcp",
+		ServiceName: &svcName,
+		CVEID:       &cve,
+		Severity:    domain.SeverityHigh,
+	}
+
+	targetRepo := &mockTargetRepo{
+		targets: map[uuid.UUID]*domain.Target{
+			targetID: {ID: targetID, TenantID: tenantID, Value: "192.168.1.10"},
+		},
+	}
+
+	svc := NewScanService(scanRepo, &mockProfileRepo{}, targetRepo, findingRepo, newMockScanGroupRepo(), &mockOrchestratorClient{})
+
+	diff, err := svc.GetScanDiff(context.Background(), tenantID, scanID)
+	if err != nil {
+		t.Fatalf("GetScanDiff ha restituito un errore inatteso: %v", err)
+	}
+
+	if diff.PreviousScanID != nil {
+		t.Errorf("Atteso PreviousScanID nil per prima scansione, ottenuto %v", diff.PreviousScanID)
+	}
+	if diff.TotalNew != 1 {
+		t.Errorf("Atteso TotalNew = 1, ottenuto %d", diff.TotalNew)
+	}
+	if diff.TotalResolved != 0 || diff.TotalPersistent != 0 {
+		t.Errorf("Attesi 0 resolved e 0 persistent, ottenuti res=%d, pers=%d", diff.TotalResolved, diff.TotalPersistent)
+	}
+	if len(diff.Items) != 1 || diff.Items[0].Status != domain.DiffStatusNew {
+		t.Errorf("Item atteso con stato NEW, ottenuto: %+v", diff.Items)
+	}
+}
+
+func TestScanService_GetScanDiff_WithPreviousScan_NewPersistentResolved(t *testing.T) {
+	tenantID := uuid.New()
+	targetID := uuid.New()
+	prevScanID := uuid.New()
+	currScanID := uuid.New()
+
+	scanRepo := newFullMockScanRepo()
+	now := time.Now()
+	prevTime := now.Add(-2 * time.Hour)
+	_ = scanRepo.Create(context.Background(), &domain.Scan{
+		ID:          prevScanID,
+		TenantID:    tenantID,
+		TargetID:    targetID,
+		Status:      domain.ScanStatusCompleted,
+		CompletedAt: &prevTime,
+	})
+	_ = scanRepo.Create(context.Background(), &domain.Scan{
+		ID:          currScanID,
+		TenantID:    tenantID,
+		TargetID:    targetID,
+		Status:      domain.ScanStatusCompleted,
+		CompletedAt: &now,
+	})
+
+	findingRepo := newMockFindingRepo()
+	sshSvc := "ssh"
+	cveResolved := "CVE-2021-0001"
+	cvePersistent := "CVE-2022-0002"
+	cveNew := "CVE-2023-0003"
+
+	// Finding in prevScan:
+	// 1. CVE-2021-0001 (che sarà RISOLTA)
+	f1ID := uuid.New()
+	findingRepo.findings[f1ID] = &domain.Finding{
+		ID:          f1ID,
+		ScanID:      prevScanID,
+		TenantID:    tenantID,
+		HostIP:      "192.168.1.10",
+		Port:        22,
+		Protocol:    "tcp",
+		ServiceName: &sshSvc,
+		CVEID:       &cveResolved,
+		Severity:    domain.SeverityMedium,
+	}
+	// 2. CVE-2022-0002 (che sarà PERSISTENTE)
+	f2ID := uuid.New()
+	findingRepo.findings[f2ID] = &domain.Finding{
+		ID:          f2ID,
+		ScanID:      prevScanID,
+		TenantID:    tenantID,
+		HostIP:      "192.168.1.10",
+		Port:        80,
+		Protocol:    "tcp",
+		CVEID:       &cvePersistent,
+		Severity:    domain.SeverityHigh,
+	}
+
+	// Finding in currScan:
+	// 1. CVE-2022-0002 (PERSISTENTE)
+	f3ID := uuid.New()
+	findingRepo.findings[f3ID] = &domain.Finding{
+		ID:          f3ID,
+		ScanID:      currScanID,
+		TenantID:    tenantID,
+		HostIP:      "192.168.1.10",
+		Port:        80,
+		Protocol:    "tcp",
+		CVEID:       &cvePersistent,
+		Severity:    domain.SeverityHigh,
+	}
+	// 2. CVE-2023-0003 (NUOVA)
+	f4ID := uuid.New()
+	findingRepo.findings[f4ID] = &domain.Finding{
+		ID:          f4ID,
+		ScanID:      currScanID,
+		TenantID:    tenantID,
+		HostIP:      "192.168.1.10",
+		Port:        443,
+		Protocol:    "tcp",
+		CVEID:       &cveNew,
+		Severity:    domain.SeverityCritical,
+	}
+
+	targetRepo := &mockTargetRepo{
+		targets: map[uuid.UUID]*domain.Target{
+			targetID: {ID: targetID, TenantID: tenantID, Value: "192.168.1.10"},
+		},
+	}
+
+	svc := NewScanService(scanRepo, &mockProfileRepo{}, targetRepo, findingRepo, newMockScanGroupRepo(), &mockOrchestratorClient{})
+
+	diff, err := svc.GetScanDiff(context.Background(), tenantID, currScanID)
+	if err != nil {
+		t.Fatalf("GetScanDiff ha restituito un errore inatteso: %v", err)
+	}
+
+	if diff.PreviousScanID == nil || *diff.PreviousScanID != prevScanID {
+		t.Errorf("Atteso PreviousScanID %v, ottenuto %v", prevScanID, diff.PreviousScanID)
+	}
+
+	if diff.TotalNew != 1 {
+		t.Errorf("Atteso TotalNew = 1, ottenuto %d", diff.TotalNew)
+	}
+	if diff.TotalPersistent != 1 {
+		t.Errorf("Atteso TotalPersistent = 1, ottenuto %d", diff.TotalPersistent)
+	}
+	if diff.TotalResolved != 1 {
+		t.Errorf("Atteso TotalResolved = 1, ottenuto %d", diff.TotalResolved)
+	}
+
+	statusCount := make(map[domain.ScanDiffStatus]int)
+	for _, it := range diff.Items {
+		statusCount[it.Status]++
+	}
+	if statusCount[domain.DiffStatusNew] != 1 || statusCount[domain.DiffStatusPersistent] != 1 || statusCount[domain.DiffStatusResolved] != 1 {
+		t.Errorf("Conteggio item per stato errato: %+v", statusCount)
+	}
+}
+
 

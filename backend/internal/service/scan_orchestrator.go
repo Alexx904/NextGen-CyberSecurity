@@ -435,7 +435,11 @@ func (o *ScanOrchestrator) processJob(job *ScanJob, workerID int) {
 	now := time.Now().UTC()
 	for _, h := range report.GetUpHosts() {
 		for _, p := range h.Ports {
-			if strings.EqualFold(p.State, "open") {
+			isRelevantPort := strings.EqualFold(p.State, "open") ||
+				strings.EqualFold(p.State, "unfiltered") ||
+				strings.EqualFold(p.State, "open|filtered")
+
+			if isRelevantPort {
 				var portFindings []*domain.Finding
 				if o.correlator != nil {
 					pFindings, err := o.correlator.CorrelatePort(ctx, scan.ID, scan.TenantID, h, p)
@@ -444,21 +448,29 @@ func (o *ScanOrchestrator) processJob(job *ScanJob, workerID int) {
 					}
 					portFindings = pFindings
 				} else {
+					portState := p.State
+					if portState == "" {
+						portState = "open"
+					}
 					f := &domain.Finding{
-						ID:        uuid.New(),
-						ScanID:    scan.ID,
-						TenantID:  scan.TenantID,
-						HostIP:    h.IP,
-						Port:      p.PortID,
-						Protocol:  p.Protocol,
-						Severity:  domain.SeverityInfo,
-						CreatedAt: now,
+						ID:              uuid.New(),
+						ScanID:          scan.ID,
+						TenantID:        scan.TenantID,
+						HostIP:          h.IP,
+						Port:            p.PortID,
+						Protocol:        p.Protocol,
+						PortState:       portState,
+						Severity:        domain.SeverityInfo,
+						Confidence:      domain.ConfidenceConfirmed,
+						DetectionMethod: domain.DetectionMethodPortState,
+						CreatedAt:       now,
 					}
 					if h.PrimaryHostname != "" {
 						hn := h.PrimaryHostname
 						f.Hostname = &hn
 					}
 					if p.Service != nil {
+						f.DetectionMethod = domain.DetectionMethodBanner
 						if p.Service.Name != "" {
 							sName := p.Service.Name
 							f.ServiceName = &sName
@@ -470,6 +482,10 @@ func (o *ScanOrchestrator) processJob(job *ScanJob, workerID int) {
 						if p.Service.RawBanner != "" {
 							sBanner := p.Service.RawBanner
 							f.RawBanner = &sBanner
+						}
+						if len(p.Service.CPEs) > 0 {
+							cpe := p.Service.CPEs[0]
+							f.CPE = &cpe
 						}
 					}
 					portFindings = []*domain.Finding{f}

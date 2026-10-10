@@ -21,6 +21,9 @@ export interface AttackEdge {
   type: AttackEdgeType;
   label: string;
   weight: number;
+  inferred?: boolean;
+  inference_basis?: string;
+  confidence?: number;
 }
 
 export interface AttackPath {

@@ -54,6 +54,9 @@ func (m *reportMockScanRepo) Update(ctx context.Context, scan *domain.Scan) erro
 func (m *reportMockScanRepo) GetActiveByTarget(ctx context.Context, tenantID, targetID uuid.UUID) (*domain.Scan, error) {
 	return nil, nil
 }
+func (m *reportMockScanRepo) GetPreviousCompletedByTarget(ctx context.Context, tenantID, targetID, excludeScanID uuid.UUID) (*domain.Scan, error) {
+	return nil, nil
+}
 
 type reportMockTenantRepo struct {
 	getByIDFunc func(ctx context.Context, id uuid.UUID) (*domain.Tenant, error)

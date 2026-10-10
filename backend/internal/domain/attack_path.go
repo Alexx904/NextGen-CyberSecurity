@@ -54,14 +54,33 @@ type AttackNode struct {
 	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 }
 
-// AttackEdge rappresenta una connessione orientata tra due nodi del grafo.
+// AttackSeverityFromCVSS converte uno score CVSS nella corretta severità allineata allo standard (SEC-P2-01)
+func AttackSeverityFromCVSS(score float64) string {
+	switch {
+	case score >= 9.0:
+		return string(SeverityCritical)
+	case score >= 7.0:
+		return string(SeverityHigh)
+	case score >= 4.0:
+		return string(SeverityMedium)
+	case score > 0.0:
+		return string(SeverityLow)
+	default:
+		return string(SeverityInfo)
+	}
+}
+
+// AttackEdge rappresenta una connessione orientata tra due nodi del grafo con supporto a relazioni inferite (SEC-P2-01).
 type AttackEdge struct {
-	ID     string         `json:"id"`
-	Source string         `json:"source"`
-	Target string         `json:"target"`
-	Type   AttackEdgeType `json:"type"`
-	Label  string         `json:"label"`
-	Weight float64        `json:"weight"`
+	ID             string         `json:"id"`
+	Source         string         `json:"source"`
+	Target         string         `json:"target"`
+	Type           AttackEdgeType `json:"type"`
+	Label          string         `json:"label"`
+	Weight         float64        `json:"weight"`
+	Inferred       bool           `json:"inferred,omitempty"`
+	InferenceBasis string         `json:"inference_basis,omitempty"`
+	Confidence     float64        `json:"confidence,omitempty"`
 }
 
 // AttackPath descrive una catena completa e ordinata di compromissione da un entrypoint a un asset interno.
@@ -107,36 +126,52 @@ type AttackGraph struct {
 	Summary     AttackGraphSummary `json:"summary"`
 }
 
-// CalculateCumulativeRisk calcola il punteggio di rischio (0.0 - 100.0) di una sequenza di nodi.
+// CalculateCumulativeRisk calcola il punteggio di rischio probabilistico (0.0 - 100.0) di una sequenza di nodi (SEC-P2-02).
 func CalculateCumulativeRisk(pathNodes []AttackNode, hopCount int) float64 {
 	if len(pathNodes) == 0 {
 		return 0.0
 	}
 
-	var sumCVSS float64
 	var hasCriticalVuln bool
+	var hasHighVuln bool
+	vulnCount := 0
+
+	// Probabilità congiunta che nessun exploit riesca: prod(1 - p_i)
+	probNone := 1.0
 
 	for _, node := range pathNodes {
 		if node.Type == NodeTypeVulnerability && node.CVSS > 0 {
-			sumCVSS += node.CVSS
+			vulnCount++
 			if node.CVSS >= 9.0 {
 				hasCriticalVuln = true
+			} else if node.CVSS >= 7.0 {
+				hasHighVuln = true
 			}
+			// Normalizzazione probabilistica per vulnerabilità singola (p_i in [0.05, 0.95])
+			p := math.Min(0.95, math.Max(0.05, (node.CVSS/10.0)*0.85))
+			probNone *= (1.0 - p)
 		}
 	}
 
-	if sumCVSS == 0.0 {
-		// Percorso senza vulnerabilità esplicite (puramente topologico)
-		sumCVSS = 2.0
+	var baseRisk float64
+	if vulnCount > 0 {
+		// P = 1 - prod(1 - p_i)
+		combinedProb := 1.0 - probNone
+		baseRisk = combinedProb * 100.0
+	} else {
+		// Percorso senza vulnerabilità note (puramente topologico)
+		baseRisk = 15.0
 	}
 
-	// Fattore hop: cammini più corti hanno maggiore probabilità di successo per l'attaccante
+	// Modulatore per hop: hop minori = maggiore esposizione diretta dell'asset
 	effectiveHops := math.Max(1.0, float64(hopCount))
-	hopFactor := 1.0 + (1.0 / math.Sqrt(effectiveHops))
+	hopFactor := 1.0 + (0.5 / math.Sqrt(effectiveHops))
+	risk := baseRisk * hopFactor
 
-	risk := sumCVSS * hopFactor * 5.0
-	if hasCriticalVuln && risk < 80.0 {
-		risk = 80.0
+	if hasCriticalVuln && risk < 85.0 {
+		risk = 85.0
+	} else if hasHighVuln && risk < 65.0 {
+		risk = 65.0
 	}
 
 	if risk > 100.0 {

@@ -1,4 +1,7 @@
-import { SeverityLevel } from './scan';
+import type { SeverityLevel } from './scan';
+
+export type FindingConfidence = 'CONFIRMED' | 'PROBABLE' | 'UNVERIFIED';
+export type DetectionMethod = 'nse' | 'banner' | 'nvd_keyword' | 'port_state';
 
 export interface FindingItem {
   id: string;
@@ -8,11 +11,15 @@ export interface FindingItem {
   hostname?: string;
   port: number;
   protocol: string;
+  port_state?: string;
   service_name?: string;
   service_version?: string;
   cve_id?: string;
   cvss_score?: number;
   severity: SeverityLevel;
+  confidence?: FindingConfidence;
+  detection_method?: DetectionMethod;
+  cpe?: string;
   raw_banner?: string;
   remediation?: string;
   created_at: string;

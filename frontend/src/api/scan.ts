@@ -45,5 +45,16 @@ export const scanApi = {
       throw new Error(response.data.error?.message || 'Impossibile annullare la scansione');
     }
   },
+
+  /**
+   * Recupera l'analisi differenziale dei finding (NEW, RESOLVED, PERSISTENT) rispetto alla scansione precedente (SEC-P2-03)
+   */
+  getDiff: async (scanId: string): Promise<import('../types/scan').ScanDiffResult> => {
+    const response = await apiClient.get<ApiResponse<import('../types/scan').ScanDiffResult>>(`/scans/${scanId}/diff`);
+    if (!response.data.success || !response.data.data) {
+      throw new Error(response.data.error?.message || 'Impossibile recuperare il diff della scansione');
+    }
+    return response.data.data;
+  },
 };
 

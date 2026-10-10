@@ -445,7 +445,7 @@ export const AttackPathGraph: React.FC<AttackPathGraphProps> = ({
                   stroke={strokeColor}
                   strokeWidth={strokeWidth}
                   strokeDasharray={
-                    edge.type === 'PIVOTS_TO' || isEdgeInActivePath ? '6 4' : undefined
+                    edge.inferred || edge.type === 'PIVOTS_TO' || isEdgeInActivePath ? '6 4' : undefined
                   }
                   markerEnd={marker}
                   className={isEdgeInActivePath ? 'animate-pulse' : ''}
@@ -454,7 +454,7 @@ export const AttackPathGraph: React.FC<AttackPathGraphProps> = ({
                 {edge.label && !isDimmed && (
                   <text
                     x={(x1 + x2) / 2}
-                    y={(y1 + y2) / 2 - 6}
+                    y={(y1 + y2) / 2 - (edge.inferred ? 10 : 6)}
                     fill="#94a3b8"
                     fontSize="9"
                     fontFamily="monospace"
@@ -463,6 +463,35 @@ export const AttackPathGraph: React.FC<AttackPathGraphProps> = ({
                   >
                     {edge.label}
                   </text>
+                )}
+                {/* Badge visivo per archi inferiti con tooltip su confidenza e base euristica */}
+                {edge.inferred && !isDimmed && (
+                  <g className="cursor-help pointer-events-auto">
+                    <title>{`Arco Inferito: ${edge.inference_basis || 'Correlazione euristica di rete / subnet'} (Confidenza: ${Math.round((edge.confidence ?? 0.8) * 100)}%)`}</title>
+                    <rect
+                      x={(x1 + x2) / 2 - 44}
+                      y={(y1 + y2) / 2 + 2}
+                      width="88"
+                      height="15"
+                      rx="3"
+                      fill="#0f172a"
+                      stroke="#f97316"
+                      strokeWidth="0.8"
+                      strokeDasharray="2 2"
+                    />
+                    <text
+                      x={(x1 + x2) / 2}
+                      y={(y1 + y2) / 2 + 13}
+                      fill="#fb923c"
+                      fontSize="8"
+                      fontWeight="bold"
+                      fontFamily="monospace"
+                      textAnchor="middle"
+                      className="select-none"
+                    >
+                      {`INFERRED ${Math.round((edge.confidence ?? 0.8) * 100)}%`}
+                    </text>
+                  </g>
                 )}
               </g>
             );

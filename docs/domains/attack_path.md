@@ -25,26 +25,37 @@ L'**Attack Path Mapping** (`FR-14`, `UC-13`) supera la visualizzazione frammenta
 ### 2.2 Tipologia Archi (`AttackEdgeType`)
 - `NETWORK_ACCESS`: Raggiungibilità di rete tra l'esterno e un host/servizio o tra subnet diverse.
 - `EXPLOITS`: Relazione tra un attaccante/servizio e una specifica vulnerabilità sfruttabile.
-- `PIVOTS_TO`: Capacità di eseguire lateral movement da un nodo compromesso verso la rete interna.
+- `PIVOTS_TO`: Capacità di eseguire lateral movement da un nodo compromesso verso la rete interna (tipicamente arco inferito con confidenza 85%).
 - `TRUSTED_RELATION`: Relazione fiduciaria o credenziali condivise (es. chiave SSH o accesso DB).
+- **Archi Inferiti (`SEC-P2-01`):** Gli archi generati euriticamente presentano `inferred: true`, `inference_basis` (es. `Stessa subnet IPv4 (/24) o host multi-homed`) e `confidence: float64` (0.0 - 1.0). Nel frontend SVG vengono renderizzati con tratto tratteggiato `strokeDasharray="6 4"` e badge `INFERRED xx%` con tooltip informativo.
 
-### 2.3 Formula di Cumulative Path Risk Score (`domain.CalculateCumulativeRisk`)
-Ogni percorso $P = (N_0, N_1, \dots, N_k)$ riceve un punteggio di rischio aggregato (0.0 - 100.0):
+### 2.3 Formula di Cumulative Path Risk Score Probabilistica (`domain.CalculateCumulativeRisk`, `SEC-P2-02`)
+Ogni percorso $P = (N_0, N_1, \dots, N_k)$ riceve un punteggio di rischio aggregato (0.0 - 100.0) basato sulla teoria dell'affidabilità probabilistica:
+
+$$p_i = \min(0.99, \, \frac{\text{CVSS}_i}{10.0})$$
+
+$$P_{\text{combined}} = 1.0 - \prod_{i \in \text{Vulns}} (1.0 - p_i)$$
 
 $$\text{EffectiveHops} = \max(1.0, \, \text{HopCount})$$
 
-$$\text{HopFactor} = 1.0 + \frac{1.0}{\sqrt{\text{EffectiveHops}}}$$
+$$\text{HopFactor} = 1.0 + \frac{0.5}{\sqrt{\text{EffectiveHops}}}$$
 
-$$\text{RawRisk} = \left(\sum_{i \in \text{Vulns}} \text{CVSS}_i\right) \times \text{HopFactor} \times 5.0$$
+$$\text{RiskScore}(P) = \min(100.0, \, P_{\text{combined}} \times 100.0 \times \text{HopFactor})$$
 
-- Se il percorso non contiene vulnerabilità esplicite (cammino puramente topologico), viene assunto $\sum \text{CVSS} = 2.0$.
-- **Critical Vulnerability Safeguard:** Se il cammino include almeno una vulnerabilità critica ($\text{CVSS} \ge 9.0$), il rischio ha un pavimento minimo garantito di **80.0**.
-- **Normalizzazione:** $\text{RiskScore}(P) = \min(100.0, \, \text{RawRisk})$.
+- Se il percorso non contiene vulnerabilità esplicite (cammino puramente topologico), viene assunto $P_{\text{combined}} = 0.20$.
+- **Critical Vulnerability Safeguard:** Se il cammino include almeno una vulnerabilità critica ($\text{CVSS} \ge 9.0$), il rischio ha un pavimento minimo garantito di **85.0**.
+- **Bound Computazionale:** L'esplorazione DFS è limitata a una profondità massima di 6 nodi e a un tetto di 50 percorsi totali per prevenire l'esplosione combinatoria in reti dense (`maxPaths = 50`).
 - **Classificazione Severità Cammino:**
   - `CRITICAL`: $\text{RiskScore} \ge 75.0$
   - `HIGH`: $55.0 \le \text{RiskScore} < 75.0$
   - `MEDIUM`: $35.0 \le \text{RiskScore} < 55.0$
   - `LOW`: $\text{RiskScore} < 35.0$
+
+### 2.4 Allineamento Rigoroso Severità Nodi con Standard CVSS (`AttackSeverityFromCVSS`, `SEC-P2-01`)
+- `CRITICAL`: $\text{CVSS} \ge 9.0$
+- `HIGH`: $7.0 \le \text{CVSS} < 9.0$
+- `MEDIUM`: $4.0 \le \text{CVSS} < 7.0$
+- `LOW`: $\text{CVSS} < 4.0$
 
 ---
 
@@ -185,5 +196,9 @@ Un **Chokepoint** è un nodo intermedio $N$ la cui eliminazione interrompe il ma
 ### 5.2 Elenco Chokepoint Prioritari
 - `GET /api/v1/attack-paths/chokepoints`
 - Restituisce la slice ordinata dei nodi la cui remediation azzera il massimo volume di rischio mitigato per il tenant.
+
+## 6. Ultimo allineamento
+- 2026-10-10 (Epic 26 SEC-P2 Attack Path Refinement: coerenza CVSS, archi inferiti, rischio probabilistico $1 - \prod(1 - p_i)$ e bound a 50 percorsi)
+
 
 

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jung-kurt/gofpdf"
+	fpdf "github.com/go-pdf/fpdf"
 
 	"nextgen-cybersec/internal/domain"
 	"nextgen-cybersec/pkg/report"
@@ -29,7 +29,7 @@ func createTinyPNG() string {
 }
 
 func TestUnicode(t *testing.T) {
-	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf := fpdf.New("P", "mm", "A4", "")
 	tr := pdf.UnicodeTranslatorFromDescriptor("")
 	got := tr("vulnerabilità")
 	t.Logf("gofpdf tr: len %d, hex: %x, str: %s", len(got), []byte(got), got)

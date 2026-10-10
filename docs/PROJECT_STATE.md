@@ -3,15 +3,15 @@
 > Memoria viva dell'agente. Letta a inizio sessione, aggiornata a fine di ogni turno.
 > Non cancellare sezioni: se vuote, scrivi "nessuno".
 
-**Ultimo aggiornamento:** 2026-10-10 17:05  
+**Ultimo aggiornamento:** 2026-10-10 17:35  
 **Modalità progetto:** esistente (onboarded il 2026-10-09, validato dall'utente)  
-**Fase:** Validazione Epic 24 (SEC-P0 Hardening Critico) & Pianificazione Epic 25 (SEC-P1)  
+**Fase:** Implementazione e Verifica Completa Epic 25 (SEC-P1) & Epic 26 (SEC-P2)  
 
 ## Project Profile
 
 ```
 Nome progetto:           NextGen-CyberSecurity Platform
-Linguaggi/stack:         Golang 1.22+ (Chi Router, pgx/v5, gorilla/websocket, robfig/cron) + React 18 / TypeScript 5.6 (Vite, Tailwind CSS, xterm.js, Recharts)
+Linguaggi/stack:         Golang 1.22+ (Chi Router, pgx/v5, gorilla/websocket, robfig/cron, go-pdf/fpdf v0.9.0) + React 18 / TypeScript 5.6 (Vite, Tailwind CSS, xterm.js, Recharts)
 Gestore pacchetti:       Go Modules (backend), npm (frontend)
 Comando test mirati:     go test -v ./internal/<package>/... (backend), npx vitest run src/<path>/<file>.test.ts (frontend)
 Comando suite completa:  go test ./... (backend), npm test (frontend)
@@ -28,59 +28,47 @@ Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git
 
 | Data | Comando | Esito | Fallimenti preesistenti noti |
 |---|---|---|---|
-| 2026-10-10 17:00 | `go test ./...` (backend) | PASS (exit code 0, 14 package) | Nessuno. Tutti i test passano al 100%. |
-| 2026-10-10 17:00 | `go build ./... ; go vet ./...` (backend) | PASS (exit code 0) | Nessuno. Compilazione pulita e zero lint warning. |
-| 2026-10-10 17:01 | `npm test` (frontend Vitest) | PASS (exit code 0, 16 file, 97 test) | Nessuno. Tutti i test passano al 100% con **0 warning stderr**. |
-| 2026-10-10 16:45 | `npm run build` (frontend tsc + Vite) | PASS (exit code 0, 7.13s) | Nessuno. Compilazione TypeScript pulita, chunk `AttackPath` 28 kB. |
+| 2026-10-10 17:34 | `go test ./...` (backend) | PASS (exit code 0, 14 package) | Nessuno. Tutti i test passano al 100%. |
+| 2026-10-10 17:34 | `go build ./... ; go vet ./...` (backend) | PASS (exit code 0) | Nessuno. Compilazione pulita e zero lint warning. |
+| 2026-10-10 17:34 | `npm test` (frontend Vitest) | PASS (exit code 0, 16 file, 99 test) | Nessuno. Tutti i test passano al 100% con **0 warning stderr**. |
+| 2026-10-10 17:34 | `npm run build` (frontend tsc + Vite) | PASS (exit code 0, 7.70s) | Nessuno. Compilazione TypeScript pulita, chunk `AttackPath` 28 kB. |
 
 ## In corso
 
-- (nessuno - Epic 24 SEC-P0 implementata e verificata con successo)
+- (nessuno - Epic 25 SEC-P1 ed Epic 26 SEC-P2 completate e verificate con successo)
 
 ## Accettati recentemente dal PO (`[x]`)
 
 - **FEAT-REPORT-PDF-UX-01 · Perfezionamento Grafico, Tipografico & Coerenza Dati dei Report PDF A4 (FR-18, UC-17)**:
   - Validato e accettato dal PO in data 2026-10-10.
-  - Risolti tutti i difetti grafici dei PDF A4 (Executive compresso a 2 pagine dense senza buchi, wrapping multiriga dinamico senza troncamenti né font miniaturizzati, separazione riga CVE e Azione, colori semantici coerenti, scoring multi-host normalizzato con salvaguardia 0-critical, software reali dai banner, flusso continuo tecnico fino a 270mm, date e durate valorizzate).
 - **FEAT-IP-ORG-01 .. 04 · Workstation Multi-Company Workflow**:
   - Validato e accettato dal PO in data 2026-10-10.
-  - Sidebar organizzata per azioni operative, raggruppamento per cartella/cliente in Scansioni, Vulnerabilità e Report con posture score e download 1-click.
 - **FEAT-CVE-ONLINE-01 · Ricerca Vulnerabilità Online NIST NVD 2.0 & Script Nmap (`--script=vuln`) (FR-17, UC-16)**:
   - Validato e accettato dal PO in data 2026-10-10.
-  - Script NSE vuln/vulners, estrazione automatica CVE, client REST NIST NVD API 2.0 con auto-caching in PostgreSQL locale.
 - **FEAT-WORKFLOW-CLEANUP-01 .. 07 · Ottimizzazione Flusso Operativo, Riorganizzazione Sequenziale & Consolidamento per Azienda**:
   - Validato e accettato dal PO in data 2026-10-10.
-  - Dossier report consolidati per azienda (eliminati report singoli IP), sidebar sequenziale Passo 1 -> 5, scansioni esclusive per azienda in `/scans`, eliminazione massiva checkbox in `/targets`, Network Discovery potenziata con creazione azienda e cache tenant.
 - **FEAT-SCAN-PROF-01 .. 04 · Personalizzazione Avanzata Profili, Profilo Generalista 360°, Multi-Obiettivo & Guida Semplice (FR-16)**:
   - Validato e accettato dal PO in data 2026-10-10.
-  - Profilo 360° "Tutto in Uno", modalità "Componi Multi-Obiettivo" via checkbox, Guida Semplice interattiva con spiegazioni per il PO, modalità Professionale con live command preview.
 - **FEAT-M2-02 · Motore di Calcolo Lateral Movement & API Grafo (Backend Go)**:
   - Validato e accettato dal PO in data 2026-10-10.
-  - Servizio di aggregazione topologica per calcolo lateral movement, chokepoint di sicurezza ed endpoint `/api/v1/attack-paths/graph` e `/api/v1/attack-paths/chokepoints`.
 
 ## In attesa di accettazione utente
 
+- **Epic 25 · SEC-P1: Scanner Engine Overhaul & Profiling Accuracy (SEC-P1-01 .. SEC-P1-06)**:
+  - **SEC-P1-01 (Profilo UDP Specialistico)**: Nuovo profilo dedicato `UDP Specialized Services & Critical Infra` (`-sU -p U:53,69,123,161,514,623,5353 -T4`) per DNS, TFTP, NTP, SNMP, Syslog, IPMI e mDNS, isolato dalle code TCP per azzerare i colli di bottiglia. Supporto sintassi mista UDP/TCP `-p U:...,T:...`.
+  - **SEC-P1-02 (Ricalibrazione Profili Nmap)**: Rimossa la porta 69 (UDP) dal profilo `Legacy Protocols` TCP per evitare timeout spuri su socket stream; rimossa flag `-n` da LAN Discovery per abilitare la reverse DNS resolution automatica; gestione raffinata dello stato porta `unfiltered` e `open|filtered` per evitare falsi positivi di porta aperta su scansioni firewall ACK.
+  - **SEC-P1-03 (Tassonomia di Invasività & Gate di Sicurezza)**: Classificazione di tutti i profili in `SAFE`, `INTRUSIVE`, `DANGEROUS`. Badge semantico visivo in `NewScanModal.tsx` e blocco obbligatorio al lancio con checkbox esplicito di autorizzazione prima di avviare profili ad alto impatto di rete.
+  - **SEC-P1-04 (Arricchimento Modello Finding)**: Aggiunta al modello dati e al database dei campi `confidence` (`CONFIRMED`, `PROBABLE`, `UNVERIFIED`), `detection_method` (`nse`, `banner`, `nvd_keyword`, `port_state`), `cpe` e `port_state` (migrazione SQL `000007_scanner_overhaul_findings`).
+  - **SEC-P1-05 (Hardening Container Capabilities)**: Concessione minima stretta in `docker-compose.yml` (`CAP_NET_RAW` per SYN scan, rimosso `CAP_NET_ADMIN`), abilitazione env `NMAP_PRIVILEGED=1`.
+  - **SEC-P1-06 (Migrazione Libreria PDF a `go-pdf/fpdf`)**: Sostituzione del package deprecato `jung-kurt/gofpdf` con il fork mantenuto `github.com/go-pdf/fpdf v0.9.0`.
+
+- **Epic 26 · SEC-P2: Attack Path Refinement & Advanced Orchestration (SEC-P2-01 .. SEC-P2-03)**:
+  - **SEC-P2-01 (Coerenza CVSS/Severity & Archi Inferiti)**: Allineamento rigoroso tra punteggio CVSS dei nodi e severità visiva (Low <4.0, Med 4.0-6.9, High 7.0-8.9, Crit >=9.0); marcatura esplicita degli archi `PIVOTS_TO` come inferiti (`inferred: true`, `confidence: 0.85`), rendering con tratto tratteggiato `strokeDasharray="6 4"`, badge `INFERRED xx%` e tooltip con base euristica.
+  - **SEC-P2-02 (Formula Rischio Probabilistica & Bound DFS)**: Formula cumulativa basata sulla teoria dell'affidabilità $1 - \prod(1 - p_i)$ con fattore hop attenuato e salvaguardia $\ge 85$ per CVE critiche; limite combinatorio a 50 percorsi massimi (`maxPaths = 50`) e profondità 6 nodi.
+  - **SEC-P2-03 (Diff tra Scansioni: NEW, RESOLVED, PERSISTENT)**: Endpoint `GET /api/v1/scans/{id}/diff` che calcola in tempo reale il differenziale tra la scansione corrente e la precedente per lo stesso target, identificando finding nuovi (`NEW`), persistenti (`PERSISTENT`) e confermati come risolti (`RESOLVED`).
+
 - **Epic 24 · SEC-P0: Hardening Critico & Scanner Security Perimeter (SEC-P0-01 .. SEC-P0-06)**:
-  - **SEC-P0-01 (Deny-List & Scope Check)**: Blocco categorico all'inserimento e al lancio di scansioni/discovery verso loopback (`127.0.0.0/8`, `::1`), link-local (`169.254.0.0/16`, `fe80::/10`), bridge Docker (`172.17.0.0/16` .. `172.20.0.0/16`), hostname interni (`localhost`, `postgres`, `backend`, `.internal`, `.local`), CIDR `/8` e risoluzione DNS anti-rebinding con `net.LookupIP`.
-  - **SEC-P0-02 (Stream-Ticket Monouso per SSE & WebSocket)**: Sostituzione dei JWT raw a lungo termine nei query param con ticket usa-e-getta monouso (TTL 30s) emessi tramite `POST /api/v1/auth/stream-ticket` protetto. Handshake per `/api/v1/scans/{id}/stream`, `/api/v1/network-discovery/stream` e terminale WebSocket `/ws/v1/ssh/servers/{id}/terminal` migrati a `?ticket=...` con fallback trasparente. Zero cred leakage nei log Nginx e browser.
-  - **SEC-P0-03 (Delimitatore `--` POSIX Nmap)**: Inserimento sistematico di `--` prima del target in `BuildSafeArguments` per rendere impossibile la flag injection via nomi ostili; argomenti tipizzati e validati.
-  - **SEC-P0-04 (Default Offline & Safe Scripts)**: Disabilitazione di default per lo script esterno `vulners` dai profili di scansione; esecuzione rigorosa di script sicuri e locali (`--script "vuln and safe"`) conforme agli standard di privacy aziendale.
-  - **SEC-P0-05 (Redazione Credenziali Debug Console)**: Mascheramento automatico e ricorsivo di token, ticket, passphrases, chiavi e header Bearer nei log del drawer e nell'esportatore Markdown 1-click per l'AI.
-  - **SEC-P0-06 (Firewall Rollback Watchdog Remoto)**: Esecuzione del timer anti-lockout direttamente sull'host remoto via `nohup` distaccato con supporto sudo (`nohup sh -c 'sleep 60 && (iptables-restore < backup || sudo iptables-restore < backup)' &`), garantendo il rollback anche a fronte di disconnessione o caduta del backend.
-
-- **FEAT-M2-03 · Componente UI Visual Graph Explorer (Frontend React) (FR-14, UC-13)**:
-  - Canvas SVG interattivo con controlli zoom/pan e layout topologico per livelli di penetrazione.
-  - Highlighting dinamico dei percorsi di attacco con attenuazione nodi esterni e selezione nodi/chokepoints.
-  - Filtri CVSS interattivi, chokepoint cards con rimedio 1-click e code-split a 28 kB.
-
-- **ONBOARD-04 · Risoluzione Warning nei Test Vitest (act & Recharts container)**:
-  - Eliminazione totale dei warning stderr nei test frontend tramite `setup.ts` e cleanup globale (16 file, 97 test, 0 warning).
-
-- **ONBOARD-05 · Test di Caratterizzazione per Scenari Limite Nmap & Rete**:
-  - Test isolati per simulare interruzione brusca (SIGKILL/exit 137), XML troncato, XML corrotto, overflow stderr e fallback a FAILED senza panic.
-
-- **ONBOARD-02 · Automated Container E2E Test Runner**:
-  - Runner unificato multipiattaforma `scripts/run_e2e_docker.sh` e `scripts/run_e2e_docker.ps1` per avvio Compose, validazione REST, SSE, frontend e Attack Path.
+  - Deny-list scope check, stream-ticket monouso SSE/WS, delimitatore POSIX `--`, safe scripts, redazione credenziali debug, nohup watchdog rollback.
 
 ## Bloccati / Domande aperte per l'utente
 
@@ -92,12 +80,13 @@ Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git
 - Archiviazione storica dei file legacy in `docs/_legacy/` confermata.
 - Pipeline CI/CD GitHub Actions e bundle splitting implementati.
 - Milestone 2 completata sia su Backend Go che su Frontend React.
-- Roadmap di hardening sicurezza (Epiche SEC-P0, SEC-P1, SEC-P2) approvata operativamente.
+- Roadmap di hardening sicurezza (Epiche SEC-P0, SEC-P1, SEC-P2) implementata al 100%.
 
 ## Decisioni recenti (ultime 10, dettagli negli ADR)
 
+- **ADR-06 (2026-10-10):** Attack Path Probabilistic Risk Formula $1 - \prod(1 - p_i)$, bound 50 cammini, archi inferiti tratteggiati con confidenza, e Scan Diff `GET /api/v1/scans/{id}/diff` con stati NEW/RESOLVED/PERSISTENT.
+- **ADR-05 (2026-10-10):** Profilo specialistico UDP, tassonomia di invasività con gate UI, modello finding arricchito con confidence/detection_method/cpe, hardening container capabilities (solo `CAP_NET_RAW`), migrazione PDF a `go-pdf/fpdf v0.9.0`.
 - **ADR-04 (2026-10-10):** Stream-Ticket monouso memoria thread-safe (TTL 30s) per SSE e WebSocket; delimitatore POSIX `--` in Nmap; deny-list target interni e Docker bridge con anti-rebinding DNS; nohup watchdog remoto firewall rollback.
-- **PO-04 (2026-10-10):** Approvazione cumulativa globale di tutti i task di flusso, profili, CVE online e motore lateral movement (`FEAT-SCAN-PROF`, `FEAT-WORKFLOW-CLEANUP`, `FEAT-CVE-ONLINE`, `FEAT-REPORT-PDF-UX-01`, `FEAT-M2-02`).
 - **PO-01 (2026-10-09):** Approvazione implementazione pipeline CI/CD GitHub Actions per backend e frontend.
 - **PO-02 (2026-10-09):** Approvazione ottimizzazione bundle frontend tramite code-splitting e `React.lazy`.
 - **PO-03 (2026-10-09):** Priorità strategica Milestone 2 assegnata a Attack Path Mapping.

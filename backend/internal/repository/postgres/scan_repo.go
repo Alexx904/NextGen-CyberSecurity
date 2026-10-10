@@ -274,6 +274,52 @@ func (r *ScanRepo) GetActiveByTarget(ctx context.Context, tenantID, targetID uui
 	return &s, nil
 }
 
+// GetPreviousCompletedByTarget recupera l'ultima scansione conclusa con successo per lo stesso target (esclusa quella corrente)
+func (r *ScanRepo) GetPreviousCompletedByTarget(ctx context.Context, tenantID, targetID, excludeScanID uuid.UUID) (*domain.Scan, error) {
+	query := `
+		SELECT id, tenant_id, target_id, profile_id, trigger_type, status,
+		       started_at, completed_at, summary_stats, error_message, created_at, updated_at
+		FROM scans
+		WHERE tenant_id = $1 AND target_id = $2 AND status = 'COMPLETED' AND id != $3
+		ORDER BY completed_at DESC NULLS LAST, created_at DESC
+		LIMIT 1
+	`
+
+	var s domain.Scan
+	var triggerStr, statusStr string
+	var statsRaw []byte
+
+	err := r.pool.QueryRow(ctx, query, tenantID, targetID, excludeScanID).Scan(
+		&s.ID,
+		&s.TenantID,
+		&s.TargetID,
+		&s.ProfileID,
+		&triggerStr,
+		&statusStr,
+		&s.StartedAt,
+		&s.CompletedAt,
+		&statsRaw,
+		&s.ErrorMessage,
+		&s.CreatedAt,
+		&s.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil // Nessuna scansione precedente completata
+		}
+		return nil, fmt.Errorf("recupero scansione precedente completata fallito: %w", err)
+	}
+
+	s.TriggerType = domain.ScanTriggerType(triggerStr)
+	s.Status = domain.ScanStatus(statusStr)
+	if len(statsRaw) > 0 {
+		_ = json.Unmarshal(statsRaw, &s.SummaryStats)
+	}
+
+	return &s, nil
+}
+
+
 // ============================================================================
 // SCAN PROFILE REPOSITORY IMPLEMENTATION
 // ============================================================================
@@ -291,13 +337,13 @@ func NewScanProfileRepo(pool *pgxpool.Pool) *ScanProfileRepo {
 // GetByID recupera un profilo di scansione tramite UUID
 func (r *ScanProfileRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.ScanProfile, error) {
 	query := `
-		SELECT id, name, nmap_args, description, timeout_seconds, category, is_custom, tenant_id, created_at, updated_at
+		SELECT id, name, nmap_args, description, timeout_seconds, category, invasiveness, is_custom, tenant_id, created_at, updated_at
 		FROM scan_profiles
 		WHERE id = $1
 	`
 
 	var p domain.ScanProfile
-	var catStr string
+	var catStr, invStr string
 	err := r.pool.QueryRow(ctx, query, id).Scan(
 		&p.ID,
 		&p.Name,
@@ -305,6 +351,7 @@ func (r *ScanProfileRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Sc
 		&p.Description,
 		&p.TimeoutSeconds,
 		&catStr,
+		&invStr,
 		&p.IsCustom,
 		&p.TenantID,
 		&p.CreatedAt,
@@ -317,6 +364,10 @@ func (r *ScanProfileRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Sc
 		return nil, fmt.Errorf("recupero profilo per ID fallito: %w", err)
 	}
 	p.Category = domain.ScanProfileCategory(catStr)
+	p.Invasiveness = domain.InvasivenessLevel(invStr)
+	if p.Invasiveness == "" {
+		p.Invasiveness = domain.InvasivenessSafe
+	}
 
 	return &p, nil
 }
@@ -324,13 +375,13 @@ func (r *ScanProfileRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Sc
 // GetByName recupera un profilo di scansione tramite nome identificativo
 func (r *ScanProfileRepo) GetByName(ctx context.Context, name string) (*domain.ScanProfile, error) {
 	query := `
-		SELECT id, name, nmap_args, description, timeout_seconds, category, is_custom, tenant_id, created_at, updated_at
+		SELECT id, name, nmap_args, description, timeout_seconds, category, invasiveness, is_custom, tenant_id, created_at, updated_at
 		FROM scan_profiles
 		WHERE name = $1
 	`
 
 	var p domain.ScanProfile
-	var catStr string
+	var catStr, invStr string
 	err := r.pool.QueryRow(ctx, query, name).Scan(
 		&p.ID,
 		&p.Name,
@@ -338,6 +389,7 @@ func (r *ScanProfileRepo) GetByName(ctx context.Context, name string) (*domain.S
 		&p.Description,
 		&p.TimeoutSeconds,
 		&catStr,
+		&invStr,
 		&p.IsCustom,
 		&p.TenantID,
 		&p.CreatedAt,
@@ -350,6 +402,10 @@ func (r *ScanProfileRepo) GetByName(ctx context.Context, name string) (*domain.S
 		return nil, fmt.Errorf("recupero profilo per nome fallito: %w", err)
 	}
 	p.Category = domain.ScanProfileCategory(catStr)
+	p.Invasiveness = domain.InvasivenessLevel(invStr)
+	if p.Invasiveness == "" {
+		p.Invasiveness = domain.InvasivenessSafe
+	}
 
 	return &p, nil
 }
@@ -362,7 +418,7 @@ func (r *ScanProfileRepo) List(ctx context.Context, tenantID *uuid.UUID) ([]*dom
 
 	if tenantID == nil {
 		query = `
-			SELECT id, name, nmap_args, description, timeout_seconds, category, is_custom, tenant_id, created_at, updated_at
+			SELECT id, name, nmap_args, description, timeout_seconds, category, invasiveness, is_custom, tenant_id, created_at, updated_at
 			FROM scan_profiles
 			WHERE tenant_id IS NULL
 			ORDER BY category ASC, name ASC
@@ -370,7 +426,7 @@ func (r *ScanProfileRepo) List(ctx context.Context, tenantID *uuid.UUID) ([]*dom
 		rows, err = r.pool.Query(ctx, query)
 	} else {
 		query = `
-			SELECT id, name, nmap_args, description, timeout_seconds, category, is_custom, tenant_id, created_at, updated_at
+			SELECT id, name, nmap_args, description, timeout_seconds, category, invasiveness, is_custom, tenant_id, created_at, updated_at
 			FROM scan_profiles
 			WHERE tenant_id IS NULL OR tenant_id = $1
 			ORDER BY category ASC, name ASC
@@ -386,7 +442,7 @@ func (r *ScanProfileRepo) List(ctx context.Context, tenantID *uuid.UUID) ([]*dom
 	var profiles []*domain.ScanProfile
 	for rows.Next() {
 		var p domain.ScanProfile
-		var catStr string
+		var catStr, invStr string
 		if err := rows.Scan(
 			&p.ID,
 			&p.Name,
@@ -394,6 +450,7 @@ func (r *ScanProfileRepo) List(ctx context.Context, tenantID *uuid.UUID) ([]*dom
 			&p.Description,
 			&p.TimeoutSeconds,
 			&catStr,
+			&invStr,
 			&p.IsCustom,
 			&p.TenantID,
 			&p.CreatedAt,
@@ -402,6 +459,10 @@ func (r *ScanProfileRepo) List(ctx context.Context, tenantID *uuid.UUID) ([]*dom
 			return nil, fmt.Errorf("lettura riga profilo fallita: %w", err)
 		}
 		p.Category = domain.ScanProfileCategory(catStr)
+		p.Invasiveness = domain.InvasivenessLevel(invStr)
+		if p.Invasiveness == "" {
+			p.Invasiveness = domain.InvasivenessSafe
+		}
 		profiles = append(profiles, &p)
 	}
 
@@ -420,7 +481,7 @@ func (r *ScanProfileRepo) ListByCategory(ctx context.Context, tenantID *uuid.UUI
 
 	if tenantID == nil {
 		query = `
-			SELECT id, name, nmap_args, description, timeout_seconds, category, is_custom, tenant_id, created_at, updated_at
+			SELECT id, name, nmap_args, description, timeout_seconds, category, invasiveness, is_custom, tenant_id, created_at, updated_at
 			FROM scan_profiles
 			WHERE tenant_id IS NULL AND category = $1
 			ORDER BY name ASC
@@ -428,7 +489,7 @@ func (r *ScanProfileRepo) ListByCategory(ctx context.Context, tenantID *uuid.UUI
 		rows, err = r.pool.Query(ctx, query, string(category))
 	} else {
 		query = `
-			SELECT id, name, nmap_args, description, timeout_seconds, category, is_custom, tenant_id, created_at, updated_at
+			SELECT id, name, nmap_args, description, timeout_seconds, category, invasiveness, is_custom, tenant_id, created_at, updated_at
 			FROM scan_profiles
 			WHERE (tenant_id IS NULL OR tenant_id = $1) AND category = $2
 			ORDER BY name ASC
@@ -444,7 +505,7 @@ func (r *ScanProfileRepo) ListByCategory(ctx context.Context, tenantID *uuid.UUI
 	var profiles []*domain.ScanProfile
 	for rows.Next() {
 		var p domain.ScanProfile
-		var catStr string
+		var catStr, invStr string
 		if err := rows.Scan(
 			&p.ID,
 			&p.Name,
@@ -452,6 +513,7 @@ func (r *ScanProfileRepo) ListByCategory(ctx context.Context, tenantID *uuid.UUI
 			&p.Description,
 			&p.TimeoutSeconds,
 			&catStr,
+			&invStr,
 			&p.IsCustom,
 			&p.TenantID,
 			&p.CreatedAt,
@@ -460,6 +522,10 @@ func (r *ScanProfileRepo) ListByCategory(ctx context.Context, tenantID *uuid.UUI
 			return nil, fmt.Errorf("lettura riga profilo per categoria fallita: %w", err)
 		}
 		p.Category = domain.ScanProfileCategory(catStr)
+		p.Invasiveness = domain.InvasivenessLevel(invStr)
+		if p.Invasiveness == "" {
+			p.Invasiveness = domain.InvasivenessSafe
+		}
 		profiles = append(profiles, &p)
 	}
 
@@ -485,13 +551,16 @@ func (r *ScanProfileRepo) Create(ctx context.Context, profile *domain.ScanProfil
 	if profile.Category == "" {
 		profile.Category = domain.ProfileCategoryCustom
 	}
+	if profile.Invasiveness == "" {
+		profile.Invasiveness = domain.InvasivenessSafe
+	}
 	if profile.TimeoutSeconds <= 0 {
 		profile.TimeoutSeconds = 3600
 	}
 
 	query := `
-		INSERT INTO scan_profiles (id, name, nmap_args, description, timeout_seconds, category, is_custom, tenant_id, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO scan_profiles (id, name, nmap_args, description, timeout_seconds, category, invasiveness, is_custom, tenant_id, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`
 
 	_, err := r.pool.Exec(
@@ -503,6 +572,7 @@ func (r *ScanProfileRepo) Create(ctx context.Context, profile *domain.ScanProfil
 		profile.Description,
 		profile.TimeoutSeconds,
 		string(profile.Category),
+		string(profile.Invasiveness),
 		profile.IsCustom,
 		profile.TenantID,
 		profile.CreatedAt,

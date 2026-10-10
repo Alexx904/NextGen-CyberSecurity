@@ -251,6 +251,7 @@ func main() {
 			scanRouter.Get("/{id}", scanHandler.GetByID)
 			scanRouter.Get("/{id}/stream", scanHandler.Stream)
 			scanRouter.Get("/{id}/findings", scanHandler.GetFindings)
+			scanRouter.Get("/{id}/diff", scanHandler.GetDiff)
 
 			// Esportazione Report PDF White-Label e CSV Tabellare (RFC 4180)
 			scanRouter.Get("/{id}/reports/pdf", reportHandler.DownloadPDF)

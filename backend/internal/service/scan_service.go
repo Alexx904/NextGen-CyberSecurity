@@ -30,6 +30,7 @@ type ScanService interface {
 	ListProfiles(ctx context.Context, tenantID *uuid.UUID, category *domain.ScanProfileCategory) ([]*domain.ScanProfile, error)
 	CreateCustomProfile(ctx context.Context, tenantID uuid.UUID, name, nmapArgs string, description *string, timeoutSeconds int, category domain.ScanProfileCategory) (*domain.ScanProfile, error)
 	DeleteCustomProfile(ctx context.Context, tenantID, id uuid.UUID) error
+	GetScanDiff(ctx context.Context, tenantID, scanID uuid.UUID) (*domain.ScanDiffResult, error)
 }
 
 type scanService struct {
@@ -343,4 +344,172 @@ func (s *scanService) StartGroupScan(ctx context.Context, tenantID, groupID, pro
 
 	return startedScans, nil
 }
+
+// GetScanDiff calcola il differenziale dei finding tra la scansione indicata e la precedente scansione completata per lo stesso target (SEC-P2-03)
+func (s *scanService) GetScanDiff(ctx context.Context, tenantID, scanID uuid.UUID) (*domain.ScanDiffResult, error) {
+	// 1. Recupero scansione corrente
+	currScan, err := s.scanRepo.GetByID(ctx, tenantID, scanID)
+	if err != nil {
+		return nil, err
+	}
+
+	targetVal := ""
+	target, err := s.targetRepo.GetByID(ctx, tenantID, currScan.TargetID)
+	if err == nil && target != nil {
+		targetVal = target.Value
+	}
+
+	// 2. Recupero finding della scansione corrente
+	currFindings, _, err := s.findingRepo.List(ctx, tenantID, domain.FindingFilter{
+		ScanID: &currScan.ID,
+		Limit:  10000,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("recupero finding scansione corrente fallito: %w", err)
+	}
+
+	// 3. Ricerca dell'ultima scansione completata precedente per lo stesso target
+	prevScan, err := s.scanRepo.GetPreviousCompletedByTarget(ctx, tenantID, currScan.TargetID, currScan.ID)
+	if err != nil {
+		return nil, fmt.Errorf("ricerca scansione precedente completata fallita: %w", err)
+	}
+
+	res := &domain.ScanDiffResult{
+		CurrentScanID: currScan.ID,
+		TargetID:      currScan.TargetID,
+		TargetValue:   targetVal,
+		GeneratedAt:   time.Now(),
+		Items:         make([]domain.FindingDiffItem, 0),
+	}
+
+	// Helper per calcolare la tupla logica univoca del finding
+	buildKey := func(host string, port int, proto string, cve *string, service *string) string {
+		cveKey := ""
+		if cve != nil && *cve != "" {
+			cveKey = *cve
+		} else if service != nil && *service != "" {
+			cveKey = *service
+		}
+		return fmt.Sprintf("%s:%d:%s:%s", host, port, strings.ToLower(proto), cveKey)
+	}
+
+	// Mappa finding correnti
+	currMap := make(map[string]*domain.Finding)
+	for _, f := range currFindings {
+		key := buildKey(f.HostIP, f.Port, f.Protocol, f.CVEID, f.ServiceName)
+		currMap[key] = f
+	}
+
+	// Caso base: nessuna scansione precedente completata, tutti i finding correnti sono NEW
+	if prevScan == nil {
+		for key, f := range currMap {
+			item := domain.FindingDiffItem{
+				FindingKey:      key,
+				Status:          domain.DiffStatusNew,
+				HostIP:          f.HostIP,
+				Port:            f.Port,
+				Protocol:        f.Protocol,
+				PortState:       f.PortState,
+				ServiceName:     f.ServiceName,
+				CVEID:           f.CVEID,
+				CVSSScore:       f.CVSSScore,
+				Severity:        f.Severity,
+				Confidence:      f.Confidence,
+				DetectionMethod: f.DetectionMethod,
+				Remediation:     f.Remediation,
+				CurrentScanID:   currScan.ID,
+			}
+			res.Items = append(res.Items, item)
+			res.TotalNew++
+		}
+		return res, nil
+	}
+
+	res.PreviousScanID = &prevScan.ID
+
+	// Recupero finding della scansione precedente
+	prevFindings, _, err := s.findingRepo.List(ctx, tenantID, domain.FindingFilter{
+		ScanID: &prevScan.ID,
+		Limit:  10000,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("recupero finding scansione precedente fallito: %w", err)
+	}
+
+	prevMap := make(map[string]*domain.Finding)
+	for _, f := range prevFindings {
+		key := buildKey(f.HostIP, f.Port, f.Protocol, f.CVEID, f.ServiceName)
+		prevMap[key] = f
+	}
+
+	// 1. Elabora finding della scansione corrente -> PERSISTENT o NEW
+	for key, f := range currMap {
+		if _, exists := prevMap[key]; exists {
+			res.Items = append(res.Items, domain.FindingDiffItem{
+				FindingKey:      key,
+				Status:          domain.DiffStatusPersistent,
+				HostIP:          f.HostIP,
+				Port:            f.Port,
+				Protocol:        f.Protocol,
+				PortState:       f.PortState,
+				ServiceName:     f.ServiceName,
+				CVEID:           f.CVEID,
+				CVSSScore:       f.CVSSScore,
+				Severity:        f.Severity,
+				Confidence:      f.Confidence,
+				DetectionMethod: f.DetectionMethod,
+				Remediation:     f.Remediation,
+				CurrentScanID:   currScan.ID,
+				PreviousScanID:  &prevScan.ID,
+			})
+			res.TotalPersistent++
+		} else {
+			res.Items = append(res.Items, domain.FindingDiffItem{
+				FindingKey:      key,
+				Status:          domain.DiffStatusNew,
+				HostIP:          f.HostIP,
+				Port:            f.Port,
+				Protocol:        f.Protocol,
+				PortState:       f.PortState,
+				ServiceName:     f.ServiceName,
+				CVEID:           f.CVEID,
+				CVSSScore:       f.CVSSScore,
+				Severity:        f.Severity,
+				Confidence:      f.Confidence,
+				DetectionMethod: f.DetectionMethod,
+				Remediation:     f.Remediation,
+				CurrentScanID:   currScan.ID,
+				PreviousScanID:  &prevScan.ID,
+			})
+			res.TotalNew++
+		}
+	}
+
+	// 2. Elabora finding presenti nella scansione precedente ma assenti nella corrente -> RESOLVED
+	for key, pf := range prevMap {
+		if _, exists := currMap[key]; !exists {
+			res.Items = append(res.Items, domain.FindingDiffItem{
+				FindingKey:      key,
+				Status:          domain.DiffStatusResolved,
+				HostIP:          pf.HostIP,
+				Port:            pf.Port,
+				Protocol:        pf.Protocol,
+				PortState:       pf.PortState,
+				ServiceName:     pf.ServiceName,
+				CVEID:           pf.CVEID,
+				CVSSScore:       pf.CVSSScore,
+				Severity:        pf.Severity,
+				Confidence:      pf.Confidence,
+				DetectionMethod: pf.DetectionMethod,
+				Remediation:     pf.Remediation,
+				CurrentScanID:   currScan.ID,
+				PreviousScanID:  &prevScan.ID,
+			})
+			res.TotalResolved++
+		}
+	}
+
+	return res, nil
+}
+
 

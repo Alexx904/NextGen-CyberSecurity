@@ -290,4 +290,37 @@ describe('AttackPath Page - Visual Graph Explorer & Chokepoints', () => {
 
     expect(screen.getByText('Riprova')).toBeDefined();
   });
+
+  it('mostra correttamente il badge INFERRED con percentuale di confidenza per archi inferiti', async () => {
+    const graphWithInferred: AttackGraph = {
+      ...mockGraphData,
+      edges: [
+        ...mockGraphData.edges,
+        {
+          id: 'edge-inferred-1',
+          source: 'host-192-168-1-10',
+          target: 'host-10-0-0-50',
+          type: 'PIVOTS_TO',
+          label: 'Pivot Rete Interna',
+          weight: 2.0,
+          inferred: true,
+          confidence: 0.85,
+          inference_basis: 'Condivisione stessa subnet o dual-homed host',
+        },
+      ],
+    };
+
+    vi.mocked(attackPathApi.getGraph).mockResolvedValue(graphWithInferred);
+
+    render(
+      <MemoryRouter>
+        <AttackPath />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('INFERRED 85%')).toBeDefined();
+    });
+  });
 });
+
