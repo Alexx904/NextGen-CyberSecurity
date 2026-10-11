@@ -3,9 +3,9 @@
 > Memoria viva dell'agente. Letta a inizio sessione, aggiornata a fine di ogni turno.
 > Non cancellare sezioni: se vuote, scrivi "nessuno".
 
-**Ultimo aggiornamento:** 2026-10-11 14:48  
+**Ultimo aggiornamento:** 2026-10-11 15:08  
 **Modalità progetto:** esistente (onboarded il 2026-10-09, validato dall'utente)  
-**Fase:** Tutte le Epiche (Milestone 2, SEC-P0, SEC-P1, SEC-P2) convalidate e accettate dal PO. Ramo main allineato.  
+**Fase:** Tutte le Epiche (Milestone 2, SEC-P0, SEC-P1, SEC-P2) convalidate e accettate dal PO. Stack Docker Compose operativo e healthy.  
 
 ## Project Profile
 
@@ -20,7 +20,7 @@ Comando lint/format:     go vet ./... (backend)
 Percorsi per livello:    unit=backend/pkg, backend/internal/domain, backend/internal/scanner; service=backend/internal/service; integration=backend/internal/delivery, backend/internal/repository/postgres; frontend=frontend/src/tests, frontend/src/**/*.test.tsx
 Prerequisiti ambiente:   Docker & Docker Compose (PostgreSQL 16, Nmap su Linux container)
 Come avviare l'app:      docker compose up --build (oppure 'go run ./cmd/server' + 'cd frontend && npm run dev')
-Branch principale:       main (allineato e pronto per il push)
+Branch principale:       main (allineato e sincronizzato)
 Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git push --force, DROP database senza conferma esplicita
 ```
 
@@ -28,10 +28,10 @@ Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git
 
 | Data | Comando | Esito | Fallimenti preesistenti noti |
 |---|---|---|---|
-| 2026-10-11 14:46 | `go test ./...` (backend) | PASS (exit code 0, 14 package) | Nessuno. Tutti i test passano al 100%. |
+| 2026-10-11 15:06 | `go test ./...` (backend) | PASS (exit code 0, 14 package) | Nessuno. Tutti i test passano al 100%, incluso `TestGetMaxSourceVersion`. |
+| 2026-10-11 15:07 | `go build ./... ; go vet ./...` (backend) | PASS (exit code 0) | Nessuno. Compilazione pulita e zero lint warning. |
 | 2026-10-11 14:46 | `npm run build` (frontend tsc + Vite) | PASS (exit code 0, 8.01s) | Nessuno. Compilazione TypeScript pulita, chunk `AttackPath` 28.88 kB. |
 | 2026-10-10 18:14 | `npm test` (frontend Vitest) | PASS (exit code 0, 16 file, 99 test) | Nessuno. Tutti i test passano al 100% con **0 warning stderr**. |
-| 2026-10-10 18:14 | `go build ./... ; go vet ./...` (backend) | PASS (exit code 0) | Nessuno. Compilazione pulita e zero lint warning. |
 
 ## In corso
 
@@ -82,9 +82,9 @@ Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git
 
 ## Log sessioni (ultime 5, la più recente in alto)
 
+- 2026-10-11 15:08 · Risoluzione blocco avvio `docker compose up -d`: rilevato errore `no migration found for version 8: file does not exist` causato da versione 8 residua in `schema_migrations` del volume PostgreSQL; implementato algoritmo di autoguarigione schema in `migrator.go` (`GetMaxSourceVersion`) per forzare l'allineamento automatico alla versione massima supportata ed evitare crash-loop; risolto conflitto porta 3000 (bloccata dall'intervallo esclusioni dinamiche WinNAT/Hyper-V 2976-3075) parametrizzando `${FRONTEND_PORT:-3000}` in `docker-compose.yml` e impostando porta 3080 in `.env`; verificata con successo la piena salute di tutti i container Docker (`postgres`, `backend`, `frontend`) · Backend Go 14/14 pkg PASS (incluso nuovo unit test `TestGetMaxSourceVersion`), compilazione e linting 100% VERDI
 - 2026-10-11 14:48 · Fast-forward merge del ramo `feat/FEAT-SCAN-PROFILES-custom-categories` su `main` e push sul repository remoto `origin/main` su richiesta del Product Owner; verifica zero-assumption completata con successo: Backend Go (14/14 pkg PASS), Frontend build (`npm run build` PASS con 0 errori di compilazione e TypeScript pulito)
 - 2026-10-10 18:14 · Verifica visuale e funzionale E2E automatizzata con Google Chrome headless via Puppeteer: testate con successo Dashboard, Attack Path Graph (`/attack-path`), Scansioni (`/scans`), Modale Nuova Scansione (`NewScanModal`), Reports (`/reports`) e Live Debug Console drawer (`>_`); rilevata e corretta l'omissione del campo `invasiveness` in `ProfileResponse` (`scan_handler.go`) e inserito profilo `All-in-One 360° Comprehensive Audit` nel DB; convalidate le visualizzazioni dei badge `SAFE`/`INTRUSIVE`, del profilo `Specialized UDP Critical Services` e del gate di autorizzazione obbligatoria con checkbox; catturati screenshot visuali conformi in artifacts · Backend 14/14 pkg PASS, Frontend 16 file / 99 test PASS al 100%
 - 2026-10-10 17:05 · Correzione anomalia HTTP 500 su target interni protetti: rimappati `domain.ErrTargetInternalRestricted` e `domain.ErrTargetScopeTooBroad` su HTTP 400 Bad Request espliciti (`TARGET_RESTRICTED` e `SCOPE_TOO_BROAD`) in `discovery_handler.go`, `target_handler.go` e `scan_handler.go`; aggiunto controllo preventivo `CheckTargetScope` in `target_service.go` e `scan_service.go`; introdotto bypass configurabile via env `ALLOW_INTERNAL_TARGETS=true` / `DEV_ALLOW_LOCALHOST=true` per consentire test locali di sviluppo in piena sicurezza · Test suite backend (14 pkg) e frontend (97 test) 100% VERDI
 - 2026-10-10 16:50 · Implementazione e verifica completa di Epic 24 (SEC-P0 Hardening Critico): sviluppato `StreamTicketStore` monouso per SSE e WebSocket con TTL 30s ed endpoint protetto `/api/v1/auth/stream-ticket`; implementato `CheckTargetScope` con deny-list IP/CIDR/hostname (loopback, RFC1918 docker bridge, link-local, cloud metadata, .internal) e risoluzione DNS anti-rebinding; inserito delimitatore POSIX `--` prima del target in `BuildSafeArguments` Nmap; disabilitato per default script esterno `vulners`; aggiunta regex di redazione query parameters sensibili (`ticket=`, `token=`, `passphrase=`) nella Debug Console e nell'esportatore Markdown AI; aggiunto watchdog di rollback remoto distaccato via `nohup` e `sudo iptables-restore` per firewall; risolto disallineamento cleanup async in `WebTerminalModal.tsx` · Test backend 14/14 pkg PASS (0 errori, build/vet OK), Frontend 16 file / 97 test PASS, npm run build OK (0 errori)
-- 2026-10-10 16:25 · Valutazione approfondita dell'Audit di Sicurezza & Architettura (10 Ottobre 2026): allineamento immediato della documentazione (inserito requisito legale FR-01.3 di autorizzazione scansione e FR-01.4 deny-list in `0_REQUIREMENTS.md`, aggiornati i perimetri in/out-of-scope in `1_PROJECT_CONTEXT.md`, completati gli attributi mancanti nell'ERD di `2_ARCHITECTURE.md`), strutturazione del backlog di remediation in tre Epiche formalizzate in `docs/3_TASK_LIST.md` (Epic 24 SEC-P0, Epic 25 SEC-P1, Epic 26 SEC-P2) · Test suite backend (14 pkg) e frontend (95 test) 100% VERDI
 
