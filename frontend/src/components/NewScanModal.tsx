@@ -32,6 +32,7 @@ import { TargetItem, TargetListResponseData, TargetGroupNode } from '../types/ta
 import { ScanItem, ScanProfileItem, ScanProfileCategory } from '../types/scan';
 import { ScheduleItem } from '../types/schedule';
 import { getGroupAndDescendantIds } from './TreeExplorer';
+import { useCompany } from '../context/CompanyContext';
 
 interface NewScanModalProps {
   isOpen: boolean;
@@ -274,6 +275,9 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
   onScheduleCreated,
   defaultGroupId,
 }) => {
+  const { selectedCompanyId } = useCompany();
+  const effectiveInitialGroupId = defaultGroupId || selectedCompanyId || '';
+
   const [activeTab, setActiveTab] = useState<'ON_DEMAND' | 'SCHEDULED'>('ON_DEMAND');
   const [configMode, setConfigMode] = useState<'GUIDED' | 'MULTI_OBJECTIVE' | 'PROFESSIONAL'>('GUIDED');
   const [showHelpGuide, setShowHelpGuide] = useState<boolean>(false);
@@ -283,7 +287,7 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
   const [profiles, setProfiles] = useState<ScanProfileItem[]>([]);
   const [loadingData, setLoadingData] = useState<boolean>(false);
 
-  const [selectedGroupId, setSelectedGroupId] = useState<string>(defaultGroupId || '');
+  const [selectedGroupId, setSelectedGroupId] = useState<string>(effectiveInitialGroupId);
   const [selectedProfileId, setSelectedProfileId] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<ScanProfileCategory>('ALL_IN_ONE');
 
@@ -357,8 +361,8 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
             setTargets(targetsRes.data.data.items);
           }
 
-          if (defaultGroupId) {
-            setSelectedGroupId(defaultGroupId);
+          if (effectiveInitialGroupId) {
+            setSelectedGroupId(effectiveInitialGroupId);
           } else if (loadedGroups.length > 0) {
             setSelectedGroupId((prev) => (prev ? prev : loadedGroups[0].id));
           }
@@ -421,9 +425,13 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
       }
     };
 
-    recurse(targetGroups);
+    const rootNodes = selectedCompanyId
+      ? targetGroups.filter((n) => n.id === selectedCompanyId)
+      : targetGroups;
+
+    recurse(rootNodes.length > 0 ? rootNodes : targetGroups);
     return list;
-  }, [targetGroups, targets]);
+  }, [targetGroups, targets, selectedCompanyId]);
 
   const selectedGroupInfo = useMemo(() => {
     return flattenedGroups.find((g) => g.id === selectedGroupId) || null;

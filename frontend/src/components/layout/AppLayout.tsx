@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useCompany } from '../../context/CompanyContext';
 import axios from 'axios';
 import {
   ShieldCheck,
@@ -20,6 +21,9 @@ import {
   Radar,
   Server,
   Network,
+  Building2,
+  ChevronDown,
+  ArrowRight,
 } from 'lucide-react';
 
 interface HealthData {
@@ -31,6 +35,12 @@ interface HealthData {
 
 export const AppLayout: React.FC = () => {
   const { user, logout } = useAuth();
+  const {
+    companies,
+    selectedCompanyId,
+    selectedCompany,
+    setSelectedCompanyId,
+  } = useCompany();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [health, setHealth] = useState<HealthData | null>(null);
@@ -78,13 +88,19 @@ export const AppLayout: React.FC = () => {
       ],
     },
     {
+      category: 'Organizzazione & Scope',
+      items: [
+        { name: 'Gestione Aziende', path: '/companies', icon: Building2, badge: 'Aziende' },
+        { name: 'Target & Reparti', path: '/targets', icon: Crosshair, badge: 'Reparti' },
+      ],
+    },
+    {
       category: 'Flusso Operativo',
       items: [
         { name: '1. Network Discovery', path: '/network-discovery', icon: Radar, badge: 'Passo 1' },
-        { name: '2. Target & Cartelle', path: '/targets', icon: Crosshair, badge: 'Passo 2' },
-        { name: '3. Scansioni Nmap', path: '/scans', icon: Terminal, badge: 'Passo 3' },
-        { name: '4. Vulnerabilità (CVE)', path: '/findings', icon: BarChart3, badge: 'Passo 4' },
-        { name: '5. Report Aziendali', path: '/reports', icon: FileText, badge: 'Passo 5' },
+        { name: '2. Scansioni Nmap', path: '/scans', icon: Terminal, badge: 'Passo 2' },
+        { name: '3. Vulnerabilità (CVE)', path: '/findings', icon: BarChart3, badge: 'Passo 3' },
+        { name: '4. Report White-Label', path: '/reports', icon: FileText, badge: 'Passo 4' },
       ],
     },
     {
@@ -106,6 +122,72 @@ export const AppLayout: React.FC = () => {
       ],
     },
   ];
+
+  const renderCompanySwitcher = (onItemClick?: () => void) => (
+    <div className="mb-4 pb-3.5 border-b border-cyber-border space-y-2">
+      <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-1">
+        <div className="flex items-center gap-1.5 text-cyan-400">
+          <Building2 className="w-3.5 h-3.5" />
+          <span>Azienda / Scope</span>
+        </div>
+        <NavLink
+          to="/companies"
+          onClick={onItemClick}
+          className="text-[10px] text-slate-400 hover:text-cyan-400 transition flex items-center gap-0.5"
+          title="Gestisci Aziende"
+        >
+          <span>Gestione</span>
+          <ArrowRight className="w-2.5 h-2.5" />
+        </NavLink>
+      </div>
+
+      <div className="relative">
+        <select
+          value={selectedCompanyId || ''}
+          onChange={(e) => {
+            setSelectedCompanyId(e.target.value ? e.target.value : null);
+            if (onItemClick) onItemClick();
+          }}
+          className="w-full appearance-none rounded-lg border border-slate-700 bg-slate-800/90 py-2 pl-3 pr-8 text-xs font-medium text-white focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 cursor-pointer truncate"
+          aria-label="Seleziona Azienda Scope"
+        >
+          <option value="">🌐 Tutte le Aziende (Globale)</option>
+          {companies.map((c) => (
+            <option key={c.id} value={c.id}>
+              🏢 {c.name} ({c.children?.length || 0} rep. · {c.target_count || 0} IP)
+            </option>
+          ))}
+        </select>
+        <ChevronDown className="absolute right-2.5 top-2.5 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+      </div>
+
+      {selectedCompany && (
+        <div
+          className="flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-[11px] font-medium transition-all"
+          style={{
+            backgroundColor: `${selectedCompany.color_tag || '#3b82f6'}15`,
+            borderColor: `${selectedCompany.color_tag || '#3b82f6'}40`,
+            color: selectedCompany.color_tag || '#38bdf8',
+          }}
+        >
+          <span className="truncate font-semibold flex items-center gap-1.5">
+            <span
+              className="w-2 h-2 rounded-full inline-block shrink-0"
+              style={{ backgroundColor: selectedCompany.color_tag || '#3b82f6' }}
+            />
+            <span className="truncate">{selectedCompany.name}</span>
+          </span>
+          <button
+            onClick={() => setSelectedCompanyId(null)}
+            className="text-slate-400 hover:text-white p-0.5 ml-1 transition shrink-0"
+            title="Disattiva filtro e mostra tutte le aziende"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
 
   const renderNavLinks = (onItemClick?: () => void) => (
     <div className="space-y-4">
@@ -220,9 +302,12 @@ export const AppLayout: React.FC = () => {
       <div className="flex-1 flex">
         {/* Sidebar Nav (Desktop) */}
         <aside className="w-64 border-r border-cyber-border bg-[#0d121f] p-3.5 hidden md:flex flex-col justify-between overflow-y-auto">
-          <nav className="space-y-1">
-            {renderNavLinks()}
-          </nav>
+          <div>
+            {renderCompanySwitcher()}
+            <nav className="space-y-1">
+              {renderNavLinks()}
+            </nav>
+          </div>
 
           <div className="pt-4 mt-auto">
             <div className="p-3 rounded-lg border border-cyber-border bg-slate-900/60 text-xs space-y-1">
@@ -239,9 +324,12 @@ export const AppLayout: React.FC = () => {
         {mobileMenuOpen && (
           <div className="md:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm flex">
             <div className="w-72 bg-[#0d121f] border-r border-cyber-border p-4 flex flex-col justify-between overflow-y-auto">
-              <nav className="mt-14">
-                {renderNavLinks(() => setMobileMenuOpen(false))}
-              </nav>
+              <div className="mt-14">
+                {renderCompanySwitcher(() => setMobileMenuOpen(false))}
+                <nav>
+                  {renderNavLinks(() => setMobileMenuOpen(false))}
+                </nav>
+              </div>
 
               <div className="pt-4 mt-auto">
                 <div className="p-3 rounded-lg border border-cyber-border bg-slate-900/60 text-xs space-y-1">

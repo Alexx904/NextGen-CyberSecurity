@@ -19,14 +19,23 @@ import { ScanItem, ScanListResponseData } from '../types/scan';
 import { FindingItem, FindingListResponseData } from '../types/finding';
 import { TargetItem, TargetListResponseData, TargetGroupNode } from '../types/target';
 import { FindingsTable } from '../components/FindingsTable';
+import { useCompany } from '../context/CompanyContext';
 
 export const Findings: React.FC = () => {
+  const {
+    selectedCompanyId: globalCompanyId,
+    selectedCompany,
+    departments,
+    companyGroupIds,
+  } = useCompany();
+
   const [scans, setScans] = useState<ScanItem[]>([]);
   const [targetsMap, setTargetsMap] = useState<Map<string, TargetItem>>(new Map());
   const [groupsTree, setGroupsTree] = useState<TargetGroupNode[]>([]);
 
-  // Filtri gerarchici: Cartella / Azienda Scope -> Target IP -> Scansione
-  const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
+  // Filtri gerarchici: Cartella / Azienda Scope -> Reparto -> Target IP -> Scansione
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>(globalCompanyId || '');
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>('');
   const [selectedTargetId, setSelectedTargetId] = useState<string>('');
   const [selectedScanId, setSelectedScanId] = useState<string>('');
 
@@ -181,24 +190,49 @@ export const Findings: React.FC = () => {
     return result;
   }, [groupsTree, targetsMap, scans]);
 
+  // Sincronizza con l'azienda selezionata nel menu laterale globale
+  useEffect(() => {
+    if (globalCompanyId) {
+      setSelectedCompanyId(globalCompanyId);
+      setSelectedDepartmentId('');
+      setSelectedTargetId('');
+      setSelectedScanId('');
+    }
+  }, [globalCompanyId]);
+
   // Seleziona automaticamente la prima cartella/azienda con scansioni se non ancora selezionata
   useEffect(() => {
-    if (!selectedCompanyId && companyFolders.length > 0) {
+    if (!selectedCompanyId && !globalCompanyId && companyFolders.length > 0) {
       const firstWithScans = companyFolders.find((c) => c.totalScans > 0);
       setSelectedCompanyId(firstWithScans ? firstWithScans.id : companyFolders[0].id);
     }
-  }, [companyFolders, selectedCompanyId]);
+  }, [companyFolders, selectedCompanyId, globalCompanyId]);
 
   // Cartella / Azienda attiva
   const activeCompany = useMemo(() => {
     return companyFolders.find((c) => c.id === selectedCompanyId) || companyFolders[0] || null;
   }, [companyFolders, selectedCompanyId]);
 
+  // Targets filtrati in base all'azienda attiva e all'eventuale reparto selezionato
+  const filteredCompanyTargets = useMemo(() => {
+    if (!activeCompany) return [];
+    if (!globalCompanyId) return activeCompany.targets;
+
+    return activeCompany.targets.filter((t) => {
+      const tgtObj = targetsMap.get(t.id);
+      if (!tgtObj) return false;
+      if (selectedDepartmentId) {
+        return tgtObj.group_id === selectedDepartmentId;
+      }
+      return tgtObj.group_id && companyGroupIds.has(tgtObj.group_id);
+    });
+  }, [activeCompany, globalCompanyId, selectedDepartmentId, targetsMap, companyGroupIds]);
+
   // Target attivo all'interno dell'azienda
   const activeTarget = useMemo(() => {
     if (!activeCompany || !selectedTargetId) return null;
-    return activeCompany.targets.find((t) => t.id === selectedTargetId) || null;
-  }, [activeCompany, selectedTargetId]);
+    return filteredCompanyTargets.find((t) => t.id === selectedTargetId) || null;
+  }, [activeCompany, filteredCompanyTargets, selectedTargetId]);
 
   // Scansioni idonee da cui recuperare i finding per la vista corrente
   const targetScanIds = useMemo(() => {
@@ -214,9 +248,9 @@ export const Findings: React.FC = () => {
       return activeTarget.scans.length > 0 ? [activeTarget.scans[0].id] : [];
     }
     if (activeCompany) {
-      // Se sono selezionati tutti gli IP dell'azienda, raccogli la scansione più recente per ciascun target
+      // Se sono selezionati tutti gli IP dell'azienda/reparto, raccogli la scansione più recente per ciascun target
       const ids: string[] = [];
-      activeCompany.targets.forEach((t) => {
+      filteredCompanyTargets.forEach((t) => {
         const completed = t.scans.filter((s) => s.status === 'COMPLETED');
         if (completed.length > 0) {
           ids.push(completed[0].id);
@@ -227,7 +261,7 @@ export const Findings: React.FC = () => {
       return ids;
     }
     return [];
-  }, [selectedScanId, activeTarget, activeCompany]);
+  }, [selectedScanId, activeTarget, activeCompany, filteredCompanyTargets]);
 
   // Caricamento finding per gli scan identificati
   const fetchFindingsForScans = useCallback(async (scanIds: string[]) => {
@@ -334,67 +368,118 @@ export const Findings: React.FC = () => {
         </div>
       )}
 
-      {/* Livello 1: Selettore Cartella Scope / Azienda Cliente */}
-      <div className="rounded-xl border border-cyber-border bg-[#111726]/80 p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-wider text-slate-400">
-            <Building className="w-4 h-4 text-cyan-400" />
-            <span>Seleziona Azienda o Cartella Scope</span>
+      {/* Livello 1: Scope Aziendale Attivo o Selettore Cartelle */}
+      {selectedCompany ? (
+        <div className="p-4 rounded-xl border border-cyan-500/30 bg-gradient-to-r from-cyan-950/40 to-slate-900/60 backdrop-blur flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center space-x-3.5">
+            <div
+              className="p-2.5 rounded-xl border shrink-0"
+              style={{
+                backgroundColor: `${selectedCompany.color_tag || '#06b6d4'}20`,
+                borderColor: `${selectedCompany.color_tag || '#06b6d4'}40`,
+                color: selectedCompany.color_tag || '#06b6d4',
+              }}
+            >
+              <Building className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="text-[11px] font-mono uppercase tracking-wider text-cyan-400 font-semibold">
+                  Scope Aziendale Attivo
+                </span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                  {departments.length} {departments.length === 1 ? 'Reparto' : 'Reparti'}
+                </span>
+              </div>
+              <h3 className="text-base font-bold text-white">{selectedCompany.name}</h3>
+            </div>
           </div>
-          <span className="text-[11px] text-slate-400 font-mono">
-            {companyFolders.length} {companyFolders.length === 1 ? 'cartella attiva' : 'cartelle attive'}
-          </span>
-        </div>
 
-        {/* Lista Orizzontale Card Aziende */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-          {companyFolders.map((comp) => {
-            const isSelected = activeCompany?.id === comp.id;
-            return (
-              <button
-                key={comp.id}
-                type="button"
-                onClick={() => {
-                  setSelectedCompanyId(comp.id);
+          {/* Filtro Reparto (se l'azienda ha reparti censiti) */}
+          {departments.length > 0 && (
+            <div className="flex items-center space-x-2 text-xs">
+              <span className="text-slate-400 font-medium">Reparto:</span>
+              <select
+                value={selectedDepartmentId}
+                onChange={(e) => {
+                  setSelectedDepartmentId(e.target.value);
                   setSelectedTargetId('');
                   setSelectedScanId('');
                 }}
-                className={`p-3 rounded-xl border text-left transition-all flex items-start space-x-3 ${
-                  isSelected
-                    ? 'bg-cyan-500/15 border-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.15)] ring-1 ring-cyan-500/30'
-                    : 'bg-slate-900/60 hover:bg-slate-800/60 border-cyber-border/70 text-slate-300'
-                }`}
+                className="bg-slate-900 border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-500 font-medium"
               >
-                <div
-                  className="p-2 rounded-lg border shrink-0 mt-0.5"
-                  style={{
-                    backgroundColor: `${comp.color_tag}15`,
-                    borderColor: `${comp.color_tag}40`,
-                    color: comp.color_tag,
-                  }}
-                >
-                  <Folder className="w-4 h-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className={`text-xs font-bold truncate ${isSelected ? 'text-white' : 'text-slate-200'}`}>
-                    {comp.name}
-                  </div>
-                  <div className="flex items-center space-x-2 text-[10px] text-slate-400 mt-1 font-mono">
-                    <span>{comp.targets.length} Target/IP</span>
-                    <span>·</span>
-                    <span className={comp.totalScans > 0 ? 'text-cyan-400' : 'text-slate-500'}>
-                      {comp.totalScans} audit
-                    </span>
-                  </div>
-                </div>
-              </button>
-            );
-          })}
+                <option value="">Tutti i reparti ({departments.length})</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    🏢 {d.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
-      </div>
+      ) : (
+        <div className="rounded-xl border border-cyber-border bg-[#111726]/80 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-wider text-slate-400">
+              <Building className="w-4 h-4 text-cyan-400" />
+              <span>Seleziona Azienda o Cartella Scope</span>
+            </div>
+            <span className="text-[11px] text-slate-400 font-mono">
+              {companyFolders.length} {companyFolders.length === 1 ? 'cartella attiva' : 'cartelle attive'}
+            </span>
+          </div>
 
-      {/* Livello 2: Selettore Specifico Target / Indirizzo IP all'interno dell'Azienda */}
-      {activeCompany && activeCompany.targets.length > 0 && (
+          {/* Lista Orizzontale Card Aziende */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+            {companyFolders.map((comp) => {
+              const isSelected = activeCompany?.id === comp.id;
+              return (
+                <button
+                  key={comp.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedCompanyId(comp.id);
+                    setSelectedTargetId('');
+                    setSelectedScanId('');
+                  }}
+                  className={`p-3 rounded-xl border text-left transition-all flex items-start space-x-3 ${
+                    isSelected
+                      ? 'bg-cyan-500/15 border-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.15)] ring-1 ring-cyan-500/30'
+                      : 'bg-slate-900/60 hover:bg-slate-800/60 border-cyber-border/70 text-slate-300'
+                  }`}
+                >
+                  <div
+                    className="p-2 rounded-lg border shrink-0 mt-0.5"
+                    style={{
+                      backgroundColor: `${comp.color_tag}15`,
+                      borderColor: `${comp.color_tag}40`,
+                      color: comp.color_tag,
+                    }}
+                  >
+                    <Folder className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className={`text-xs font-bold truncate ${isSelected ? 'text-white' : 'text-slate-200'}`}>
+                      {comp.name}
+                    </div>
+                    <div className="flex items-center space-x-2 text-[10px] text-slate-400 mt-1 font-mono">
+                      <span>{comp.targets.length} Target/IP</span>
+                      <span>·</span>
+                      <span className={comp.totalScans > 0 ? 'text-cyan-400' : 'text-slate-500'}>
+                        {comp.totalScans} audit
+                      </span>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Livello 2: Selettore Specifico Target / Indirizzo IP all'interno dell'Azienda/Reparto */}
+      {filteredCompanyTargets.length > 0 && (
         <div className="rounded-xl border border-cyber-border bg-[#111726]/60 p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2 text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -402,12 +487,12 @@ export const Findings: React.FC = () => {
               <span>Ispezione per Singolo IP o Visione Aggregata</span>
             </div>
             <span className="text-[11px] text-slate-400">
-              Ambito: <strong className="text-white font-semibold">{activeCompany.name}</strong>
+              Ambito: <strong className="text-white font-semibold">{activeCompany?.name || 'Azienda'}</strong>
             </span>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {/* Opzione: Tutti gli IP dell'azienda */}
+            {/* Opzione: Tutti gli IP del perimetro filtrato */}
             <button
               type="button"
               onClick={() => {
@@ -421,11 +506,11 @@ export const Findings: React.FC = () => {
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
-              <span>Tutti gli IP di questa Cartella ({activeCompany.targets.length})</span>
+              <span>Tutti gli IP di questo ambito ({filteredCompanyTargets.length})</span>
             </button>
 
             {/* Pill per ciascun IP / Target censito */}
-            {activeCompany.targets.map((tgt) => {
+            {filteredCompanyTargets.map((tgt) => {
               const isSelected = selectedTargetId === tgt.id;
               return (
                 <button

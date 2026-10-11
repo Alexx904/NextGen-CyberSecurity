@@ -229,7 +229,9 @@ describe('ScanDetail Live Real-Time Monitoring & Progressive Findings', () => {
     });
 
     // EventSource deve essere connesso al topic di scansione
-    expect(MockEventSource.instances.length).toBe(1);
+    await waitFor(() => {
+      expect(MockEventSource.instances.length).toBe(1);
+    });
     const es = MockEventSource.instances[0];
     expect(es.url).toContain(`/api/v1/scans/${scanId}/stream`);
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Network,
@@ -22,8 +22,16 @@ import {
   AttackPath as IAttackPath,
 } from '../types/attackPath';
 import { AttackPathGraph } from '../components/graph/AttackPathGraph';
+import { useCompany } from '../context/CompanyContext';
 
 export const AttackPath: React.FC = () => {
+  const {
+    selectedCompanyId,
+    selectedCompany,
+    departments,
+    companyTargetValues,
+  } = useCompany();
+
   const [graph, setGraph] = useState<AttackGraph | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +43,13 @@ export const AttackPath: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'paths' | 'chokepoints' | 'node'>('paths');
   const [copiedChokepoint, setCopiedChokepoint] = useState<string | null>(null);
 
+  const displayedPaths = useMemo(() => {
+    if (!graph?.paths) return [];
+    if (!selectedCompanyId || companyTargetValues.size === 0) return graph.paths;
+    const filtered = graph.paths.filter((p) => companyTargetValues.has(p.target_asset));
+    return filtered.length > 0 ? filtered : graph.paths;
+  }, [graph?.paths, selectedCompanyId, companyTargetValues]);
+
   const fetchGraph = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -42,7 +57,6 @@ export const AttackPath: React.FC = () => {
       const data = await attackPathApi.getGraph({ min_cvss: minCVSS });
       setGraph(data);
 
-      // Se c'è un percorso critico e nessun percorso selezionato, pre-selezioniamo il primo
       if (data.paths && data.paths.length > 0 && !selectedPathId) {
         setSelectedPathId(data.paths[0].id);
       }
@@ -129,6 +143,27 @@ export const AttackPath: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Banner Scope Aziendale Attivo */}
+      {selectedCompany && (
+        <div className="p-3.5 rounded-xl border border-cyan-500/30 bg-cyan-950/20 backdrop-blur-sm flex items-center justify-between text-xs">
+          <div className="flex items-center space-x-2.5">
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+            <span className="text-slate-300">
+              Scope attivo:{' '}
+              <strong className="text-white font-semibold">{selectedCompany.name}</strong>
+              {departments.length > 0 && (
+                <span className="text-slate-400 ml-1.5">
+                  ({departments.length} reparti associati)
+                </span>
+              )}
+            </span>
+          </div>
+          <span className="text-[11px] text-cyan-400 font-mono">
+            {companyTargetValues.size} IP censiti nel perimetro aziendale
+          </span>
+        </div>
+      )}
 
       {/* KPI Banner di Sintesi Topologica */}
       {graph && (
@@ -290,7 +325,7 @@ export const AttackPath: React.FC = () => {
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                <span>Percorsi ({graph.paths?.length || 0})</span>
+                <span>Percorsi ({displayedPaths.length})</span>
               </button>
               <button
                 onClick={() => setActiveTab('chokepoints')}
@@ -323,13 +358,13 @@ export const AttackPath: React.FC = () => {
                   Seleziona una catena di attacco per visualizzarla isolata sul grafo:
                 </div>
 
-                {(!graph.paths || graph.paths.length === 0) && (
+                {displayedPaths.length === 0 && (
                   <p className="text-xs text-slate-500 py-4 text-center">
-                    Nessun cammino critico identificato per questo filtro CVSS.
+                    Nessun cammino critico identificato per questo filtro CVSS nel perimetro.
                   </p>
                 )}
 
-                {graph.paths?.map((path) => {
+                {displayedPaths.map((path) => {
                   const isSelected = selectedPathId === path.id;
                   const isCrit = path.severity === 'CRITICAL';
                   const isHigh = path.severity === 'HIGH';

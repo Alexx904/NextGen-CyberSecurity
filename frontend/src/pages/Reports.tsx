@@ -22,8 +22,16 @@ import { reportsApi } from '../api/reports';
 import { ApiResponse } from '../types/auth';
 import { TargetGroupNode } from '../types/target';
 import { ReportItem, ReportFilterParams, ReportTemplate, ReportFormat } from '../types/report';
+import { useCompany } from '../context/CompanyContext';
 
 export const Reports: React.FC = () => {
+  const {
+    selectedCompanyId,
+    selectedCompany,
+    departments,
+    companyGroupIds,
+  } = useCompany();
+
   // Modalità di visualizzazione: Raggruppata per Azienda (default) vs Archivio Cronologico Lineare
   const [viewMode, setViewMode] = useState<'grouped' | 'flat'>('grouped');
 
@@ -277,8 +285,13 @@ export const Reports: React.FC = () => {
       });
     });
 
+    // Filtro per scope attivo
+    const scopedResult = selectedCompanyId
+      ? result.filter((comp) => companyGroupIds.has(comp.id))
+      : result.filter((comp) => !gMap.get(comp.id)?.parent_id);
+
     // Filtra per ricerca e severità
-    return result.filter((comp) => {
+    return scopedResult.filter((comp) => {
       if (search.trim()) {
         const q = search.toLowerCase();
         const matchName = comp.name.toLowerCase().includes(q);
@@ -295,7 +308,7 @@ export const Reports: React.FC = () => {
 
       return true;
     });
-  }, [groupsTree, reports, search, severityFilter]);
+  }, [groupsTree, reports, search, severityFilter, selectedCompanyId, companyGroupIds]);
 
   // Metriche sintetiche aggregate delle aziende
   const kpiStats = useMemo(() => {
@@ -438,6 +451,62 @@ export const Reports: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Banner Scope Aziendale Attivo */}
+      {selectedCompany && (
+        <div className="p-4 rounded-xl border border-cyan-500/30 bg-gradient-to-r from-cyan-950/40 to-slate-900/60 backdrop-blur flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg">
+          <div className="flex items-center space-x-3.5">
+            <div
+              className="p-2.5 rounded-xl border shrink-0"
+              style={{
+                backgroundColor: `${selectedCompany.color_tag || '#06b6d4'}20`,
+                borderColor: `${selectedCompany.color_tag || '#06b6d4'}40`,
+                color: selectedCompany.color_tag || '#06b6d4',
+              }}
+            >
+              <Building className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="text-[11px] font-mono uppercase tracking-wider text-cyan-400 font-semibold">
+                  Dossier Consolidato Scope Attivo
+                </span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                  {departments.length} {departments.length === 1 ? 'Reparto' : 'Reparti'}
+                </span>
+              </div>
+              <h3 className="text-base font-bold text-white">{selectedCompany.name}</h3>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => handleCompanyDownload(selectedCompany.id, selectedCompany.name, 'pdf', 'executive')}
+              disabled={downloadingId === selectedCompany.id}
+              className="px-3 py-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 text-xs font-semibold transition-colors flex items-center space-x-1.5"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Executive PDF</span>
+            </button>
+            <button
+              onClick={() => handleCompanyDownload(selectedCompany.id, selectedCompany.name, 'pdf', 'technical')}
+              disabled={downloadingId === selectedCompany.id}
+              className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors flex items-center space-x-1.5"
+            >
+              <FileCode className="w-3.5 h-3.5" />
+              <span>Tecnico PDF</span>
+            </button>
+            <button
+              onClick={() => handleCompanyDownload(selectedCompany.id, selectedCompany.name, 'csv')}
+              disabled={downloadingId === selectedCompany.id}
+              className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors flex items-center space-x-1.5"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>CSV</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* KPI Cards di Riepilogo Posture */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

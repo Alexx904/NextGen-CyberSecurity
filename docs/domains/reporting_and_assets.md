@@ -69,12 +69,39 @@ $$\text{PostureScore} = \text{clamp}\left(0, \, 100, \, \text{round}(100 - \text
 
 ---
 
-## 3. Specifiche Contratti API REST Reporting Hub
+## 4. Gestione Aziende, Reparti & CompanyContext Globale (`Epic 27`, `FEAT-COMPANY-SCOPE`)
 
-- `GET /api/v1/reports`: Elenco paginato dei report storici con filtri (`group_id`, `target_id`, `severity`, `date_from`, `date_to`, `search`).
-- `GET /api/v1/reports/{id}/download?type=pdf|csv&template=executive|technical`: Download del report di singola scansione.
-- `GET /api/v1/reports/company/{groupId}/download?type=pdf|csv&template=executive|technical`: Download del dossier consolidato multi-host dell'azienda.
-- `GET /api/v1/scans/{id}/reports/pdf`: Endpoint di convenienza per download PDF rapido da schermata dettaglio scansione.
-- `GET /api/v1/scans/{id}/reports/csv`: Endpoint di convenienza per download CSV rapido da schermata dettaglio scansione.
+### 4.1 Modello Gerarchico Azienda / Reparto
+- **Aziende Clienti:** Nodi di livello radice in `target_groups` caratterizzati da `parent_id IS NULL`. Rappresentano le entità legali o clienti primari gestiti dal consulente o team MSSP.
+- **Reparti Aziendali:** Nodi discendenti in `target_groups` con `parent_id != NULL`. Rappresentano aree, uffici o subnet distinte (es. *Reparto IT*, *Finance*, *DMZ Produzione*).
+- **Target IP Associati:** Ciascun target appartiene a un reparto specifico (`group_id`) o direttamente all'azienda radice. La chiusura ricorsiva (`getAllDescendantGroupIds`) mappa istantaneamente tutti gli IP all'azienda madre.
+
+### 4.2 CompanyContext Globale (`frontend/src/context/CompanyContext.tsx`)
+- Stato centralizzato React: `selectedCompanyId`, `selectedCompany`, `departments`, `companyGroupIds`, `companyTargetIds`, `companyTargetValues`.
+- Persistenza automatica in `localStorage` (`nextgen_active_company_id`) per preservare lo scope attivo tra ricaricamenti pagina.
+- Helper unificati di filtraggio automatico:
+  - `filterTargets(targets)`: restituisce solo i target dello scope.
+  - `filterScans(scans)`: filtra le scansioni dei soli target dell'azienda.
+  - `filterFindings(findings)`: isola le vulnerabilità CVE dei target dell'azienda.
+  - `isTargetInActiveScope(targetIdOrValue)`: test booleano rapido su ID o stringa IP/hostname.
+- Fallback sicuro `DEFAULT_COMPANY_CONTEXT` per esecuzione trasparente in test isolati senza eccezioni.
+
+### 4.3 Navigazione e Dashboard `/companies`
+- **Sidebar Dropdown:** Selettore globale con badge stato, ricerca rapida e commutazione istantanea tra "Tutte le Aziende" e l'azienda cliente desiderata.
+- **Pagina `/companies`:** Cruscotto direzionale con metriche aggregate (totale aziende, reparti censiti, IP gestiti, media posture), color tag personalizzato (#hex), operazioni CRUD complete e tasto di attivazione scope.
+- **Contestualizzazione Viste:**
+  - `/targets`: visualizza esclusivamente i reparti dell'azienda selezionata e crea sotto-reparti per l'azienda attiva.
+  - `/dashboard`: card posture per l'azienda e per ciascuno dei suoi reparti, banner scope attivo.
+  - `/scans` & `NewScanModal`: scansioni e schedulazioni filtrate; modale pre-seleziona l'azienda attiva e limita la scelta ai soli suoi reparti.
+  - `/findings`: ispezione per reparto ed IP dell'azienda attiva, eliminando switcher duplicati.
+  - `/reports`: aggregazione sui reparti dell'azienda e download istantaneo del dossier consolidato (Executive PDF, Tecnico PDF, CSV).
+  - `/attack-path`: focalizzazione del grafo topologico sui bersagli dell'azienda attiva.
+
+---
+
+## 5. Ultimo Allineamento
+- **Data:** 2026-10-11
+- **Hash commit:** In attesa di accettazione PO (Epic 27 FEAT-COMPANY-SCOPE)
+
 
 

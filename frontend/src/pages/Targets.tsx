@@ -21,13 +21,21 @@ import { ApiResponse } from '../types/auth';
 import { TargetItem, TargetListResponseData, TargetGroupNode, TargetGroup } from '../types/target';
 import { TargetModal } from '../components/TargetModal';
 import { TreeExplorer, getGroupAndDescendantIds } from '../components/TreeExplorer';
+import { useCompany } from '../context/CompanyContext';
 
 export const Targets: React.FC = () => {
+  const {
+    selectedCompanyId,
+    selectedCompany,
+    setSelectedCompanyId,
+    companyGroupIds,
+  } = useCompany();
+
   const [targets, setTargets] = useState<TargetItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Selezione cartella Scope attiva
+  // Selezione cartella / reparto Scope attiva
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [selectedGroupNode, setSelectedGroupNode] = useState<TargetGroupNode | null>(null);
   const [flatGroups, setFlatGroups] = useState<Map<string, TargetGroup>>(new Map());
@@ -150,15 +158,17 @@ export const Targets: React.FC = () => {
         (selectedStatus === 'AUTHORIZED' && !t.is_blacklisted) ||
         (selectedStatus === 'BLACKLIST' && t.is_blacklisted);
 
-      // Filtro cartella scope (albero)
+      // Filtro reparto scope (albero) o azienda attiva
       let matchesGroup = true;
       if (activeSubtreeGroupIds) {
         matchesGroup = t.group_id ? activeSubtreeGroupIds.has(t.group_id) : false;
+      } else if (selectedCompanyId) {
+        matchesGroup = t.group_id ? companyGroupIds.has(t.group_id) : false;
       }
 
       return matchesSearch && matchesType && matchesStatus && matchesGroup;
     });
-  }, [targets, search, selectedType, selectedStatus, activeSubtreeGroupIds]);
+  }, [targets, search, selectedType, selectedStatus, activeSubtreeGroupIds, selectedCompanyId, companyGroupIds]);
 
   const isAllFilteredSelected = useMemo(() => {
     return (
@@ -270,12 +280,41 @@ export const Targets: React.FC = () => {
         </button>
       </div>
 
+      {/* Active Company Scope Banner */}
+      {selectedCompany && (
+        <div className="p-3.5 rounded-xl border border-cyan-500/40 bg-cyan-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-cyan-200">
+          <div className="flex items-center space-x-2.5">
+            <div
+              className="w-3.5 h-3.5 rounded-full shrink-0 shadow-[0_0_8px_rgba(6,182,212,0.4)]"
+              style={{ backgroundColor: selectedCompany.color_tag || '#06b6d4' }}
+            />
+            <span>
+              Scope Aziendale Attivo: <strong className="text-white font-semibold">{selectedCompany.name}</strong> — Stai visualizzando e gestendo i reparti e i bersagli IP di questa specifica azienda.
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setSelectedCompanyId(null)}
+              className="px-2.5 py-1 rounded-lg border border-cyan-500/40 bg-cyan-500/15 text-cyan-300 hover:bg-cyan-500/25 text-[11px] font-medium transition"
+            >
+              Mostra Tutte le Aziende
+            </button>
+            <Link
+              to="/companies"
+              className="px-2.5 py-1 rounded-lg border border-slate-700 bg-slate-800 text-slate-300 hover:text-white text-[11px] font-medium transition"
+            >
+              Gestione Aziende
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* Workflow Guidance Banner */}
       <div className="p-3.5 rounded-xl border border-blue-500/30 bg-blue-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-blue-200">
         <div className="flex items-center space-x-2.5">
           <Folder className="w-4 h-4 text-cyan-400 shrink-0" />
           <span>
-            <strong>Gestione Bersagli & Aziende</strong>: Questa sezione è dedicata al censimento, organizzazione in cartelle/aziende e blacklist degli host. Per avviare scansioni e audit di vulnerabilità, recati nella sezione dedicata.
+            <strong>Gestione Bersagli & Aziende</strong>: Questa sezione è dedicata al censimento, organizzazione in reparti/aziende e blacklist degli host. Per avviare scansioni e audit di vulnerabilità, recati nella sezione dedicata.
           </span>
         </div>
         <Link
@@ -309,6 +348,7 @@ export const Targets: React.FC = () => {
         <div className="lg:col-span-4 xl:col-span-3">
           <TreeExplorer
             selectedGroupId={selectedGroupId}
+            companyId={selectedCompanyId}
             onSelectGroup={(id, node) => {
               setSelectedGroupId(id);
               setSelectedGroupNode(node || null);
@@ -633,7 +673,7 @@ export const Targets: React.FC = () => {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onTargetCreated={fetchTargets}
-        defaultGroupId={selectedGroupId}
+        defaultGroupId={selectedGroupId || selectedCompanyId}
       />
 
 

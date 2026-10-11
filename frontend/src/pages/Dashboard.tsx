@@ -22,8 +22,16 @@ import { ApiResponse } from '../types/auth';
 import { TargetGroupNode, TargetItem, TargetListResponseData } from '../types/target';
 import { ReportListResponseData, ReportItem } from '../types/report';
 import { ScanListResponseData, ScanItem } from '../types/scan';
+import { useCompany } from '../context/CompanyContext';
 
 export const Dashboard: React.FC = () => {
+  const {
+    selectedCompanyId,
+    selectedCompany,
+    setSelectedCompanyId,
+    departments,
+    companyGroupIds,
+  } = useCompany();
 
   const [groups, setGroups] = useState<TargetGroupNode[]>([]);
   const [targets, setTargets] = useState<TargetItem[]>([]);
@@ -140,6 +148,8 @@ export const Dashboard: React.FC = () => {
       postureScore: number;
       postureGrade: string;
       latestScan?: ScanItem;
+      isDepartment?: boolean;
+      parentId?: string | null;
     }> = [];
 
     flatGroupsMap.forEach((gNode, gId) => {
@@ -203,14 +213,20 @@ export const Dashboard: React.FC = () => {
         highCount: high,
         mediumCount: med,
         lowCount: low,
+        isDepartment: !!gNode.parent_id,
+        parentId: gNode.parent_id,
         postureScore,
         postureGrade,
         latestScan,
       });
     });
 
+    const scopedList = selectedCompanyId
+      ? result.filter((c) => companyGroupIds.has(c.id))
+      : result.filter((c) => !c.parentId);
+
     return {
-      companies: result.filter((c) =>
+      companies: scopedList.filter((c) =>
         companySearch.trim()
           ? c.name.toLowerCase().includes(companySearch.toLowerCase()) ||
             (c.description && c.description.toLowerCase().includes(companySearch.toLowerCase())) ||
@@ -219,7 +235,7 @@ export const Dashboard: React.FC = () => {
       ),
       unassignedTargets,
     };
-  }, [groups, targets, reports, recentScans, companySearch]);
+  }, [groups, targets, reports, recentScans, companySearch, selectedCompanyId, companyGroupIds]);
 
   const getGradeBadge = (grade: string) => {
     switch (grade) {
@@ -287,19 +303,29 @@ export const Dashboard: React.FC = () => {
             </div>
             <div>
               <h2 className="text-2xl font-bold tracking-tight text-white flex items-center space-x-2.5">
-                <span>Panoramica Sicurezza per Azienda</span>
+                <span>Panoramica Sicurezza {selectedCompany ? `· ${selectedCompany.name}` : 'per Azienda'}</span>
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 font-medium">
-                  MSSP Multi-Company Posture
+                  {selectedCompany ? 'Scope Aziendale Attivo' : 'MSSP Multi-Company Posture'}
                 </span>
               </h2>
               <p className="text-sm text-slate-400 mt-0.5">
-                Cruscotto operativo per il monitoraggio della postura di sicurezza e conformità delle singole aziende clienti gestite.
+                {selectedCompany
+                  ? `Cruscotto operativo focalizzato su ${selectedCompany.name} e sui suoi ${departments.length} reparti associati.`
+                  : 'Cruscotto operativo per il monitoraggio della postura di sicurezza e conformità delle singole aziende clienti gestite.'}
               </p>
             </div>
           </div>
         </div>
 
         <div className="flex items-center space-x-2 self-start sm:self-auto">
+          {selectedCompany && (
+            <button
+              onClick={() => setSelectedCompanyId(null)}
+              className="px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors text-xs font-medium"
+            >
+              Mostra Tutte le Aziende
+            </button>
+          )}
           <button
             onClick={fetchDashboardData}
             disabled={loading}
@@ -311,6 +337,52 @@ export const Dashboard: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Banner Scope Aziendale Attivo */}
+      {selectedCompany && (
+        <div className="p-4 rounded-2xl border border-cyan-500/30 bg-gradient-to-r from-cyan-950/40 to-slate-900/60 backdrop-blur flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg">
+          <div className="flex items-center space-x-3.5">
+            <div
+              className="p-3 rounded-xl border shrink-0"
+              style={{
+                backgroundColor: `${selectedCompany.color_tag || '#06b6d4'}20`,
+                borderColor: `${selectedCompany.color_tag || '#06b6d4'}40`,
+                color: selectedCompany.color_tag || '#06b6d4',
+              }}
+            >
+              <Building className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="text-[11px] font-mono uppercase tracking-wider text-cyan-400 font-semibold">
+                  Azienda Attiva
+                </span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                  {departments.length} {departments.length === 1 ? 'Reparto' : 'Reparti'}
+                </span>
+              </div>
+              <h3 className="text-lg font-bold text-white">{selectedCompany.name}</h3>
+              {selectedCompany.description && (
+                <p className="text-xs text-slate-400 mt-0.5">{selectedCompany.description}</p>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center space-x-2 self-start sm:self-auto">
+            <Link
+              to="/companies"
+              className="px-3 py-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 text-xs font-medium transition-colors"
+            >
+              Gestisci Aziende
+            </Link>
+            <Link
+              to="/targets"
+              className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors"
+            >
+              Gestisci Reparti in Target
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Guida al Flusso Operativo Lineare (Nessuna confusione o ridondanza) */}
       <div className="p-4 rounded-2xl border border-cyber-border bg-slate-950/80 shadow-lg space-y-3">
@@ -434,7 +506,8 @@ export const Dashboard: React.FC = () => {
         </div>
 
         <div className="text-xs text-slate-400">
-          Mostrando <strong className="text-white">{companyCards.companies.length}</strong> aziende clienti
+          Mostrando <strong className="text-white">{companyCards.companies.length}</strong>{' '}
+          {selectedCompanyId ? 'entità e reparti aziendali' : 'aziende clienti'}
         </div>
       </div>
 
@@ -443,15 +516,15 @@ export const Dashboard: React.FC = () => {
         {companyCards.companies.length === 0 ? (
           <div className="col-span-full p-12 rounded-2xl border border-cyber-border bg-cyber-card/40 text-center space-y-3">
             <Building className="w-10 h-10 text-slate-600 mx-auto" />
-            <div className="text-sm font-semibold text-white">Nessuna Azienda registrata</div>
+            <div className="text-sm font-semibold text-white">Nessuna entità registrata</div>
             <p className="text-xs text-slate-400 max-w-md mx-auto">
-              Non è ancora presente alcuna azienda censita nel sistema. Accedi a Target per creare la prima cartella/azienda e assegnarvi i bersagli di rete.
+              Non è presente alcuna entità associata per questo filtro. Gestisci le aziende o aggiungi nuovi reparti e IP in Target.
             </p>
             <Link
-              to="/targets"
+              to="/companies"
               className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-lg bg-cyan-500 text-slate-950 font-semibold text-xs"
             >
-              <span>Configura Aziende in Target</span>
+              <span>Gestione Aziende</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
@@ -459,9 +532,13 @@ export const Dashboard: React.FC = () => {
           companyCards.companies.map((company) => (
             <div
               key={company.id}
-              className="rounded-2xl border border-cyber-border bg-cyber-card/80 p-5 flex flex-col justify-between shadow-xl hover:border-slate-700 transition-all space-y-4"
+              className={`rounded-2xl border bg-cyber-card/80 p-5 flex flex-col justify-between shadow-xl transition-all space-y-4 ${
+                company.id === selectedCompanyId
+                  ? 'border-cyan-500/50 ring-1 ring-cyan-500/30'
+                  : 'border-cyber-border hover:border-slate-700'
+              }`}
             >
-              {/* Header Azienda */}
+              {/* Header Azienda / Reparto */}
               <div className="space-y-2">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center space-x-2.5">
@@ -473,9 +550,27 @@ export const Dashboard: React.FC = () => {
                         color: company.color_tag,
                       }}
                     >
-                      <Building className="w-5 h-5" />
+                      {company.isDepartment ? (
+                        <Layers className="w-5 h-5" />
+                      ) : (
+                        <Building className="w-5 h-5" />
+                      )}
                     </div>
                     <div>
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-[10px] uppercase font-mono tracking-wider text-slate-400 font-semibold">
+                          {company.isDepartment ? 'Reparto' : 'Azienda'}
+                        </span>
+                        {!selectedCompanyId && (
+                          <button
+                            onClick={() => setSelectedCompanyId(company.id)}
+                            className="text-[10px] text-cyan-400 hover:underline"
+                            title="Imposta come scope attivo"
+                          >
+                            (Seleziona)
+                          </button>
+                        )}
+                      </div>
                       <h3 className="text-base font-bold text-white line-clamp-1">{company.name}</h3>
                       <div className="text-[11px] text-slate-400">
                         {company.targets.length} IP / Target gestiti

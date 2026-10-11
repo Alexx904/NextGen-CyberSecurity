@@ -12,6 +12,7 @@ import {
   AlertCircle,
   Globe,
   FolderPlus,
+  Building2,
 } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { ApiResponse } from '../types/auth';
@@ -24,6 +25,7 @@ interface TreeExplorerProps {
   onGroupsLoaded?: (groups: TargetGroupNode[]) => void;
   targets?: TargetItem[];
   className?: string;
+  companyId?: string | null;
 }
 
 // Funzione helper esportata per ricavare l'ID del gruppo e di tutti i suoi discendenti
@@ -58,6 +60,7 @@ export const TreeExplorer: React.FC<TreeExplorerProps> = ({
   onGroupsLoaded,
   targets,
   className = '',
+  companyId,
 }) => {
   const [treeData, setTreeData] = useState<TargetGroupNode[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -131,9 +134,14 @@ export const TreeExplorer: React.FC<TreeExplorerProps> = ({
 
   const handleOpenCreateRoot = () => {
     setGroupToEdit(null);
-    setDefaultParentId(null);
+    setDefaultParentId(companyId || null);
     setIsGroupModalOpen(true);
   };
+
+  const filteredTreeData = useMemo(() => {
+    if (!companyId) return treeData;
+    return treeData.filter((node) => node.id === companyId);
+  }, [treeData, companyId]);
 
   const handleOpenCreateSub = (parent: TargetGroupNode, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -206,10 +214,17 @@ export const TreeExplorer: React.FC<TreeExplorerProps> = ({
   // Calcolo totale complessivo target dinamico
   const totalScopeTargets = useMemo(() => {
     if (targets) {
+      if (companyId) {
+        const companyNode = treeData.find((n) => n.id === companyId);
+        if (companyNode) {
+          const validIds = new Set(getGroupAndDescendantIds(companyNode));
+          return targets.filter((t) => t.group_id && validIds.has(t.group_id)).length;
+        }
+      }
       return targets.filter((t) => t.group_id).length;
     }
-    return treeData.reduce((acc, n) => acc + (n.target_count || 0), 0);
-  }, [treeData, targets]);
+    return filteredTreeData.reduce((acc, n) => acc + (n.target_count || 0), 0);
+  }, [treeData, targets, companyId, filteredTreeData]);
 
   const renderRiskBadge = (risk: string) => {
     switch (risk?.toUpperCase()) {
@@ -374,9 +389,13 @@ export const TreeExplorer: React.FC<TreeExplorerProps> = ({
       {/* Header Widget */}
       <div className="p-3.5 border-b border-cyber-border/80 bg-slate-900/60 flex items-center justify-between">
         <div className="flex items-center space-x-2">
-          <Layers className="w-4 h-4 text-cyan-400" />
+          {companyId ? (
+            <Building2 className="w-4 h-4 text-cyan-400" />
+          ) : (
+            <Layers className="w-4 h-4 text-cyan-400" />
+          )}
           <h3 className="text-xs font-bold text-white tracking-wide uppercase">
-            Albero Scope & Cartelle
+            {companyId ? 'Reparti Aziendali' : 'Albero Scope & Cartelle'}
           </h3>
         </div>
 
@@ -385,10 +404,10 @@ export const TreeExplorer: React.FC<TreeExplorerProps> = ({
             type="button"
             onClick={handleOpenCreateRoot}
             className="p-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 text-[11px] font-semibold flex items-center space-x-1 transition-colors"
-            title="Aggiungi Cartella Principale"
+            title={companyId ? 'Aggiungi Reparto all\'Azienda' : 'Aggiungi Cartella Principale'}
           >
             <FolderPlus className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Nuova</span>
+            <span className="hidden sm:inline">{companyId ? '+ Reparto' : 'Nuova'}</span>
           </button>
 
           <button
@@ -431,7 +450,9 @@ export const TreeExplorer: React.FC<TreeExplorerProps> = ({
         >
           <div className="flex items-center space-x-2">
             <Globe className="w-4 h-4 text-cyan-400" />
-            <span className="font-medium">Tutti i Target</span>
+            <span className="font-medium">
+              {companyId ? "Tutti i Target dell'Azienda" : "Tutti i Target"}
+            </span>
           </div>
           <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-900 border border-cyber-border text-slate-400">
             {totalScopeTargets}
@@ -439,31 +460,35 @@ export const TreeExplorer: React.FC<TreeExplorerProps> = ({
         </div>
 
         {/* Caricamento */}
-        {loading && treeData.length === 0 ? (
+        {loading && filteredTreeData.length === 0 ? (
           <div className="py-8 text-center text-slate-400 text-xs space-y-2">
             <RefreshCw className="w-5 h-5 animate-spin text-cyan-400 mx-auto" />
             <p>Caricamento struttura gerarchica...</p>
           </div>
-        ) : treeData.length === 0 ? (
+        ) : filteredTreeData.length === 0 ? (
           <div className="py-8 text-center p-4">
             <div className="w-10 h-10 rounded-xl bg-slate-900 border border-cyber-border flex items-center justify-center text-slate-500 mx-auto mb-2">
               <Folder className="w-5 h-5" />
             </div>
-            <p className="text-xs text-slate-300 font-medium">Nessuna cartella creata</p>
+            <p className="text-xs text-slate-300 font-medium">
+              {companyId ? 'Nessun reparto configurato per questa azienda' : 'Nessuna cartella creata'}
+            </p>
             <p className="text-[11px] text-slate-500 mt-1">
-              Organizza la tua infrastruttura in cartelle logiche per facilitare le scansioni.
+              {companyId
+                ? 'Suddividi questa azienda in reparti (es. IT, Produzione, DMZ) per una gestione granulare.'
+                : 'Organizza la tua infrastruttura in cartelle logiche per facilitare le scansioni.'}
             </p>
             <button
               onClick={handleOpenCreateRoot}
               className="mt-3 px-3 py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 text-xs font-semibold inline-flex items-center space-x-1"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Crea Prima Cartella</span>
+              <span>{companyId ? 'Crea Primo Reparto' : 'Crea Prima Cartella'}</span>
             </button>
           </div>
         ) : (
           <div className="space-y-0.5 pt-1">
-            {treeData.map((node) => renderNode(node, 0))}
+            {filteredTreeData.map((node) => renderNode(node, 0))}
           </div>
         )}
       </div>

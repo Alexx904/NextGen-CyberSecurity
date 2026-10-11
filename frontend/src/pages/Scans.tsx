@@ -29,17 +29,25 @@ import { apiClient } from '../api/client';
 import { ApiResponse } from '../types/auth';
 import { ScanItem, ScanListResponseData } from '../types/scan';
 import { ScheduleItem, ScheduleListResponseData } from '../types/schedule';
-import { TargetItem, TargetListResponseData, TargetGroupNode } from '../types/target';
+import { TargetItem, TargetGroupNode, TargetListResponseData } from '../types/target';
 import { ScanProgressBadge } from '../components/ScanProgressBadge';
 import { NewScanModal } from '../components/NewScanModal';
 import { downloadReportFile } from '../utils/download';
+import { useCompany } from '../context/CompanyContext';
 
 export const Scans: React.FC = () => {
+  const {
+    selectedCompanyId,
+    selectedCompany,
+    departments,
+    companyTargetIds,
+    filterScans,
+  } = useCompany();
+
   const [activeTab, setActiveTab] = useState<'SCANS' | 'SCHEDULES'>('SCANS');
 
   // Stato Scansioni
   const [scans, setScans] = useState<ScanItem[]>([]);
-  const [totalScans, setTotalScans] = useState<number>(0);
   const [loadingScans, setLoadingScans] = useState<boolean>(true);
   const [scansError, setScansError] = useState<string | null>(null);
 
@@ -82,7 +90,6 @@ export const Scans: React.FC = () => {
       const response = await apiClient.get<ApiResponse<ScanListResponseData>>('/scans?limit=50');
       if (response.data?.data) {
         setScans(response.data.data.items || []);
-        setTotalScans(response.data.data.total || 0);
       }
     } catch (err: any) {
       if (!silent) {
@@ -148,8 +155,14 @@ export const Scans: React.FC = () => {
     }
   }, [activeTab, fetchSchedules]);
 
-  // Lista appiattita dei gruppi per dropdown
+  // Lista appiattita dei gruppi o reparti per dropdown
   const flatGroups = useMemo(() => {
+    if (selectedCompanyId) {
+      return departments.map((d) => ({
+        id: d.id,
+        name: `Reparto: ${d.name}`,
+      }));
+    }
     const list: { id: string; name: string }[] = [];
     function recurse(nodes: TargetGroupNode[], prefix = '') {
       for (const n of nodes) {
@@ -161,7 +174,7 @@ export const Scans: React.FC = () => {
     }
     recurse(groupsTree);
     return list;
-  }, [groupsTree]);
+  }, [groupsTree, selectedCompanyId, departments]);
 
   // Mappa dei gruppi per ID
   const groupsMap = useMemo(() => {
@@ -202,11 +215,18 @@ export const Scans: React.FC = () => {
     return validTargetIds;
   }, [selectedGroupFilter, groupsMap, targetsMap]);
 
-  // Scansioni filtrate in base alla cartella target selezionata
+  // Scansioni filtrate in base all'azienda attiva e al reparto/cartella selezionata
   const displayedScans = useMemo(() => {
-    if (!targetIdsInSelectedGroup) return scans;
-    return scans.filter((s) => targetIdsInSelectedGroup.has(s.target_id));
-  }, [scans, targetIdsInSelectedGroup]);
+    const base = selectedCompanyId ? filterScans(scans) : scans;
+    if (!targetIdsInSelectedGroup) return base;
+    return base.filter((s) => targetIdsInSelectedGroup.has(s.target_id));
+  }, [scans, targetIdsInSelectedGroup, selectedCompanyId, filterScans]);
+
+  // Pianificazioni filtrate in base all'azienda attiva
+  const displayedSchedules = useMemo(() => {
+    if (!selectedCompanyId) return schedules;
+    return schedules.filter((s) => companyTargetIds.has(s.target_id));
+  }, [schedules, selectedCompanyId, companyTargetIds]);
 
   interface ScansByTarget {
     targetId: string;
@@ -504,6 +524,27 @@ export const Scans: React.FC = () => {
         </div>
       </div>
 
+      {/* Banner Scope Aziendale Attivo */}
+      {selectedCompany && (
+        <div className="p-3.5 rounded-xl border border-cyan-500/30 bg-cyan-950/20 backdrop-blur-sm flex items-center justify-between text-xs">
+          <div className="flex items-center space-x-2.5">
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+            <span className="text-slate-300">
+              Scope attivo:{' '}
+              <strong className="text-white font-semibold">{selectedCompany.name}</strong>
+              {departments.length > 0 && (
+                <span className="text-slate-400 ml-1.5">
+                  ({departments.length} reparti associati)
+                </span>
+              )}
+            </span>
+          </div>
+          <span className="text-[11px] text-cyan-400 font-mono">
+            {displayedScans.length} scansioni rilevate per il perimetro
+          </span>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex items-center justify-between border-b border-cyber-border bg-slate-900/40 rounded-xl px-4 py-2.5">
         <div className="flex space-x-2">
@@ -516,7 +557,7 @@ export const Scans: React.FC = () => {
             }`}
           >
             <Play className="w-3.5 h-3.5" />
-            <span>Scansioni Eseguite & Live ({totalScans})</span>
+            <span>Scansioni Eseguite & Live ({displayedScans.length})</span>
           </button>
 
           <button
@@ -528,7 +569,7 @@ export const Scans: React.FC = () => {
             }`}
           >
             <Calendar className="w-3.5 h-3.5" />
-            <span>Pianificazioni Ricorrenti ({schedules.length})</span>
+            <span>Pianificazioni Ricorrenti ({displayedSchedules.length})</span>
           </button>
         </div>
 
@@ -542,7 +583,9 @@ export const Scans: React.FC = () => {
                 onChange={(e) => setSelectedGroupFilter(e.target.value)}
                 className="bg-slate-900 border border-cyber-border rounded-lg px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-cyan-500"
               >
-                <option value="">Tutte le cartelle scope</option>
+                <option value="">
+                  {selectedCompany ? `Tutti i reparti di ${selectedCompany.name}` : 'Tutte le cartelle scope'}
+                </option>
                 {flatGroups.map((g) => (
                   <option key={g.id} value={g.id}>
                     📂 {g.name}
@@ -1203,7 +1246,7 @@ export const Scans: React.FC = () => {
               <RefreshCw className="w-6 h-6 animate-spin text-cyan-400" />
               <span className="text-xs">Caricamento pianificazioni in corso...</span>
             </div>
-          ) : schedules.length === 0 ? (
+          ) : displayedSchedules.length === 0 ? (
             <div className="py-16 flex flex-col items-center justify-center text-center space-y-3 p-6">
               <div className="w-12 h-12 rounded-xl bg-slate-900 border border-cyber-border flex items-center justify-center text-slate-500">
                 <Calendar className="w-6 h-6" />
@@ -1235,7 +1278,7 @@ export const Scans: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-cyber-border/40 text-xs">
-                  {schedules.map((schedule) => (
+                  {displayedSchedules.map((schedule) => (
                     <tr key={schedule.id} className="hover:bg-slate-800/25 transition-colors">
                       <td className="py-3.5 px-4 font-mono font-medium text-cyan-400">
                         {schedule.id.slice(0, 8)}...
@@ -1293,6 +1336,7 @@ export const Scans: React.FC = () => {
       {/* Modale Nuova Scansione */}
       <NewScanModal
         isOpen={isNewScanModalOpen}
+        defaultGroupId={selectedGroupFilter || selectedCompanyId || undefined}
         onClose={() => setIsNewScanModalOpen(false)}
         onScanLaunched={() => {
           fetchScans();

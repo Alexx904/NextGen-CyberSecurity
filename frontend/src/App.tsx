@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { DebugProvider } from './context/DebugContext';
+import { CompanyProvider } from './context/CompanyContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { AppLayout } from './components/layout/AppLayout';
 import { DebugFloatingToggle } from './components/debug/DebugFloatingToggle';
@@ -10,6 +11,7 @@ import { DebugConsoleDrawer } from './components/debug/DebugConsoleDrawer';
 // Code-splitting via React.lazy per ottimizzazione bundle e caricamento su richiesta
 const Login = lazy(() => import('./pages/Login').then(m => ({ default: m.Login })));
 const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
+const Companies = lazy(() => import('./pages/Companies').then(m => ({ default: m.Companies })));
 const Targets = lazy(() => import('./pages/Targets').then(m => ({ default: m.Targets })));
 const Scans = lazy(() => import('./pages/Scans').then(m => ({ default: m.Scans })));
 const ScanDetail = lazy(() => import('./pages/ScanDetail').then(m => ({ default: m.ScanDetail })));
@@ -36,35 +38,38 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <DebugProvider>
-          <Suspense fallback={<PageLoadingFallback />}>
-            <Routes>
-              {/* Rotta Pubblica: Autenticazione */}
-              <Route path="/login" element={<Login />} />
+          <CompanyProvider>
+            <Suspense fallback={<PageLoadingFallback />}>
+              <Routes>
+                {/* Rotta Pubblica: Autenticazione */}
+                <Route path="/login" element={<Login />} />
 
-              {/* Rotte Protette: Accessibili solo con sessione valida */}
-              <Route element={<ProtectedRoute />}>
-                <Route element={<AppLayout />}>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/targets" element={<Targets />} />
-                  <Route path="/network-discovery" element={<NetworkDiscovery />} />
-                  <Route path="/scans" element={<Scans />} />
-                  <Route path="/scans/:id" element={<ScanDetail />} />
-                  <Route path="/ssh-servers" element={<SSHServers />} />
-                  <Route path="/findings" element={<Findings />} />
-                  <Route path="/attack-path" element={<AttackPath />} />
-                  <Route path="/reports" element={<Reports />} />
-                  <Route path="/settings" element={<Settings />} />
+                {/* Rotte Protette: Accessibili solo con sessione valida */}
+                <Route element={<ProtectedRoute />}>
+                  <Route element={<AppLayout />}>
+                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/companies" element={<Companies />} />
+                    <Route path="/targets" element={<Targets />} />
+                    <Route path="/network-discovery" element={<NetworkDiscovery />} />
+                    <Route path="/scans" element={<Scans />} />
+                    <Route path="/scans/:id" element={<ScanDetail />} />
+                    <Route path="/ssh-servers" element={<SSHServers />} />
+                    <Route path="/findings" element={<Findings />} />
+                    <Route path="/attack-path" element={<AttackPath />} />
+                    <Route path="/reports" element={<Reports />} />
+                    <Route path="/settings" element={<Settings />} />
+                  </Route>
                 </Route>
-              </Route>
 
-              {/* Fallback per rotte sconosciute */}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </Suspense>
+                {/* Fallback per rotte sconosciute */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Suspense>
 
-          {/* Console di Debug e Pulsante Fluttuante Globale (attivi su qualsiasi pagina, incluso Login) */}
-          <DebugFloatingToggle />
-          <DebugConsoleDrawer />
+            {/* Console di Debug e Pulsante Fluttuante Globale (attivi su qualsiasi pagina, incluso Login) */}
+            <DebugFloatingToggle />
+            <DebugConsoleDrawer />
+          </CompanyProvider>
         </DebugProvider>
       </AuthProvider>
     </BrowserRouter>
