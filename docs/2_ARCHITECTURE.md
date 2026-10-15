@@ -341,6 +341,25 @@ Per garantire modularità ed efficienza di contesto, i dettagli tecnici e i cont
 4. **[Debug & Testing Live Console Drawer](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/domains/debug_console.md)**: In-Memory Ring Buffer (500 log), intercettori Axios/SSE/WS/JS, sanificazione credenziali `[REDACTED]` ed esportatore Markdown preformattato per AI.
 5. **[Attack Path Mapping & Threat Chaining](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/domains/attack_path.md)**: Analisi topologica a grafo, calcolo del Cumulative Path Risk Score, rilevamento catene di compromissione, individuazione algoritmica dei chokepoint e Visual Graph Explorer SVG interattivo con controlli zoom/pan e filtri CVSS.
 6. **[Vulnerability Intelligence & CVE Correlation](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/domains/vulnerability_intelligence.md)**: Catalogo locale offline-ready, client REST NIST NVD API 2.0 (timeout 4s), auto-caching PostgreSQL su `cve_entries`, correlazione script NSE (`--script=vuln`, `--script=vulners`) ed endpoint `/api/v1/cve/stats` e `/api/v1/cve/sync`.
+7. **[Active Defense & SOAR Light (M3)](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/domains/active_defense_and_soar.md)**: Remediation 1-click su chokepoints, generatore virtual patching, webhook alerting hub.
+8. **[Compliance & Governance (M4)](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/domains/compliance_and_governance.md)**: Mappatura NIS2/DORA/ISO 27001, scorecard per reparto, dossier PDF audit-ready.
+9. **[AI Security Copilot & Assistant (M5)](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/domains/ai_copilot.md)**: Generazione dinamica playbook di mitigazione, sintesi narrative executive per report, query semantiche "Ask Infrastructure".
+
+### Mappa documenti Full-Stack (Glob -> Dominio -> Documento)
+Tabella vincolante per il gate **Doc Sync**. Deve coprire il 100% del codice applicativo (Backend Go, Frontend React, Migrazioni SQL):
+
+| Percorso (glob Backend / Frontend / DB) | Dominio | Documento di Riferimento |
+| :--- | :--- | :--- |
+| `backend/internal/scanner/**`<br/>`backend/internal/service/scan*`<br/>`backend/internal/service/discovery*`<br/>`backend/internal/delivery/scan*`<br/>`backend/internal/delivery/discovery*`<br/>`frontend/src/pages/Scans*`<br/>`frontend/src/pages/NetworkDiscovery*`<br/>`frontend/src/components/scans/**`<br/>`frontend/src/components/NewScanModal*`<br/>`frontend/src/components/discovery/**`<br/>`frontend/src/components/Scan*` | scanning & discovery | `docs/domains/scanning_and_discovery.md` |
+| `backend/internal/service/ssh*`<br/>`backend/internal/service/firewall*`<br/>`backend/internal/delivery/ssh*`<br/>`backend/internal/delivery/firewall*`<br/>`frontend/src/pages/SSHServers*`<br/>`frontend/src/components/ssh/**`<br/>`frontend/src/components/Terminal*` | ssh & firewall | `docs/domains/ssh_and_firewall.md` |
+| `backend/internal/service/target*`<br/>`backend/internal/service/report*`<br/>`backend/pkg/report/**`<br/>`backend/internal/delivery/target*`<br/>`backend/internal/delivery/report*`<br/>`backend/internal/delivery/tenant*`<br/>`frontend/src/pages/Companies*`<br/>`frontend/src/pages/Targets*`<br/>`frontend/src/pages/Reports*`<br/>`frontend/src/pages/Dashboard*`<br/>`frontend/src/context/CompanyContext*`<br/>`frontend/src/components/Company*`<br/>`frontend/src/components/TreeExplorer*`<br/>`frontend/src/components/Target*` | reporting & assets | `docs/domains/reporting_and_assets.md` |
+| `frontend/src/pages/DebugConsole*`<br/>`frontend/src/components/Debug*`<br/>`frontend/src/utils/debugLogger*` | debug_console | `docs/domains/debug_console.md` |
+| `backend/internal/service/attack_path*`<br/>`backend/internal/delivery/attack_path*`<br/>`frontend/src/pages/AttackPath*`<br/>`frontend/src/components/attack-path/**`<br/>`frontend/src/components/AttackPath*` | attack_path | `docs/domains/attack_path.md` |
+| `backend/internal/service/cve*`<br/>`backend/internal/delivery/cve*`<br/>`frontend/src/pages/Findings*`<br/>`frontend/src/components/findings/**`<br/>`frontend/src/components/Finding*` | vulnerability intelligence | `docs/domains/vulnerability_intelligence.md` |
+| `backend/internal/service/defense*`<br/>`backend/internal/service/alert*`<br/>`backend/internal/delivery/defense*`<br/>`backend/internal/delivery/alert*`<br/>`frontend/src/pages/ActiveDefense*`<br/>`frontend/src/components/defense/**`<br/>`frontend/src/components/alert/**` | active defense & soar | `docs/domains/active_defense_and_soar.md` |
+| `backend/internal/service/compliance*`<br/>`backend/internal/delivery/compliance*`<br/>`frontend/src/pages/Compliance*`<br/>`frontend/src/components/compliance/**` | compliance & governance | `docs/domains/compliance_and_governance.md` |
+| `backend/internal/service/copilot*`<br/>`backend/internal/delivery/copilot*`<br/>`frontend/src/components/copilot/**` | ai security copilot | `docs/domains/ai_copilot.md` |
+| `backend/internal/repository/migrations/**`<br/>`backend/internal/repository/postgres/**` | database & core erd | `docs/2_ARCHITECTURE.md#erd` |
 
 ---
 
@@ -367,6 +386,9 @@ Tutte le API rispondono sotto `/api/v1` con payload standard `{ "success": true,
 - `GET /api/v1/ssh/servers/{id}/firewall`, `POST /api/v1/ssh/servers/{id}/firewall/rules`, `DELETE /api/v1/ssh/servers/{id}/firewall/rules/{line}`
 - `POST /api/v1/ssh/servers/{id}/firewall/apply`, `POST /api/v1/ssh/servers/{id}/firewall/confirm`, `POST /api/v1/ssh/servers/{id}/firewall/rollback`
 - `GET /ws/v1/ssh/servers/{id}/terminal?ticket={ticket}` (WebSocket PTY con ticket monouso, fallback `?token=`)
+- *(M3)* `POST /api/v1/attack-paths/chokepoints/{id}/remediate`, `POST /api/v1/virtual-patching/generate`, `GET/POST/PUT/DELETE /api/v1/alert-channels`, `POST /api/v1/alert-channels/{id}/test`
+- *(M4)* `GET /api/v1/compliance/overview`, `GET /api/v1/compliance/frameworks/{framework}`, `GET /api/v1/compliance/dossier/pdf`
+- *(M5)* `POST /api/v1/copilot/playbook`, `POST /api/v1/copilot/ask`, `POST /api/v1/copilot/executive-summary`
 
 ---
 
@@ -407,6 +429,23 @@ Tutte le API rispondono sotto `/api/v1` con payload standard `{ "success": true,
     4. Nuova rotta e dashboard dedicata `/companies` con card metriche, color tag, operazioni CRUD e attivazione immediata dello scope.
     5. Propagazione automatica del filtraggio e rimozione dei dropdown ridondanti su Dashboard, Targets (solo reparti dell'azienda attiva), Scans, Nuova Scansione, Findings (ispezione per reparto ed IP), Reports e Attack Path.
   - **Conseguenze:** Esperienza utente fluida e lineare; totale coerenza visiva e operativa; eliminazione completa di disallineamenti tra feature.
+- **ADR-09 (Roadmap Strategica Milestones 3, 4, 5: Active Defense, Compliance NIS2/DORA e AI Copilot):**
+  - **Contesto:** A valle del completamento di Epic 27 e della Milestone 2, il Product Owner ha validato e selezionato tre direttrici evolutive prioritarie per posizionare la piattaforma ai vertici dell'innovazione di settore.
+  - **Decisione:**
+    1. **Milestone 3 (Active Defense & SOAR Light):** Chiusura del ciclo tra identificazione e risoluzione del rischio con neutralizzazione 1-click dei chokepoints via firewall SSH (con safety rollback), virtual patching (Fail2ban/CrowdSec/ModSecurity) e hub di alerting multi-canale (Slack, Teams, Telegram, Webhooks, SMTP).
+    2. **Milestone 4 (Continuous Compliance Frameworks):** Valutazione e scorecard automatizzata per NIS2 (Art. 21), DORA e ISO 27001 con tracciamento SLA MTTR e generazione di dossier audit-ready formali in PDF.
+    3. **Milestone 5 (AI Remediation Copilot & Assistant):** Supporto generativo per script di mitigazione su misura per OS/container, sintesi narrative executive e query contestuali "Ask Infrastructure" con isolamento rigoroso dei dati sensibili (Zero Data Leakage).
+  - **Conseguenze:** Definizione chiara delle prossime epiche di sviluppo; massima aderenza al valore per il cliente finale; sinergia completa con i moduli preesistenti.
+- **ADR-10 (Standard Operativo Software House: Context Layering, Mappa Full-Stack & Quality Gates):**
+  - **Contesto:** Con la crescita delle dimensioni del repository e delle specificità funzionali (oltre 40KB di requisiti e molteplici viste frontend), l'agente necessita di un protocollo rigoroso per preservare il budget di token, prevenire allucinazioni, garantire la retrocompatibilità DB e mantenere il 100% di allineamento documentale full-stack.
+  - **Decisione:**
+    1. **Context Layering:** Strutturazione dell'accesso ai file `.md` su 4 livelli gerarchici (Livello 0 per RAM attiva `PROJECT_STATE.md` + sprint attivo in `3_TASK_LIST.md`, Livello 1 per singolo dominio on-demand, Livello 2 per specifiche globali lette a slice/grep, Livello 3 no-context per manuali utente e legacy).
+    2. **Mappa Documenti Full-Stack:** Copertura obbligatoria di tutte le componenti applicative frontend (`frontend/src/pages/**`, `components/**`), backend Go e migrazioni SQL (`migrations/**`).
+    3. **Contract-First & DB Rollback:** Sincronizzazione preventiva dei tipi DTO TypeScript/Go prima dell'implementazione e verifica di integrità di applicazione e rollback per ogni migrazione SQL (`up`/`down`).
+    4. **Quality Gates & DoD a 4 punti:** Criterio formale per ogni task: (1) Unit/Component PASS, (2) Integration/E2E PASS, (3) Build/Typecheck/Lint PASS (exit code 0), (4) Doc Sync Full-Stack completato.
+    5. **Tech Debt Backlog:** Tracciamento sistematico in `3_TASK_LIST.md` del debito tecnico e dei refactoring pianificati.
+  - **Conseguenze:** Standard di livello Software House Enterprise; zero token bloat; totale coerenza tra frontend, backend, database e documentazione.
+
 
 
 

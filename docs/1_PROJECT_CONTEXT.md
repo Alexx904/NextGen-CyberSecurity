@@ -26,8 +26,8 @@ Il sistema supera il tradizionale paradigma del "report statico di vulnerabilit√
 
 ## 2. Perimetro del Progetto (Scope Boundaries)
 
-### 2.1 In-Scope (Milestone 1, 1.1 & Milestone 2)
-- **Asset Scope Management & Tree Explorer:** Gestione target IP/CIDR/domini con struttura gerarchica ad albero (cartelle/sotto-cartelle), blacklist e metriche di rischio aggregate.
+### 2.1 In-Scope (Milestone 1, 1.1, 2 Completate & Milestone 3, 4, 5 Approvate)
+- **Asset Scope Management, CompanyContext & Tree Explorer:** Gestione target IP/CIDR/domini con struttura gerarchica ad albero e scope globale per azienda cliente (Epic 27).
 - **Scanning Engine & Alive-Only Host Filter:** Esecuzione concorrente e sicura di Nmap in Docker con profili specialistici ed esclusione nativa degli host spenti (`down`) nei range IP.
 - **Real-Time Live Streaming Engine (SSE):** Streaming istantaneo Server-Sent Events per LAN Network Discovery e Scansioni Nmap con salvataggio incrementale su PostgreSQL.
 - **Debug & Testing Live Console Drawer:** Finestra laterale (slide-over panel `Ctrl+Shift+D`) per intercettazione diagnostica (HTTP, SSE, WebSocket, JS) ed export AI.
@@ -38,12 +38,15 @@ Il sistema supera il tradizionale paradigma del "report statico di vulnerabilit√
 - **Centralized Reports Hub:** Archivio storico, download PDF White-Label (Executive compresso A4 e Technical continuous flow) e CSV consolidati per azienda.
 - **Multi-Tenant Hybrid RBAC:** Isolamento logico dei dati per `tenant_id` e ruoli (SuperAdmin, Tenant Admin, SecOps, Auditor).
 - **Attack Path Mapping & Visual Graph Explorer (Milestone 2):** Grafo di compromissione multi-hop, inferenza percorsi di lateral movement, rilevamento nodi chokepoint ad alto ROI con prescrizione di remediation e canvas SVG interattivo con controlli zoom/pan.
+- **Active Defense & SOAR Light (Milestone 3 - Approvata):** Neutralizzazione 1-click dei chokepoint con firewall rules auto-generate via SSH, generatore di regole di virtual patching (Fail2ban, CrowdSec, ModSecurity/Nginx) e hub di alerting multi-canale (Slack, Teams, Telegram, Webhook REST, SMTP).
+- **Continuous Compliance NIS2 / DORA / ISO 27001 (Milestone 4 - Approvata):** Correlazione automatica di finding tecnici e regole firewall rispetto a NIS2 Art. 21, DORA e ISO 27001; cruscotto `/compliance` con scorecard, gap analysis, SLA MTTR e dossier audit-ready PDF.
+- **AI Remediation Copilot & Security Assistant (Milestone 5 - Approvata):** Generazione automatica di playbook di mitigazione per OS e software target, sintesi esecutive AI nei report per board direzionali e assistente conversazionale "Ask Infrastructure".
 
-### 2.2 Out-of-Scope (Roadmap Milestone 3+)
-- Dashboard di Continuous Compliance NIS2 / DORA / ISO 27001 (Milestone 3).
-- Moduli EASM (External Attack Surface Management), CSPM e Identity Leak Monitoring (Roadmap futura).
-- Scansioni autenticate (credentialed) con agenti locali su endpoint (Roadmap futura).
-- Integrazione tool esterni (Nuclei, testssl.sh, ssh-audit) orchestrati dietro scanner worker dedicato (Roadmap futura).
+### 2.2 Out-of-Scope (Roadmap Futura)
+- Moduli EASM (External Attack Surface Management) e passive OSINT subdomain enumeration.
+- Dark Web / Identity Leak Monitoring continuativo.
+- Scansioni autenticate (credentialed) con agenti locali su endpoint (EDR/agent telemetry).
+- Integrazione tool esterni containerizzati (Nuclei, testssl.sh, ssh-audit).
 
 ---
 

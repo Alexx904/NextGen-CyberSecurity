@@ -26,9 +26,21 @@ Piattaforma di CyberSecurity moderna e modulare concepita per trasformare il vul
   - **Feature 5 (Remote SSH Host & iptables Firewall Manager):** Gestione credenziali SSH (chiavi private o password cifrate AES-256-GCM), interfaccia grafica visuale per regole firewall (`iptables`/`nftables`) con timer di anti-lockout e terminale Web SSH interattivo integrato (WebSocket + xterm.js).
   - **Feature 6 (Real-Time Live Streaming Engine via SSE):** Flusso dati in tempo reale via Server-Sent Events per LAN Network Discovery e Scansioni Nmap. I dispositivi LAN compaiono all'istante all'interno della griglia man mano che rispondono, e le scansioni trasmettono fasi, percentuali di avanzamento e finding progressivi con salvataggio incrementale su PostgreSQL.
   - **Feature 7 (Debug & Testing Live Console Drawer):** Finestra laterale (slide-over panel) dedicata al monitoraggio in tempo reale di tutte le attività (chiamate HTTP REST con endpoint, status, latenza e payload, eventi SSE ricevuti, stream WebSocket, errori/warning di runtime JavaScript). Filtro rapido degli errori, visualizzazione del dettaglio evento e pulsante "Copia Report Diagnostico per AI" preformattato in Markdown per consentire all'utente di inviare istantaneamente stack trace e contesti operativi all'agente per l'immediata risoluzione dei bug.
-- **Milestone 2 (Differentiators):**
-  - Attack Path Mapping (Grafo delle Vulnerabilità e lateral movement).
-  - Continuous Compliance Score (NIS2, DORA, ISO 27001).
+- **Milestone 2 (Differentiators - Completata):**
+  - Attack Path Mapping (Grafo delle Vulnerabilità, lateral movement e nodi chokepoint).
+  - Gestione Aziende, Reparti & Scope Globale (Epic 27 - Multi-Company Hierarchical Workstation).
+- **Milestone 3 (Active Defense & SOAR Light - In Pianificazione):**
+  - One-Click Chokepoint Remediation & Firewall Isolation (integrazione diretta Attack Path con modulo SSH/iptables).
+  - Virtual Patching & WAF Rule Generator (regole automatiche Fail2ban, CrowdSec, ModSecurity, Nginx basate sulle CVE scoperte).
+  - Multi-Channel Alerting & Webhooks Hub (notifiche istantanee Slack, Microsoft Teams, Telegram, Webhooks REST generici ed Email SMTP).
+- **Milestone 4 (Continuous Compliance & Regulatory Frameworks - In Pianificazione):**
+  - Automated Regulatory Mapping Engine (correlazione algoritmica di findings, posture e firewall con NIS2 Art. 21, DORA e ISO/IEC 27001:2022).
+  - Compliance Scorecard & Department Gap Analysis (cruscotto con percentuali di adempimento, gap critici e tracciamento SLA MTTR).
+  - Audit-Ready PDF Dossier (dossier formale A4 per revisori, auditor esterni e organi di vigilanza).
+- **Milestone 5 (AI Remediation Copilot & Conversational Security Assistant - In Pianificazione):**
+  - AI Remediation Playbooks (script di remediation contestualizzati per OS, container e versioni software rilevate).
+  - AI Executive Summaries nei Report (sintesi narrativa chiara e discorsiva orientata al board e al C-level).
+  - Interfaccia conversazionale "Ask Infrastructure" (interrogazione in linguaggio naturale dello stato di sicurezza e inventario del tenant).
 
 ---
 
@@ -279,6 +291,52 @@ Piattaforma di CyberSecurity moderna e modulare concepita per trasformare il vul
 - **Attore:** CISO / Security Consultant / Auditor.
 - **Flusso:** L'operatore genera i report dall'Hub `/reports` dopo aver completato l'audit su una cartella/azienda. L'Executive Summary viene stampato o inviato in formato A4 di 2 pagine, perfettamente leggibile, con colori conformi alle direttive di sicurezza e testo di raccomandazione completo senza troncamenti. Il Technical Report presenta tutte le evidenze host per host distribuite uniformemente senza spazi vuoti e con i nomi software corretti.
 
+### FR-19: Active Defense, Chokepoint Auto-Remediation & SOAR Light (Milestone 3)
+- **FR-19.1 (Neutralizzazione Chokepoint con 1-Click):** Dalla vista del grafo topologico (`/attack-path`), selezionando un nodo o un cammino identificato come *Chokepoint ad alto ROI*, l'operatore può cliccare su "Applica Regola di Mitigazione / Isola Host". Il sistema genera automaticamente la regola di blocco `iptables`/`nftables` ottimale mirata sulla porta o sull'indirizzo sorgente/destinazione.
+- **FR-19.2 (Deployment Sicuro via SSH con Rollback):** La regola viene recapitata sul server remoto associato (se censito in *Server SSH*) tramite la sessione SSH cifrata AES-256-GCM, attivando il *Safety Rollback Timer* a 60 secondi: se l'operatore non conferma il corretto funzionamento, le regole precedenti vengono ripristinate automaticamente.
+- **FR-19.3 (Virtual Patching & WAF Rule Generator):** Per ogni vulnerabilità CVE rilevata sui servizi esposti (HTTP, Reverse Proxy, SSH), il sistema offre un pannello di generazione regole di patching virtuale con snippet copia-e-incolla o salvataggio file per:
+  - *Fail2ban* (jail e filter regex personalizzati per bloccare tentativi di probe);
+  - *CrowdSec* (scenari e parser di blocco IP abusivi);
+  - *ModSecurity / Nginx* (regole di rewrite o deny-list per exploit path noti).
+- **FR-19.4 (Multi-Channel Alerting & Webhooks Hub):** Modulo centralizzato di gestione canali di notifica configurabile per tenant e per azienda:
+  - Canali supportati: Slack (incoming webhook), Microsoft Teams (connector), Telegram Bot, Webhook REST generico (POST con payload JSON firmato HMAC-SHA256) ed Email SMTP.
+  - Eventi triggerabili: Scoperta nuova vulnerabilità CRITICAL o HIGH, rilevamento nuovo host/porta mai censito (Shadow IT), fallimento o completamento scansione programmata, scadenza certificato SSL/TLS.
+  - Test live del canale con invio messaggio di prova prima del salvataggio.
+
+### FR-20: Continuous Compliance & Regulatory Frameworks (NIS2, DORA, ISO 27001) (Milestone 4)
+- **FR-20.1 (Automated Regulatory Mapping Engine):** Correlazione algoritmica automatica tra i finding di sicurezza tecnici censiti nel database e i requisiti normativi:
+  - *NIS2 (Direttiva UE 2022/2555 - Art. 21):* Politiche di analisi dei rischi, gestione e divulgazione delle vulnerabilità, crittografia avanzata e sicurezza delle reti;
+  - *DORA (Regolamento UE 2022/2554):* Gestione del rischio ICT per entità finanziarie, monitoraggio continuativo e test di resilienza;
+  - *ISO/IEC 27001:2022 (Controlli A.8.8 Gestione vulnerabilità tecniche, A.8.20 Sicurezza di rete, A.8.24 Uso della crittografia).*
+- **FR-20.2 (Compliance Scorecard & Department Gap Analysis):** Cruscotto dedicato `/compliance` integrato con il selettore aziendale globale:
+  - Calcolo del *Compliance Score* globale e per singolo framework (0-100%);
+  - Gap Analysis con matrice dei controlli soddisfatti, parzialmente conformi o non conformi;
+  - Tracciamento SLA di remediation (MTTR - Mean Time to Remediate) delle non-conformità con alert per violazioni dei termini prescritti dalla norma.
+- **FR-20.3 (Audit-Ready Dossier PDF):** Generazione ed esportazione di un dossier formale A4 per revisori ed organi di controllo contenente:
+  - Copertina formale con dati legali dell'azienda, data di audit e firmatario;
+  - Checklist di conformità articolo per articolo con evidenze tecniche collegate;
+  - Registro storico delle contromisure applicate e piano di adeguamento residuo.
+
+### FR-21: AI Remediation Copilot & Conversational Security Assistant (Milestone 5)
+- **FR-21.1 (AI Remediation Playbooks):** Generazione dinamica di guide di mitigazione prescrittive per ogni CVE e Attack Path:
+  - Riconoscimento del sistema operativo target (Debian, Ubuntu, RHEL, Alpine, Windows Server) e del server software (`nginx`, `apache2`, `openssh`, `postgresql`);
+  - Generazione di comandi Bash esatti, script Ansible di aggiornamento o direttive di configurazione hardened pronte per il deploy.
+  - Supporto per backend LLM flessibile: modelli locali via Ollama (offline-ready, zero data leakage) o API esterne con mascheramento preventivo degli IP privati.
+- **FR-21.2 (AI Executive Summaries nei Report):** Sintesi narrativa intelligente generata dall'AI per l'Executive Report PDF: traduce l'impatto tecnico di CVE e porte aperte in scenari di rischio di business comprensibili a board direzionali e figure non tecniche.
+- **FR-21.3 (Conversational Assistant "Ask Infrastructure"):** Barra di ricerca e assistente conversazionale contestuale: l'analista può porre domande in linguaggio naturale (es. *"Quali host del reparto Vendite hanno versioni vulnerabili di Apache?"*, *"Come si propaga l'attaccante dal web server al database?"*) ricevendo risposte puntuali derivate dallo stato reale dell'inventario su PostgreSQL.
+
+### UC-18: Neutralizzazione Attiva di un Chokepoint dall'Attack Path
+- **Attore:** SecOps Engineer.
+- **Flusso:** L'operatore visualizza il grafo di attacco su `/attack-path`. Nota che l'host intermedio espone una porta SSH o un servizio pivot che permette all'attaccante di accedere al DB. Clicca su "Neutralizza Chokepoint": la piattaforma propone una regola `iptables -I INPUT -p tcp --dport <port> -s <untrusted> -j DROP`, si connette in SSH al server e applica la regola con timer di rollback a 60s. L'operatore convalida la connettività e conferma la regola; il grafo si ricalcola istantaneamente mostrando l'interruzione della catena.
+
+### UC-19: Audit di Conformità NIS2 per Cliente Aziendale
+- **Attore:** CISO / IT Compliance Manager.
+- **Flusso:** L'operatore seleziona l'azienda cliente nel selettore globale e accede alla sezione `/compliance`. Visualizza lo stato di conformità alla NIS2 (es. 82%). Individua un gap critico sull'Art. 21 dovuto a protocolli non cifrati (Telnet/HTTP) nel Reparto Produzione. Con un click genera l'Audit-Ready PDF Dossier che documenta la gap analysis e le azioni correttive pianificate per la presentazione al comitato di audit.
+
+### UC-20: Generazione Playbook di Remediation Assistito da AI
+- **Attore:** Sysadmin / Security Analyst.
+- **Flusso:** Nella schermata Vulnerabilità o Dettaglio Scansione, l'utente seleziona una CVE critica (es. RCE su OpenSSH). Clicca su "Genera Playbook AI": il copilot analizza la versione esatta del sistema operativo e fornisce la procedura di fix step-by-step con comando di patching, configurazione `sshd_config` raccomandata e test di verifica del servizio post-aggiornamento.
+
 ---
 
 ## 5. Requisiti Non Funzionali (NFR) Aggiuntivi
@@ -290,10 +348,14 @@ Piattaforma di CyberSecurity moderna e modulare concepita per trasformare il vul
 - **NFR-PERF-05 (Real-Time SSE Event Latency):** Latenza di notifica push SSE inferiore a 200ms dal momento dell'elaborazione nel worker del backend alla ricezione nel client React.
 - **NFR-REL-05 (Stream Resilience & Reconnection):** Meccanismo di auto-reconnect nativo del protocollo SSE in caso di temporanea instabilità di rete con gestione idempotente degli eventi già ricevuti.
 - **NFR-DEV-01 (Zero-Overhead Debugging & Privacy):** Il logger client-side deve conservare al massimo gli ultimi 500 eventi in memoria circolare senza causare degrado di prestazioni o memory leak. Le password e le chiavi segrete inviate nei payload devono essere automaticamente oscurate (`[REDACTED]`) prima di essere visualizzate o copiate.
+- **NFR-SEC-08 (Zero Data Leakage su Assistente AI):** L'invio di prompt a provider LLM esterni deve garantire l'offuscamento preventivo di indirizzi IP privati, credenziali, nomi utente e token di sessione. Qualora sia configurato un motore locale (es. Ollama), l'elaborazione deve avvenire interamente on-premise senza alcuna connessione verso l'esterno.
 
 ---
 
 ## 6. Decisioni Consolidate
-- **Approvazione:** Requisiti e casi d'uso aggiornati e approvati in data 2026-10-09 (Feature 6: Real-Time Live Streaming via SSE, Feature 7: Debug & Testing Live Console Drawer, Feature 8: Workstation Multi-Company Workflow, Feature 9: Specialized Scan Profiles & Professional Customization).
-- **Prossima Fase:** Fase 2 (System Design & Architecture Update) su `1_PROJECT_CONTEXT.md`, `2_ARCHITECTURE.md` e `3_TASK_LIST.md` tramite comando `/architect`.
+- **Approvazione:** Requisiti e casi d'uso aggiornati e approvati dal Product Owner in data 2026-10-11:
+  - Approvata **Milestone 3** (Active Defense & SOAR Light: Chokepoint Remediation, Virtual Patching, Alerting Hub);
+  - Approvata **Milestone 4** (Continuous Compliance: NIS2, DORA, ISO 27001, Scorecard, Dossier PDF);
+  - Approvata **Milestone 5** (AI Remediation Copilot: Playbooks, AI Executive Summaries, Conversational Assistant).
+- **Prossima Fase:** Formalizzazione in `1_PROJECT_CONTEXT.md`, `2_ARCHITECTURE.md` e pianificazione epiche in `3_TASK_LIST.md`.
 

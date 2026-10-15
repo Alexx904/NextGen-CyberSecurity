@@ -16,15 +16,15 @@ import {
   Trash2,
   Compass,
   HelpCircle,
-  Info,
   ChevronDown,
   ChevronUp,
-  Layers,
-  Server,
-  Cpu,
   Folder,
   Bug,
   AlertTriangle,
+  Server,
+  Cpu,
+  Layers,
+  ArrowRight,
 } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { ApiResponse } from '../types/auth';
@@ -48,6 +48,143 @@ const CRON_PRESETS = [
   { label: 'Ogni Lunedì alle 03:00', value: '0 3 * * 1', desc: 'Scansione settimanale di audit' },
   { label: 'Primo giorno del mese (04:00)', value: '0 4 1 * *', desc: 'Verifica mensile di conformità' },
   { label: 'Personalizzato...', value: 'CUSTOM', desc: 'Definisci una stringa cron a 5 campi' },
+];
+
+export interface MasterPreset {
+  id: string;
+  name: string;
+  badge: string;
+  duration: string;
+  invasiveness: 'SAFE' | 'INTRUSIVE';
+  icon: React.ComponentType<{ className?: string }>;
+  description: string;
+  targetFocus: string;
+  nmapArgs: string;
+  recommended?: boolean;
+  matchingNames: string[];
+  associatedCategory: ScanProfileCategory;
+  fineTuning: {
+    portPreset: string;
+    customPorts?: string;
+    timing: string;
+    synStealth: boolean;
+    ackProbe: boolean;
+    serviceVersion: boolean;
+    deepVersion: boolean;
+    osDetection: boolean;
+    vulnScripts: boolean;
+    udpScan?: boolean;
+    noPing: boolean;
+    onlyOpen: boolean;
+  };
+}
+
+export const MASTER_PRESETS: MasterPreset[] = [
+  {
+    id: 'PRESET_360',
+    name: 'Audit 360° Sicurezza Generale',
+    badge: 'Consigliato · Bilanciato',
+    duration: '15 - 30 min',
+    invasiveness: 'SAFE',
+    icon: Compass,
+    recommended: true,
+    targetFocus: 'Host vivi, top 1000 porte, rilevamento OS e versioni demoni',
+    description: 'Scansione generalista a 360°: identifica tutti i servizi attivi, il sistema operativo e verifica lo stato delle porte standard senza sovraccaricare la rete.',
+    nmapArgs: '-sS -sV -O -T4 --open',
+    matchingNames: ['All-in-One 360° Comprehensive Audit', 'Standard Service Scan'],
+    associatedCategory: 'ALL_IN_ONE',
+    fineTuning: {
+      portPreset: 'STANDARD',
+      timing: '-T4',
+      synStealth: true,
+      ackProbe: false,
+      serviceVersion: true,
+      deepVersion: false,
+      osDetection: true,
+      vulnScripts: false,
+      udpScan: false,
+      noPing: false,
+      onlyOpen: true,
+    },
+  },
+  {
+    id: 'PRESET_QUICK',
+    name: 'Ricognizione Rapida (Fast Sweep)',
+    badge: 'Mappatura LAN · Lampo',
+    duration: '1 - 3 min',
+    invasiveness: 'SAFE',
+    icon: Sparkles,
+    targetFocus: 'Mappatura host accesi e top 100 porte TCP essenziali',
+    description: 'Verifica rapida per inventariare gli host vivi e individuare immediatamente le porte essenziali senza ritardi né stress per la rete.',
+    nmapArgs: '-F -sS -T4 --open',
+    matchingNames: ['Fast Discovery', 'Fast Ping & Host Sweep (LAN)', 'LAN Discovery'],
+    associatedCategory: 'DISCOVERY',
+    fineTuning: {
+      portPreset: 'FAST',
+      timing: '-T4',
+      synStealth: true,
+      ackProbe: false,
+      serviceVersion: false,
+      deepVersion: false,
+      osDetection: false,
+      vulnScripts: false,
+      udpScan: false,
+      noPing: false,
+      onlyOpen: true,
+    },
+  },
+  {
+    id: 'PRESET_CVE',
+    name: 'Audit Vulnerabilità & CVE Exploit',
+    badge: 'Offensive · Script Vuln CVE',
+    duration: '30 - 60 min',
+    invasiveness: 'INTRUSIVE',
+    icon: ShieldAlert,
+    targetFocus: 'Script NSE attivi (--script=vuln) e probing intensivo CVE',
+    description: 'Audit profondo di penetrazione con esecuzione di script attivi Nmap (--script=vuln) per scovare exploit noti, falle RCE e configurazioni deboli.',
+    nmapArgs: '-sV -O --version-intensity 7 --script=vuln -T4 --open',
+    matchingNames: ['OS & System Daemon Flaws Audit', 'Full Deep Scan', 'Critical Services & RCE Surface'],
+    associatedCategory: 'SYSTEM_FLAWS',
+    fineTuning: {
+      portPreset: 'STANDARD',
+      timing: '-T4',
+      synStealth: true,
+      ackProbe: false,
+      serviceVersion: true,
+      deepVersion: true,
+      osDetection: true,
+      vulnScripts: true,
+      udpScan: false,
+      noPing: false,
+      onlyOpen: true,
+    },
+  },
+  {
+    id: 'PRESET_WEB',
+    name: 'Perimetro Web App & API Surface',
+    badge: 'Superfici Web & API',
+    duration: '5 - 15 min',
+    invasiveness: 'SAFE',
+    icon: Globe,
+    targetFocus: 'Porte HTTP/HTTPS/API e fingerprinting stack applicativi',
+    description: 'Ispezione mirata dei server web, portali aziendali, API REST e reverse proxy (porte 80, 443, 8000, 8080, 8443, 9000).',
+    nmapArgs: '-sV -p 80,443,8000,8080,8443,8888,3000,5000,9000 -T4 --open',
+    matchingNames: ['Web & API Surface Audit', 'Full Web Stack Deep Versioning'],
+    associatedCategory: 'WEB_APP',
+    fineTuning: {
+      portPreset: 'WEB',
+      timing: '-T4',
+      synStealth: true,
+      ackProbe: false,
+      serviceVersion: true,
+      deepVersion: false,
+      osDetection: false,
+      vulnScripts: false,
+      udpScan: false,
+      noPing: false,
+      onlyOpen: true,
+    },
+  },
 ];
 
 const CATEGORIES: {
@@ -245,7 +382,7 @@ const OBJECTIVE_OPTIONS: ObjectiveOption[] = [
   {
     id: 'OBJ_VULN_SCRIPTS',
     label: 'Script Vulnerabilità Nmap (--script=vuln)',
-    simpleDesc: 'Esegue script attivi Nmap per scovare CVE note (EternalBlue, SSL, RCE, default credentials)',
+    simpleDesc: 'Esegue script attivi Nmap (--script=vuln) per scovare CVE note (EternalBlue, SSL, RCE, default credentials)',
     flags: ['--script=vuln'],
     icon: Bug,
   },
@@ -290,17 +427,17 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
   const [selectedGroupId, setSelectedGroupId] = useState<string>(effectiveInitialGroupId);
   const [selectedProfileId, setSelectedProfileId] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<ScanProfileCategory>('ALL_IN_ONE');
+  const [selectedPresetId, setSelectedPresetId] = useState<string>('PRESET_360');
 
-  // Campi Modalità Multi-Obiettivo
+  // Campi Modalità Multi-Obiettivo (default bilanciato standard)
   const [selectedObjectiveIds, setSelectedObjectiveIds] = useState<string[]>([
     'OBJ_WEB',
     'OBJ_SERVICES',
     'OBJ_VERSIONS',
     'OBJ_OS',
-    'OBJ_VULN_SCRIPTS',
   ]);
 
-  // Campi Configuratore Professionale (Avanzato)
+  // Campi Scanning Studio 360° (Fine-Tuning Professionale)
   const [selectedPortPreset, setSelectedPortPreset] = useState<string>('FAST');
   const [customPortInput, setCustomPortInput] = useState<string>('80,443,8080-8090');
   const [timingTemplate, setTimingTemplate] = useState<string>('-T4');
@@ -309,7 +446,8 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
   const [flagServiceVersion, setFlagServiceVersion] = useState<boolean>(true);
   const [flagDeepVersion, setFlagDeepVersion] = useState<boolean>(false);
   const [flagOsDetection, setFlagOsDetection] = useState<boolean>(false);
-  const [flagVulnScripts, setFlagVulnScripts] = useState<boolean>(true);
+  const [flagVulnScripts, setFlagVulnScripts] = useState<boolean>(false);
+  const [flagUdpScan, setFlagUdpScan] = useState<boolean>(false);
   const [flagOnlyOpen, setFlagOnlyOpen] = useState<boolean>(true);
   const [flagNoPing, setFlagNoPing] = useState<boolean>(false);
 
@@ -371,10 +509,14 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
             const profileList = profilesRes.data.data.items;
             setProfiles(profileList);
 
-            // Seleziona un profilo iniziale della categoria di default PEN_TEST se presente
+            // Default: All-in-One 360 se presente, altrimenti primo disponibile
             const defaultProf =
-              profileList.find((p) => p.category === 'PEN_TEST') || profileList[0];
-            if (defaultProf) setSelectedProfileId(defaultProf.id);
+              profileList.find((p) => p.name === 'All-in-One 360° Comprehensive Audit') ||
+              profileList.find((p) => p.category === 'ALL_IN_ONE') ||
+              profileList[0];
+            if (defaultProf) {
+              setSelectedProfileId(defaultProf.id);
+            }
           }
         })
         .catch((err) => {
@@ -386,7 +528,7 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
     }
   }, [isOpen, defaultGroupId]);
 
-  // Filtra profili per categoria nella modalità guidata
+  // Filtra profili per categoria nella vista catalogo
   const filteredProfiles = useMemo(() => {
     return profiles.filter((p) => {
       if (selectedCategory === 'CUSTOM') {
@@ -437,7 +579,7 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
     return flattenedGroups.find((g) => g.id === selectedGroupId) || null;
   }, [flattenedGroups, selectedGroupId]);
 
-  // Seleziona il primo profilo disponibile quando cambia la categoria
+  // Aggiorna profilo selezionato quando cambia categoria nella vista avanzata
   useEffect(() => {
     if (configMode === 'GUIDED' && filteredProfiles.length > 0) {
       const alreadyIncluded = filteredProfiles.some((p) => p.id === selectedProfileId);
@@ -447,7 +589,7 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
     }
   }, [selectedCategory, filteredProfiles, configMode, selectedProfileId]);
 
-  // Costruzione dinamica del comando Nmap per la modalità Professionale
+  // Costruzione dinamica del comando Nmap per lo Scanning Studio 360° (Professionale)
   const generatedNmapArgs = useMemo(() => {
     const parts: string[] = [];
 
@@ -491,6 +633,7 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
 
     // Flags opzionali
     if (flagVulnScripts) parts.push('--script=vuln');
+    if (flagUdpScan) parts.push('-sU -p U:53,69,123,161,514,623,5353');
     if (flagNoPing) parts.push('-Pn');
     if (flagOnlyOpen) parts.push('--open');
 
@@ -502,6 +645,7 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
     flagDeepVersion,
     flagOsDetection,
     flagVulnScripts,
+    flagUdpScan,
     timingTemplate,
     selectedPortPreset,
     customPortInput,
@@ -564,6 +708,43 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
     return parts.join(' ');
   }, [selectedObjectiveIds]);
 
+  // Calcolo dinamico in tempo reale dell'invasività del profilo
+  const calculatedInvasiveness: 'SAFE' | 'INTRUSIVE' = useMemo(() => {
+    if (configMode === 'GUIDED') {
+      const selectedProf = profiles.find((p) => p.id === selectedProfileId);
+      if (selectedProf && (selectedProf.invasiveness === 'INTRUSIVE' || selectedProf.invasiveness === 'DANGEROUS')) {
+        return 'INTRUSIVE';
+      }
+      const currentPreset = MASTER_PRESETS.find((p) => p.id === selectedPresetId);
+      if (currentPreset?.invasiveness === 'INTRUSIVE') {
+        return 'INTRUSIVE';
+      }
+      return 'SAFE';
+    }
+
+    if (configMode === 'MULTI_OBJECTIVE') {
+      if (selectedObjectiveIds.includes('OBJ_VULN_SCRIPTS')) return 'INTRUSIVE';
+      return 'SAFE';
+    }
+
+    if (configMode === 'PROFESSIONAL') {
+      if (flagVulnScripts) return 'INTRUSIVE';
+      if (flagDeepVersion && selectedPortPreset === 'ALL') return 'INTRUSIVE';
+      return 'SAFE';
+    }
+
+    return 'SAFE';
+  }, [
+    configMode,
+    selectedProfileId,
+    selectedPresetId,
+    profiles,
+    selectedObjectiveIds,
+    flagVulnScripts,
+    flagDeepVersion,
+    selectedPortPreset,
+  ]);
+
   const targetIpPreview = useMemo(() => {
     if (selectedGroupInfo) {
       if (selectedGroupInfo.targets.length > 0) {
@@ -575,7 +756,52 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
     return '<CARTELLA_AZIENDA>';
   }, [selectedGroupInfo]);
 
+  // Argomenti Nmap mostrati nel Live Preview
+  const currentLiveNmapArgs = useMemo(() => {
+    if (configMode === 'GUIDED') {
+      const prof = profiles.find((p) => p.id === selectedProfileId);
+      if (prof) return prof.nmap_args;
+      const preset = MASTER_PRESETS.find((p) => p.id === selectedPresetId);
+      return preset?.nmapArgs || '-sS -sV -O -T4 --open';
+    }
+    if (configMode === 'MULTI_OBJECTIVE') {
+      return generatedMultiObjectiveArgs;
+    }
+    return generatedNmapArgs;
+  }, [configMode, selectedProfileId, selectedPresetId, profiles, generatedMultiObjectiveArgs, generatedNmapArgs]);
+
   if (!isOpen) return null;
+
+  // Selezione di un Master Preset e sincronizzazione
+  const handleSelectMasterPreset = (preset: MasterPreset) => {
+    setSelectedPresetId(preset.id);
+    setSelectedCategory(preset.associatedCategory);
+
+    // Cerca un profilo di sistema corrispondente nel DB
+    const matching = profiles.find((p) =>
+      preset.matchingNames.some((m) => p.name.toLowerCase().includes(m.toLowerCase()))
+    );
+
+    if (matching) {
+      setSelectedProfileId(matching.id);
+    }
+  };
+
+  // Switch a Scanning Studio con precaricamento parametri dal preset
+  const handleOpenInFineTuningStudio = (preset: MasterPreset) => {
+    setSelectedPortPreset(preset.fineTuning.portPreset);
+    setTimingTemplate(preset.fineTuning.timing);
+    setFlagSynStealth(preset.fineTuning.synStealth);
+    setFlagAckProbe(preset.fineTuning.ackProbe);
+    setFlagServiceVersion(preset.fineTuning.serviceVersion);
+    setFlagDeepVersion(preset.fineTuning.deepVersion);
+    setFlagOsDetection(preset.fineTuning.osDetection);
+    setFlagVulnScripts(preset.fineTuning.vulnScripts);
+    setFlagUdpScan(Boolean(preset.fineTuning.udpScan));
+    setFlagNoPing(preset.fineTuning.noPing);
+    setFlagOnlyOpen(preset.fineTuning.onlyOpen);
+    setConfigMode('PROFESSIONAL');
+  };
 
   // Cancellazione profilo custom
   const handleDeleteCustomProfile = async (profileId: string, e: React.MouseEvent) => {
@@ -608,8 +834,32 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
     try {
       let finalProfileId = selectedProfileId;
 
-      // In modalità Multi-Obiettivo: creiamo automaticamente un profilo con la combinazione selezionata
-      if (configMode === 'MULTI_OBJECTIVE') {
+      if (configMode === 'GUIDED') {
+        // Se non c'è un profilo già assegnato direttamente, cerca la corrispondenza col preset
+        if (!finalProfileId) {
+          const currentPreset = MASTER_PRESETS.find((p) => p.id === selectedPresetId);
+          if (currentPreset) {
+            const matched = profiles.find((p) =>
+              currentPreset.matchingNames.some((m) => p.name.toLowerCase().includes(m.toLowerCase()))
+            );
+            if (matched) {
+              finalProfileId = matched.id;
+            } else {
+              // Crea il profilo di preset al volo
+              const createRes = await apiClient.post<ApiResponse<ScanProfileItem>>('/scan-profiles', {
+                name: currentPreset.name,
+                nmap_args: currentPreset.nmapArgs,
+                description: currentPreset.description,
+                timeout_seconds: 3600,
+                category: currentPreset.associatedCategory,
+              });
+              if (createRes.data?.data) {
+                finalProfileId = createRes.data.data.id;
+              }
+            }
+          }
+        }
+      } else if (configMode === 'MULTI_OBJECTIVE') {
         if (selectedObjectiveIds.length === 0) {
           setError('Seleziona almeno un obiettivo di scansione per continuare');
           setSubmitting(false);
@@ -640,7 +890,7 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
           ? customProfileName.trim()
           : `Custom PenTest ${new Date().toISOString().slice(11, 19)}`;
 
-        const profileDesc = customProfileDesc.trim() || 'Configurazione specialistica avanzata Nmap';
+        const profileDesc = customProfileDesc.trim() || 'Configurazione specialistica avanzata Nmap (Studio 360°)';
         const timeoutSeconds = Math.max(60, customTimeoutMinutes * 60);
 
         const createRes = await apiClient.post<ApiResponse<ScanProfileItem>>('/scan-profiles', {
@@ -656,12 +906,11 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
         }
 
         finalProfileId = createRes.data.data.id;
-        // Ricarica la lista dei profili per future selezioni
         fetchProfiles();
       }
 
       if (!finalProfileId) {
-        setError('Nessun profilo di scansione selezionato o creato');
+        setError('Nessun profilo di scansione valido selezionato o creato');
         setSubmitting(false);
         return;
       }
@@ -720,6 +969,13 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
     }
   };
 
+  const isIntrusive = calculatedInvasiveness === 'INTRUSIVE';
+  const isSubmitDisabled = Boolean(
+    submitting ||
+    !selectedGroupId ||
+    (selectedGroupInfo && selectedGroupInfo.targets.length === 0) ||
+    (isIntrusive && !intrusiveConfirmed)
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
@@ -734,11 +990,11 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
               <div className="flex items-center space-x-2">
                 <h3 className="text-base font-bold text-white">Nuova Scansione di Vulnerabilità</h3>
                 <span className="text-[10px] uppercase font-mono tracking-wider px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
-                  v2.0 Pro
+                  Studio 360°
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Lancio on-demand e pianificazione con profili specialistici o configurazione avanzata
+                Master Presets intelligenti a 1-clic o configurazione granulare ad alta precisione
               </p>
             </div>
           </div>
@@ -750,7 +1006,7 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
           </button>
         </div>
 
-        {/* Tab Selector: On-Demand vs Scheduled & Modalità Semplice vs Professionale */}
+        {/* Tab Selector: On-Demand vs Scheduled & Modalità di Configurazione */}
         <div className="flex flex-wrap items-center justify-between border-b border-cyber-border bg-slate-900/70 px-4 sm:px-6 pt-2 shrink-0 gap-2">
           {/* On-Demand / Scheduled */}
           <div className="flex space-x-1 sm:space-x-2">
@@ -781,7 +1037,7 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
             </button>
           </div>
 
-          {/* Mode Selector: Guidata vs Multi-Obiettivo vs Professionale & Guida Semplice */}
+          {/* Mode Selector: Guidata (1-Click) vs Multi-Obiettivo vs Scanning Studio (Pro) */}
           <div className="pb-2 flex flex-wrap items-center gap-1.5">
             <div className="flex items-center space-x-1 bg-slate-950/60 p-1 rounded-lg border border-cyber-border">
               <button
@@ -825,12 +1081,7 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
             <button
               type="button"
               onClick={() => setShowHelpGuide(!showHelpGuide)}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center space-x-1.5 transition-all ${
-                showHelpGuide
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
-                  : 'bg-slate-950/60 text-slate-400 hover:text-amber-300 border border-cyber-border hover:border-amber-500/30'
-              }`}
-              title="Mostra spiegazione semplice su ogni categoria e obiettivo"
+              className="px-2.5 py-1 rounded-lg text-xs font-medium text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 border border-amber-500/30 flex items-center space-x-1 transition-colors"
             >
               <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
               <span className="hidden sm:inline">Guida Semplice</span>
@@ -962,166 +1213,223 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
                 )}
               </div>
 
-              {/* SEZIONE 1: MODALITÀ GUIDATA (PER CATEGORIE) */}
+              {/* SEZIONE 1: MODALITÀ GUIDATA (MASTER PRESETS + CATALOGO DETTAGLIATO) */}
               {configMode === 'GUIDED' && (
                 <div className="space-y-4">
-                  {/* Selettore Categorie (Pills con icone) */}
+                  {/* MASTER PRESETS GRID */}
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-2">
-                      1. Seleziona Obiettivo & Categoria di Scansione
-                    </label>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                      {CATEGORIES.map((cat) => {
-                        const Icon = cat.icon;
-                        const isSelected = selectedCategory === cat.id;
-                        const count = profiles.filter((p) =>
-                          cat.id === 'CUSTOM' ? p.is_custom : p.category === cat.id
-                        ).length;
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs font-semibold text-white flex items-center space-x-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>Master Presets Intelligenti (1-Click Launch)</span>
+                      </label>
+                      <span className="text-[11px] text-slate-400">
+                        Consigliati per il 90% delle operazioni quotidiane
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {MASTER_PRESETS.map((preset) => {
+                        const Icon = preset.icon;
+                        const isSelected = selectedPresetId === preset.id;
 
                         return (
                           <div
-                            key={cat.id}
-                            onClick={() => setSelectedCategory(cat.id)}
-                            className={`p-2.5 rounded-xl border cursor-pointer transition-all ${
+                            key={preset.id}
+                            onClick={() => handleSelectMasterPreset(preset)}
+                            className={`p-3.5 rounded-xl border cursor-pointer transition-all relative flex flex-col justify-between ${
                               isSelected
-                                ? `bg-gradient-to-br ${cat.color} shadow-[0_0_15px_rgba(6,182,212,0.15)] ring-1 ring-cyan-500/60`
-                                : 'border-cyber-border bg-slate-900/60 hover:border-slate-700 text-slate-400'
+                                ? 'border-cyan-500 bg-gradient-to-br from-cyan-950/40 via-slate-900 to-indigo-950/30 shadow-[0_0_15px_rgba(6,182,212,0.2)] ring-1 ring-cyan-500/50'
+                                : 'border-cyber-border bg-slate-900/60 hover:border-slate-700 text-slate-300'
                             }`}
                           >
-                            <div className="flex items-center justify-between mb-1">
-                              <Icon
-                                className={`w-4 h-4 ${
-                                  isSelected ? 'text-cyan-400' : 'text-slate-400'
-                                }`}
-                              />
-                              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-800 text-slate-300 font-mono">
-                                {count}
-                              </span>
+                            <div>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <div className="flex items-center space-x-2">
+                                  <div className={`p-1.5 rounded-lg border ${
+                                    isSelected
+                                      ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-300'
+                                      : 'bg-slate-800/80 border-slate-700 text-slate-400'
+                                  }`}>
+                                    <Icon className="w-4 h-4" />
+                                  </div>
+                                  <span className="font-bold text-xs text-white leading-tight">
+                                    {preset.name}
+                                  </span>
+                                </div>
+                                <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-bold border ${
+                                  preset.invasiveness === 'SAFE'
+                                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                                    : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                                }`}>
+                                  {preset.invasiveness === 'SAFE' ? 'SAFE' : 'Intrusivo'}
+                                </span>
+                              </div>
+
+                              <p className="text-[11px] text-slate-400 leading-snug line-clamp-2 mt-1">
+                                {preset.description}
+                              </p>
+
+                              <div className="mt-2 text-[10px] text-slate-500 flex items-center space-x-2">
+                                <span className="font-mono text-cyan-400">{preset.duration}</span>
+                                <span>•</span>
+                                <span className="truncate">{preset.targetFocus}</span>
+                              </div>
                             </div>
-                            <div className="font-semibold text-xs text-white leading-tight">
-                              {cat.name}
-                            </div>
-                            <div className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">
-                              {cat.badge}
-                            </div>
+
+                            {/* Shortcut per fine-tuning se selezionato */}
+                            {isSelected && (
+                              <div className="mt-3 pt-2.5 border-t border-cyan-500/20 flex items-center justify-between text-[11px]">
+                                <span className="text-cyan-300 font-medium flex items-center space-x-1">
+                                  <Check className="w-3.5 h-3.5 text-cyan-400" />
+                                  <span>Selezionato</span>
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenInFineTuningStudio(preset);
+                                  }}
+                                  className="text-cyan-400 hover:text-cyan-200 flex items-center space-x-1 font-semibold group"
+                                  title="Apri i parametri di questo preset nello Studio 360° per personalizzarli"
+                                >
+                                  <span>Personalizza parametri</span>
+                                  <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                                </button>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
                     </div>
                   </div>
 
-                  {/* Spiegazione semplice per la Categoria Selezionata */}
-                  {CATEGORY_HELP_GUIDE[selectedCategory] && (
-                    <div className="p-3 rounded-xl border border-cyan-500/20 bg-slate-900/60 text-xs space-y-1.5 animate-in fade-in">
-                      <div className="flex items-center justify-between text-slate-300">
-                        <span className="flex items-center space-x-1.5 text-cyan-400 font-semibold">
-                          <Info className="w-3.5 h-3.5" />
-                          <span>Obiettivo Categoria: {CATEGORIES.find((c) => c.id === selectedCategory)?.name}</span>
-                        </span>
-                        <span className="text-[10px] font-mono text-cyan-300 bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-800/40">
-                          {CATEGORY_HELP_GUIDE[selectedCategory].estimatedDuration}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-300 leading-relaxed">
-                        {CATEGORY_HELP_GUIDE[selectedCategory].simpleExplanation}
-                      </p>
-                      <div className="text-[10px] text-slate-400 pt-1 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-1">
-                        <span><strong className="text-amber-400">Consigliato quando:</strong> {CATEGORY_HELP_GUIDE[selectedCategory].whenToUse}</span>
-                        <span className="text-slate-500 font-mono hidden sm:inline">{CATEGORY_HELP_GUIDE[selectedCategory].networkImpact}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Lista Profili per la Categoria Selezionata */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="text-xs font-medium text-slate-300">
-                        2. Scegli il Profilo Specialistico ({filteredProfiles.length} disponibili)
+                  {/* SEZIONE CATALOGO COMPLETO PROFILI & CATEGORIE */}
+                  <div className="pt-2 border-t border-cyber-border/60 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-white flex items-center space-x-1.5">
+                        <Sliders className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>Catalogo Profili Specialistici & Categorie ({profiles.length} disponibili)</span>
                       </label>
+                      <span className="text-[10px] text-slate-400">
+                        Seleziona per categoria per audit specifici
+                      </span>
                     </div>
 
-                    {filteredProfiles.length === 0 ? (
-                      <div className="p-4 rounded-xl border border-cyber-border bg-slate-900/40 text-center text-xs text-slate-400">
-                        Nessun profilo trovato per questa categoria. Passa alla Modalità Professionale per creare un profilo custom.
-                      </div>
-                    ) : (
-                      <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                        {filteredProfiles.map((p) => {
-                          const isSelected = selectedProfileId === p.id;
-                          return (
-                            <div
-                              key={p.id}
-                              onClick={() => setSelectedProfileId(p.id)}
-                              className={`p-3 rounded-xl border cursor-pointer transition-all ${
-                                isSelected
-                                  ? 'border-cyan-500 bg-cyan-500/10 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
-                                  : 'border-cyber-border bg-slate-900/60 hover:border-slate-700'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between text-xs mb-1">
-                                <div className="flex items-center space-x-2">
-                                  <span
-                                    className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
-                                      isSelected
-                                        ? 'border-cyan-400 bg-cyan-400'
-                                        : 'border-slate-600'
+                    <div className="space-y-3">
+                      {/* Selettore Categorie (Pills con icone) */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          {CATEGORIES.map((cat) => {
+                            const Icon = cat.icon;
+                            const isSelected = selectedCategory === cat.id;
+                            const count = profiles.filter((p) =>
+                              cat.id === 'CUSTOM' ? p.is_custom : p.category === cat.id
+                            ).length;
+
+                            return (
+                              <div
+                                key={cat.id}
+                                onClick={() => setSelectedCategory(cat.id)}
+                                className={`p-2 rounded-xl border cursor-pointer transition-all ${
+                                  isSelected
+                                    ? `bg-gradient-to-br ${cat.color} shadow-[0_0_15px_rgba(6,182,212,0.15)] ring-1 ring-cyan-500/60`
+                                    : 'border-cyber-border bg-slate-900/60 hover:border-slate-700 text-slate-400'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between mb-1">
+                                  <Icon
+                                    className={`w-3.5 h-3.5 ${
+                                      isSelected ? 'text-cyan-400' : 'text-slate-400'
                                     }`}
-                                  >
-                                    {isSelected && (
-                                      <Check className="w-2.5 h-2.5 text-slate-950" />
-                                    )}
+                                  />
+                                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-800 text-slate-300 font-mono">
+                                    {count}
                                   </span>
-                                  <span className="font-semibold text-white">{p.name}</span>
-                                  {p.is_custom && (
-                                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/40 font-mono">
-                                      CUSTOM
-                                    </span>
-                                  )}
-                                  {p.invasiveness && (
+                                </div>
+                                <div className="font-semibold text-xs text-white leading-tight">
+                                  {cat.name}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Lista Profili per la Categoria Selezionata */}
+                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                          {filteredProfiles.map((p) => {
+                            const isSelected = selectedProfileId === p.id;
+                            return (
+                              <div
+                                key={p.id}
+                                onClick={() => setSelectedProfileId(p.id)}
+                                className={`p-2.5 rounded-xl border cursor-pointer transition-all ${
+                                  isSelected
+                                    ? 'border-cyan-500 bg-cyan-500/10 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
+                                    : 'border-cyber-border bg-slate-900/60 hover:border-slate-700'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between text-xs mb-1">
+                                  <div className="flex items-center space-x-2">
                                     <span
-                                      className={`text-[9px] px-1.5 py-0.2 rounded border font-mono font-bold ${
-                                        p.invasiveness === 'SAFE'
-                                          ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
-                                          : p.invasiveness === 'INTRUSIVE'
-                                          ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-                                          : 'bg-rose-500/10 text-rose-300 border-rose-500/30'
+                                      className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                                        isSelected
+                                          ? 'border-cyan-400 bg-cyan-400'
+                                          : 'border-slate-600'
                                       }`}
                                     >
-                                      {p.invasiveness}
+                                      {isSelected && (
+                                        <Check className="w-2.5 h-2.5 text-slate-950" />
+                                      )}
                                     </span>
-                                  )}
+                                    <span className="font-semibold text-white">{p.name}</span>
+                                    {p.is_custom && (
+                                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/40 font-mono">
+                                        CUSTOM
+                                      </span>
+                                    )}
+                                    {p.invasiveness && (
+                                      <span
+                                        className={`text-[9px] px-1.5 py-0.2 rounded border font-mono font-bold ${
+                                          p.invasiveness === 'SAFE'
+                                            ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                                            : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                                        }`}
+                                      >
+                                        {p.invasiveness}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center space-x-2">
+                                    <span className="text-[10px] text-slate-400 font-mono">
+                                      {Math.round(p.timeout_seconds / 60)}m
+                                    </span>
+                                    {p.is_custom && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => handleDeleteCustomProfile(p.id, e)}
+                                        className="p-1 text-slate-500 hover:text-rose-400 hover:bg-slate-800 rounded transition-colors"
+                                        title="Elimina profilo custom"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
-                                <div className="flex items-center space-x-2">
-                                  <span className="text-[10px] text-slate-400 font-mono">
-                                    timeout: {Math.round(p.timeout_seconds / 60)}m
-                                  </span>
-                                  {p.is_custom && (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => handleDeleteCustomProfile(p.id, e)}
-                                      className="p-1 text-slate-500 hover:text-rose-400 hover:bg-slate-800 rounded transition-colors"
-                                      title="Elimina profilo custom"
-                                    >
-                                      <Trash2 className="w-3 h-3" />
-                                    </button>
-                                  )}
+                                <p className="text-[11px] text-slate-400 pl-5.5 leading-relaxed">
+                                  {p.description}
+                                </p>
+                                <div className="mt-1.5 pl-5.5 flex items-center space-x-2">
+                                  <code className="text-[10px] font-mono bg-slate-950/80 px-2 py-0.5 rounded text-cyan-300 border border-cyan-900/40">
+                                    {p.nmap_args}
+                                  </code>
                                 </div>
                               </div>
-                              <p className="text-[11px] text-slate-400 pl-5.5 leading-relaxed">
-                                {p.description}
-                              </p>
-                              <div className="mt-2 pl-5.5 flex items-center space-x-2">
-                                <code className="text-[10px] font-mono bg-slate-950/80 px-2 py-0.5 rounded text-cyan-300 border border-cyan-900/40">
-                                  {p.nmap_args}
-                                </code>
-                              </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
                       </div>
-                    )}
+                    </div>
                   </div>
-                </div>
               )}
 
               {/* SEZIONE 2: MODALITÀ MULTI-OBIETTIVO (COMPOSIZIONE LIBERA) */}
@@ -1230,7 +1538,7 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
                 </div>
               )}
 
-              {/* SEZIONE 3: MODALITÀ PROFESSIONALE (CONFIGURATORE AVANZATO) */}
+              {/* SEZIONE 3: SCANNING STUDIO 360° (PROFESSIONALE / FINE-TUNING) */}
               {configMode === 'PROFESSIONAL' && (
                 <div className="space-y-4">
                   {/* Selettore Scope Porte */}
@@ -1427,6 +1735,20 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
                         </div>
                       </label>
 
+                      {/* Sonde UDP Critiche */}
+                      <label className="flex items-center space-x-2 p-2 rounded-lg border border-cyber-border bg-slate-900/50 cursor-pointer hover:border-slate-700 sm:col-span-2">
+                        <input
+                          type="checkbox"
+                          checked={flagUdpScan}
+                          onChange={(e) => setFlagUdpScan(e.target.checked)}
+                          className="rounded border-slate-700 text-cyan-500 focus:ring-0"
+                        />
+                        <div className="flex-1">
+                          <span className="text-white font-medium">Sonde UDP Critiche (-sU)</span>
+                          <p className="text-[10px] text-slate-500">Audit su servizi UDP esposti ad alto rischio (DNS 53, TFTP 69, NTP 123, SNMP 161, IPMI 623)</p>
+                        </div>
+                      </label>
+
                       {/* Only Open */}
                       <label className="flex items-center space-x-2 p-2 rounded-lg border border-cyber-border bg-slate-900/50 cursor-pointer hover:border-slate-700 sm:col-span-2">
                         <input
@@ -1522,26 +1844,31 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
                 </div>
               )}
 
-              {/* LIVE COMMAND PREVIEW */}
-              <div className="p-3 rounded-xl border border-cyan-900/40 bg-slate-950 font-mono text-xs">
-                <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+              {/* LIVE COMMAND PREVIEW CON LIVE INVASIVENESS METER */}
+              <div className="p-3.5 rounded-xl border border-cyan-900/40 bg-slate-950 font-mono text-xs space-y-2">
+                <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-400 gap-1.5">
                   <span className="flex items-center space-x-1.5 text-cyan-400">
                     <Terminal className="w-3.5 h-3.5" />
                     <span className="font-semibold">Live Nmap Command Preview</span>
                   </span>
-                  <span className="text-[10px] text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/40">
-                    Parametri Convalidati & Sicuri
-                  </span>
+                  <div className="flex items-center space-x-2">
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded border font-mono font-bold ${
+                        calculatedInvasiveness === 'SAFE'
+                          ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/40'
+                          : 'bg-amber-950/60 text-amber-400 border-amber-800/40 animate-pulse'
+                      }`}
+                    >
+                      Invasività: {calculatedInvasiveness}
+                    </span>
+                    <span className="text-[10px] text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/40">
+                      Parametri Convalidati & Sicuri
+                    </span>
+                  </div>
                 </div>
-                <div className="text-slate-300 break-all select-all pt-1">
+                <div className="text-slate-300 break-all select-all pt-1 bg-slate-900/70 p-2.5 rounded-lg border border-slate-800">
                   <span className="text-cyan-400 font-bold">$ nmap </span>
-                  <span className="text-amber-300">
-                    {configMode === 'GUIDED'
-                      ? profiles.find((p) => p.id === selectedProfileId)?.nmap_args || '-sS -sV -O -T4 --open'
-                      : configMode === 'MULTI_OBJECTIVE'
-                      ? generatedMultiObjectiveArgs
-                      : generatedNmapArgs}
-                  </span>{' '}
+                  <span className="text-amber-300">{currentLiveNmapArgs}</span>{' '}
                   <span className="text-emerald-300 font-semibold">{targetIpPreview}</span>
                 </div>
               </div>
@@ -1594,38 +1921,28 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
           )}
 
           {/* Gate di sicurezza e autorizzazione per profili intrusivi (SEC-P1-03 & FR-01.3) */}
-          {(() => {
-            const currentSelectedProfile = profiles.find((p) => p.id === selectedProfileId);
-            const isIntrusive = Boolean(
-              currentSelectedProfile &&
-              (currentSelectedProfile.invasiveness === 'INTRUSIVE' || currentSelectedProfile.invasiveness === 'DANGEROUS')
-            );
-
-            if (!isIntrusive) return null;
-
-            return (
-              <div className="p-3 rounded-xl border border-amber-500/40 bg-amber-500/10 space-y-2 text-xs animate-in fade-in">
-                <div className="flex items-center space-x-2 text-amber-300 font-semibold">
-                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
-                  <span>Profilo Invasivo / Offensive (SEC-P1-03 & FR-01.3)</span>
-                </div>
-                <p className="text-[11px] text-slate-300 leading-relaxed">
-                  Questo profilo esegue rilevamenti intensivi, fingerprinting o script attivi Nmap di vulnerabilità (--script=vuln).
-                </p>
-                <label className="flex items-center space-x-2 cursor-pointer text-white pt-1">
-                  <input
-                    type="checkbox"
-                    checked={intrusiveConfirmed}
-                    onChange={(e) => setIntrusiveConfirmed(e.target.checked)}
-                    className="rounded border-slate-700 text-amber-500 focus:ring-0"
-                  />
-                  <span className="font-medium text-[11px]">
-                    Confermo di possedere esplicita autorizzazione scritta del proprietario ad eseguire scansioni intrusive su questo target.
-                  </span>
-                </label>
+          {isIntrusive && (
+            <div className="p-3.5 rounded-xl border border-amber-500/40 bg-amber-500/10 space-y-2 text-xs animate-in fade-in">
+              <div className="flex items-center space-x-2 text-amber-300 font-semibold">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
+                <span>Profilo Invasivo / Offensive (SEC-P1-03 & FR-01.3)</span>
               </div>
-            );
-          })()}
+              <p className="text-[11px] text-slate-300 leading-relaxed">
+                Questo profilo esegue rilevamenti intensivi, fingerprinting o script attivi Nmap di vulnerabilità (--script=vuln).
+              </p>
+              <label className="flex items-center space-x-2 cursor-pointer text-white pt-1">
+                <input
+                  type="checkbox"
+                  checked={intrusiveConfirmed}
+                  onChange={(e) => setIntrusiveConfirmed(e.target.checked)}
+                  className="rounded border-slate-700 text-amber-500 focus:ring-0"
+                />
+                <span className="font-medium text-[11px]">
+                  Confermo di possedere esplicita autorizzazione scritta del proprietario ad eseguire scansioni intrusive su questo target.
+                </span>
+              </label>
+            </div>
+          )}
 
           {/* Footer Actions */}
           <div className="pt-3 flex items-center justify-end space-x-3 border-t border-cyber-border/60 shrink-0">
@@ -1637,40 +1954,23 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({
             >
               Annulla
             </button>
-            {(() => {
-              const currentSelectedProfile = profiles.find((p) => p.id === selectedProfileId);
-              const isIntrusive = Boolean(
-                currentSelectedProfile &&
-                (currentSelectedProfile.invasiveness === 'INTRUSIVE' || currentSelectedProfile.invasiveness === 'DANGEROUS')
-              );
-
-              const isDisabled = Boolean(
-                submitting ||
-                !selectedGroupId ||
-                (selectedGroupInfo && selectedGroupInfo.targets.length === 0) ||
-                (isIntrusive && !intrusiveConfirmed)
-              );
-
-              return (
-                <button
-                  type="submit"
-                  disabled={isDisabled}
-                  className="px-5 py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-semibold transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1.5"
-                >
-                  {activeTab === 'ON_DEMAND' ? (
-                    <>
-                      <Play className="w-3.5 h-3.5" />
-                      <span>{submitting ? 'Avvio in corso...' : 'Avvia Scansione Ora'}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Calendar className="w-3.5 h-3.5" />
-                      <span>{submitting ? 'Salvataggio...' : 'Crea Pianificazione'}</span>
-                    </>
-                  )}
-                </button>
-              );
-            })()}
+            <button
+              type="submit"
+              disabled={isSubmitDisabled}
+              className="px-5 py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-semibold transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1.5"
+            >
+              {activeTab === 'ON_DEMAND' ? (
+                <>
+                  <Play className="w-3.5 h-3.5" />
+                  <span>{submitting ? 'Avvio in corso...' : 'Avvia Scansione Ora'}</span>
+                </>
+              ) : (
+                <>
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>{submitting ? 'Salvataggio...' : 'Crea Pianificazione'}</span>
+                </>
+              )}
+            </button>
           </div>
         </form>
       </div>

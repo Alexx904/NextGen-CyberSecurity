@@ -36,9 +36,28 @@ Il sistema supporta 14 profili di scansione preconfigurati raggruppati in 6 macr
 6. **COMPLIANCE (Compliance & Hardening Check):**
    - **Legacy & Insecure Protocol Check (`-sV -p 21,23,79,110,143,512,513,514 -T3`):** Rilevamento servizi TCP in chiaro e protocolli legacy (porta 69 UDP rimossa per evitare timeout su socket TCP, SEC-P1-02) (`SAFE`).
 
-### 1.3 Modalità di Composizione e Tassonomia di Invasività (`NewScanModal.tsx`, `SEC-P1-03`)
-- Classificazione visiva con badge di invasività (`SAFE` in smeraldo, `INTRUSIVE` in ambra, `DANGEROUS` in rosso).
-- Gate di sicurezza: per lanciare profili `INTRUSIVE` o `DANGEROUS` l'utente deve selezionare esplicitamente un checkbox di autorizzazione ad alto impatto di rete prima che il pulsante di avvio si abiliti.
+### 1.3 Architettura UX Unificata a 2 Livelli: Master Presets & Scanning Studio 360° (`NewScanModal.tsx`, `Epic 27.1`)
+Per superare il sovraccarico cognitivo dei 14 profili dispersi in sotto-menu, la modale di avvio scansione è riorganizzata su due livelli gerarchici chiari ed interoperabili:
+
+1. **Livello 1: Master Presets Intelligenti (1-Click Launch)**:
+   4 macro-card ottimizzate per il 90% dei casi d'uso operativi aziendali:
+   - **Audit 360° Sicurezza Generale (`-sS -sV -O -T4 --open`):** Scansione bilanciata su top 1000 porte, banner versioning e OS fingerprinting (`SAFE`, durata 15-30 min).
+   - **Ricognizione Rapida (Fast Sweep) (`-F -sS -T4 --open`):** Sweep lampo per censire gli apparati accesi e verificare le top 100 porte TCP essenziali (`SAFE`, durata 1-3 min).
+   - **Audit Vulnerabilità & CVE Exploit (`-sV -O --version-intensity 7 --script=vuln -T4 --open`):** Audit profondo con script attivi NSE di vulnerabilità e rilevamento exploit RCE noti (`INTRUSIVE`, durata 30-60 min).
+   - **Perimetro Web App & API Surface (`-sV -p 80,443,8000,8080,8443,8888,3000,5000,9000 -T4 --open`):** Ispezione dedicata delle superfici HTTP/HTTPS, API REST, reverse proxy e certificati (`SAFE`, durata 5-15 min).
+   *Feature interoperabile:* ogni Master Preset include il pulsante diretto **"Personalizza parametri ⚙️"**, che apre istantaneamente lo Scanning Studio 360° con i flag del preset precaricati e modificabili.
+
+2. **Livello 2: Scanning Studio 360° (Fine-Tuning Granulare)**:
+   Accessibile tramite toggle o personalizzazione, fornisce libertà assoluta di configurazione:
+   - **Scope Porte:** Top 100 (-F), Top 1000 Standard, Servizi Critici & RCE, Web & API, Tutte le 65535 porte (-p-) o range arbitrari personalizzati con validazione reattiva.
+   - **Sonde & Tecniche di Scansione:** SYN Stealth (-sS), ACK Probe (-sA), Service Versioning (-sV), Deep Intensity 7 (--version-intensity 7), OS Detection (-O), Script Vulnerabilità (--script=vuln), Sonde UDP Critiche (-sU), Bypass Ping (-Pn), Solo porte aperte (--open).
+   - **Timing & Aggressiveness Template:** Slider interattivo T1 (Sneaky) .. T5 (Insane).
+   - **Salvataggio Tenant:** Possibilità di memorizzare la configurazione come nuovo Profilo Custom con nome, timeout e categoria.
+   - **Live Nmap Command Preview:** Terminale integrato che riflette i parametri in tempo reale con badge di sicurezza.
+
+### 1.4 Calcolo Dinamico dell'Invasività & Gate di Consenso Obbligatorio (`SEC-P1-03`, `FR-01.3`)
+- Il sistema ricalcola in tempo reale il livello di invasività: se sono attivati script attivi `--script=vuln` o intensità di exploit penetrativi, il badge passa istantaneamente da `SAFE` ad `INTRUSIVE`.
+- **Gate di Sicurezza:** Quando l'invasività è `INTRUSIVE`, il pulsante di avvio viene rigorosamente disabilitato finché l'operatore non spunta esplicitamente la conferma: *"Confermo di possedere esplicita autorizzazione scritta del proprietario ad eseguire scansioni intrusive su questo target"*.
 
 ### 1.7 Analisi Differenziale Scansioni (Scan Diff, `SEC-P2-03`)
 - Endpoint `GET /api/v1/scans/{id}/diff`: confronta i finding della scansione specificata con la scansione completata più recente sullo stesso target.
@@ -85,6 +104,6 @@ Il sistema supporta 14 profili di scansione preconfigurati raggruppati in 6 macr
 - Frontend test: `frontend/src/components/NewScanModal.test.tsx`, `frontend/src/pages/ScanDetail.test.tsx`, `frontend/src/hooks/useSSE.test.ts`
 
 ## 9. Ultimo allineamento
-- 2026-10-10 (Epic 25 SEC-P1 Overhaul Scanner & Epic 26 SEC-P2 Attack Path & Diff implementati e verificati al 100%)
+- 2026-10-15 (Epic 27.1: Scanning Studio 360° e Master Presets intelligenti a 2 livelli con calcolo dinamico invasività implementati e convalidati con 14 test Vitest 100% verdi)
 
 

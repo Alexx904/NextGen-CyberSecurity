@@ -556,4 +556,85 @@ describe('NewScanModal Component - Guided & Professional Scan Customization', ()
     // Ora il pulsante deve essere abilitato
     expect((submitBtn as HTMLButtonElement).disabled).toBe(false);
   });
+
+  it('renders 4 master presets and switches to fine-tuning studio with preloaded flags (Epic 27.1)', async () => {
+    render(
+      <NewScanModal
+        isOpen={true}
+        onClose={vi.fn()}
+        onScanLaunched={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Master Presets Intelligenti (1-Click Launch)')).toBeTruthy();
+    });
+
+    // Verifica presenza di tutti e 4 i Master Presets
+    expect(screen.getByText('Audit 360° Sicurezza Generale')).toBeTruthy();
+    expect(screen.getByText('Ricognizione Rapida (Fast Sweep)')).toBeTruthy();
+    expect(screen.getByText('Audit Vulnerabilità & CVE Exploit')).toBeTruthy();
+    expect(screen.getByText('Perimetro Web App & API Surface')).toBeTruthy();
+
+    // Seleziona Ricognizione Rapida (Fast Sweep)
+    fireEvent.click(screen.getByText('Ricognizione Rapida (Fast Sweep)'));
+
+    // Verifica presenza pulsante per passaggio allo Studio con parametri precaricati
+    const customizeBtn = screen.getByText('Personalizza parametri');
+    expect(customizeBtn).toBeTruthy();
+
+    // Clicca per aprire nello studio di fine-tuning
+    fireEvent.click(customizeBtn);
+
+    // Verifica switch automatico a modalità Professionale / Studio
+    expect(screen.getByText('Scope Porte Bersaglio')).toBeTruthy();
+    expect(screen.getByText('Timing & Aggressiveness Template')).toBeTruthy();
+    // Scope porte impostato su FAST
+    expect(screen.getByText('Top 100 Porte (-F)')).toBeTruthy();
+  });
+
+  it('dynamically calculates invasiveness and triggers gate when activating vuln scripts in fine-tuning studio (Epic 27.1)', async () => {
+    render(
+      <NewScanModal
+        isOpen={true}
+        onClose={vi.fn()}
+        onScanLaunched={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Professionale (Pro)')).toBeTruthy();
+    });
+
+    // Switch a modalità Studio Professionale
+    fireEvent.click(screen.getByText('Professionale (Pro)'));
+
+    // Inizialmente i flag di default sono SAFE
+    expect(screen.getByText(/Invasività:\s*SAFE/i)).toBeTruthy();
+    expect(screen.queryByText(/Profilo Invasivo \/ Offensive/i)).toBeNull();
+
+    // Attiva lo script di vulnerabilità
+    const vulnCheckbox = screen.getByRole('checkbox', {
+      name: /Script Vulnerabilità Nmap \(--script=vuln\)/i,
+    });
+    fireEvent.click(vulnCheckbox);
+
+    // L'invasività viene ricalcolata dinamicamente su INTRUSIVE
+    await waitFor(() => {
+      expect(screen.getByText(/Invasività:\s*INTRUSIVE/i)).toBeTruthy();
+      expect(screen.getByText(/Profilo Invasivo \/ Offensive/i)).toBeTruthy();
+    });
+
+    // Il pulsante deve essere bloccato finché non viene data conferma
+    const submitBtn = screen.getByRole('button', { name: /Avvia Scansione Ora/i });
+    expect((submitBtn as HTMLButtonElement).disabled).toBe(true);
+
+    // Conferma autorizzazione
+    const confirmCheckbox = screen.getByLabelText(/Confermo di possedere esplicita autorizzazione scritta/i);
+    fireEvent.click(confirmCheckbox);
+
+    // Il pulsante deve ora essere sbloccato
+    expect((submitBtn as HTMLButtonElement).disabled).toBe(false);
+  });
 });
+
