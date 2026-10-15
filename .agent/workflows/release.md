@@ -36,4 +36,3 @@ Segui le regole di `AGENTS.md`. Questo workflow prepara un rilascio formale di M
 6. **Proposta di Tag e Merge al Product Owner:**
    - Prepara il messaggio di commit Conventional Commits: `chore(release): release vX.Y.Z`.
    - Proponi commit e tag. Creazione del tag, merge, push e deploy richiedono ciascuno richiesta esplicita del PO.
-

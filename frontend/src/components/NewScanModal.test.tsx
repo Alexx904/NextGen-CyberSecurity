@@ -637,4 +637,3 @@ describe('NewScanModal Component - Guided & Professional Scan Customization', ()
     expect((submitBtn as HTMLButtonElement).disabled).toBe(false);
   });
 });
-

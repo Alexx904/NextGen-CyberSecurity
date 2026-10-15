@@ -35,4 +35,3 @@ Segui le regole di `AGENTS.md`. Questo workflow esegue un audit avversario e di 
 7. **Esito:**
    - Se emergono problemi: genera un report sintetico con livello di criticità (CRITICO / MEDIO / BASSO), crea i task correttivi o inserisci nel `Tech Debt Backlog` di `docs/04-development/TASK_LIST.md`.
    - Se pulito: conferma che non sono emersi finding nello scope esaminato e riporta le verifiche eseguite; non trasformare l'esito in una garanzia assoluta.
-

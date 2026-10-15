@@ -9,7 +9,7 @@ La piattaforma adotta un'architettura containerizzata multi-servizio Clean Archi
 ```mermaid
 graph TD
     Client["Browser / Utente (SecOps / Admin / Auditor)"]
-    
+
     subgraph Frontend_Layer ["Frontend Container"]
         SPA["React 18 + TypeScript + Vite + Tailwind CSS"]
         UI_Modules["UI Modules:
@@ -28,7 +28,7 @@ graph TD
         AuthMiddleware["Tenant & RBAC JWT Middleware"]
         WSGateway["WebSocket Gateway (gorilla/websocket)"]
         EventHub["Real-Time SSE Event Broadcaster (Pub/Sub Hub)"]
-        
+
         subgraph Core_Services ["Application Services (Clean Architecture)"]
             TargetService["Target & Tree Asset Service"]
             ScanOrchestrator["Scan Orchestrator (Incremental Findings & Alive-Only Filter)"]
@@ -66,27 +66,27 @@ graph TD
     NginxProxy -->|Proxy /api/v1| API
     NginxProxy -->|Live SSE text/event-stream| API
     NginxProxy -->|Upgrade /ws/v1| WSGateway
-    
+
     API --> AuthMiddleware
     AuthMiddleware --> Core_Services
     API --> EventHub
     WSGateway --> SSHManager
-    
+
     ScanOrchestrator -->|Push Live Events| EventHub
     DiscoveryEngine -->|Push Discovered Devices| EventHub
-    
+
     ScanOrchestrator -->|Incremental DB Writes| PostgresDB
     DiscoveryEngine -->|Incremental Device Persistence| PostgresDB
-    
+
     ScanOrchestrator -->|Raw Commands| NmapBinary
     DiscoveryEngine -->|Fast Ping/ARP Sweep| NmapBinary
     NmapBinary -->|Raw XML Stream| XMLParser
     XMLParser -->|Filtered Up Hosts| CVERegistry
-    
+
     SSHManager -->|Encrypted Session| SSHClient
     FirewallService -->|iptables Commands & Safety Rollback| SSHClient
     SSHClient -->|SSH Port 22 / Pseudo-TTY| RemoteServer
-    
+
     Core_Services -->|SQL Queries & Migrations| PostgresDB
     ReportsHubService -->|Query Findings & Tenant Branding| PostgresDB
 ```

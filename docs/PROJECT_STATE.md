@@ -4,7 +4,7 @@
 > Non cancellare sezioni: se vuote, scrivi "nessuno".
 
 **Ultimo aggiornamento:** 2026-10-15
-**Modalità progetto:** esistente (onboarded formalmente sul branch chore/agent-onboarding)  
+**Modalità progetto:** esistente (onboarded formalmente sul branch chore/agent-onboarding)
 **Fase:** Pulizia degli artefatti agentici obsoleti completata e in attesa di accettazione; governance Codex v7.1 approvata.
 
 ## Project Profile
@@ -25,6 +25,9 @@ Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git
 ```
 
 ## Baseline test (prima di ogni intervento)
+
+Verifica pre-push del 2026-10-15: `go test ./...`, `go build ./...`, `go vet ./...` PASS; frontend `npm.cmd test` PASS (18 file, 107 test), `npm.cmd run build` PASS (12,41 s). Verifica documentale PASS (24 documenti, 53 Markdown, 101 link/ancore). Controllo whitespace esteso al diff da `origin/main` PASS dopo normalizzazione. Comandi applicativi eseguiti con permessi estesi dopo blocchi locali della sandbox; nessuna modifica di logica applicativa introdotta nella preparazione.
+
 
 | Data | Comando | Esito | Fallimenti preesistenti noti |
 |---|---|---|---|
@@ -122,9 +125,8 @@ Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git
 
 ## Log sessioni (ultime 5, la più recente in alto)
 
+- 2026-10-15 · Il PO richiede pubblicazione di tutte le modifiche su `main`: verificati branch/remoto e relazione fast-forward, suite applicative e documentali PASS; preparato commit di normalizzazione whitespace prima dell'integrazione e push. Nessun tag o rilascio applicativo richiesto; accettazioni funzionali pendenti mantenute.
 - 2026-10-15 · AGENT-CLEAN-03 esteso su richiesta PO: rimossi anche manuale funzionale e 20 screenshot; `docs/` riservata ai documenti agentici. Aggiornati percorsi delle evidenze temporanee, task, workflow e verifica automatica della struttura. In attesa di accettazione PO.
 - 2026-10-15 · AGENT-SDLC-02 accettato dal PO: task promosso a `[x]`, assunzione sui ruoli confermata, voce spostata dalle attese agli accettati e registrata nel changelog. Nessuna modifica applicativa.
 - 2026-10-15 · Migrazione agentica Antigravity → Codex (AGENT-CODEX-01): riscritto `AGENTS.md` come entry point Codex; introdotto `.agent/README.md`; aggiunti otto playbook mancanti; adattati feature, feedback, onboarding, review, release e migrazioni alle capability e ai permessi reali; formalizzato ADR-11 e completato il Doc Sync della governance. Verifica documentale eseguita senza modificare codice applicativo.
 - 2026-10-15 17:15 · Esecuzione Onboarding Formale (/onboard): creata snapshot sicura pre-onboard e branch `chore/agent-onboarding`; eseguita ricognizione completa inventario repository, mapping contratti API e verifica baseline con zero assunzioni: `go vet` PASS (0 warning), `go test ./...` PASS (14/14 package), `go build ./...` PASS, `vitest run` PASS (18/18 file, 107/107 test), `npm run build` PASS (0 errori, 7.25s); confermato 100% allineamento documentale full-stack e assenza di TODO/FIXME o segreti esposti nel codice
-- 2026-10-15 17:05 · Evoluzione dell'Agente e della Governance di Progetto allo Standard "Software House Enterprise" (v6.2): aggiornato [AGENTS.md](../AGENTS.md) con Context Layering; estesa la Mappa Documenti in [2_ARCHITECTURE.md](03-architecture/HLD.md); formalizzato ADR-10; istituito il Tech Debt Backlog in [3_TASK_LIST.md](04-development/TASK_LIST.md); creati i workflow `review.md`, `db-migrate.md` e `release.md`.
-

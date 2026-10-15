@@ -38,4 +38,3 @@ Segui le regole di `AGENTS.md`. Questo workflow definisce i controlli di integri
    - Aggiorna il diagramma ERD in `docs/03-architecture/LLD/DATABASE_SCHEMA.md`.
    - Aggiorna il file di dominio corrispondente in `docs/domains/`.
    - Registra l'avvenuta migrazione nel log di `docs/PROJECT_STATE.md`.
-

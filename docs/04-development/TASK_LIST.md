@@ -1,6 +1,6 @@
 # 3. Interactive Task List & Implementation Backlog
 
-> **Stato:** ATTIVO (Priorità validate dal Product Owner)  
+> **Stato:** ATTIVO (Priorità validate dal Product Owner)
 > **Ultimo Aggiornamento:** 2026-10-15
 > **Autore / Ruolo:** Codex Tech Lead (System Architect & QA)
 > **Documenti Correlati:** [REQUIREMENTS.md](../01-product/REQUIREMENTS.md) | [PRD.md](../01-product/PRD.md) | [HLD.md](../03-architecture/HLD.md) | [CHANGELOG.md](../../CHANGELOG.md)

@@ -232,4 +232,3 @@ describe('CompanyContext & Helpers', () => {
     expect(result.current.filterTargets(mockTargets)).toHaveLength(3);
   });
 });
-

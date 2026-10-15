@@ -1,6 +1,6 @@
 # Dominio: Asset Tree Management & Centralized Reports Hub
 
-> **Dominio:** Organizzazione Gerarchica Asset, Workstation Multi-Company Workflow e Generazione Report White-Label  
+> **Dominio:** Organizzazione Gerarchica Asset, Workstation Multi-Company Workflow e Generazione Report White-Label
 > **File di Riferimento:** `backend/internal/domain/target.go`, `backend/internal/domain/report.go`, `backend/internal/service/target_group_service.go`, `backend/internal/service/report_service.go`, `backend/pkg/report/pdf_generator.go`, `backend/pkg/report/csv_generator.go`, `frontend/src/components/TreeExplorer.tsx`, `frontend/src/pages/Targets.tsx`, `frontend/src/pages/Reports.tsx`
 
 ---
@@ -102,6 +102,3 @@ $$\text{PostureScore} = \text{clamp}\left(0, \, 100, \, \text{round}(100 - \text
 ## 5. Ultimo Allineamento
 - **Data:** 2026-10-11
 - **Hash commit:** In attesa di accettazione PO (Epic 27 FEAT-COMPANY-SCOPE)
-
-
-
