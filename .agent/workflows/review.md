@@ -5,7 +5,7 @@ description: Hostile Code Review & Security Audit prima del merge o dell'accetta
 Segui le regole di `AGENTS.md`. Questo workflow esegue un audit avversario e di conformità architetturale sui commit o sul diff del branch corrente.
 
 1. **Analisi del Diff.**
-   - Esegui `git diff <branch-principale>...HEAD` e controlla la lista dei file modificati.
+   - Esegui il diff rispetto alla base appropriata e includi modifiche staged/untracked; separa esplicitamente file preesistenti estranei.
    - Verifica che nessun file estraneo o di configurazione sensibile (`.env`, certificati, chiavi private, log) sia stato incluso.
 
 2. **Checklist di Sicurezza Avversaria (Hostile Checklist):**
@@ -29,10 +29,10 @@ Segui le regole di `AGENTS.md`. Questo workflow esegue un audit avversario e di 
    - Ci sono test `skip`, commentati o con tolleranze allargate?
 
 6. **Doc Sync Verification:**
-   - Ogni file nel diff ha una riga corrispondente nella Mappa Documenti Full-Stack di `docs/2_ARCHITECTURE.md`?
+   - Ogni file applicativo nel diff ha una riga corrispondente in `docs/03-architecture/DOMAIN_MAP.md`? Per governance, infrastruttura e documenti verificare indice, ruoli e documentazione di fase pertinente.
    - I documenti di dominio sono stati aggiornati con la data e l'hash recenti?
 
 7. **Esito:**
-   - Se emergono problemi: genera un report sintetico con livello di criticità (CRITICO / MEDIO / BASSO), crea i task correttivi o inserisci nel `Tech Debt Backlog` di `docs/3_TASK_LIST.md`.
-   - Se pulito: conferma al Product Owner che il diff è pronto per il merge o per l'accettazione.
+   - Se emergono problemi: genera un report sintetico con livello di criticità (CRITICO / MEDIO / BASSO), crea i task correttivi o inserisci nel `Tech Debt Backlog` di `docs/04-development/TASK_LIST.md`.
+   - Se pulito: conferma che non sono emersi finding nello scope esaminato e riporta le verifiche eseguite; non trasformare l'esito in una garanzia assoluta.
 

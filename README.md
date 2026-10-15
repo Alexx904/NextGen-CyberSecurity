@@ -1,15 +1,24 @@
 # NextGen-CyberSecurity
 
-NextGen CyberSecurity Platform è una soluzione all-in-one per la gestione del rischio e della vulnerabilità di rete, la ricognizione LAN ad alta velocità e l'amministrazione difensiva remota dei server con isolamento multi-tenant.
+Piattaforma Go/React per ricognizione LAN, scansioni Nmap, analisi vulnerabilità, report e amministrazione difensiva remota multi-tenant. Stato delle funzionalità e roadmap: [PROJECT_STATE](docs/PROJECT_STATE.md).
 
-## 📚 Documentazione
+## Quickstart locale
 
-Tutta la documentazione architetturale, i requisiti, lo stato corrente e la guida per gli agenti sono disponibili nella cartella [`docs/`](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs):
+Con Docker e Docker Compose disponibili, dalla root:
 
-- [PROJECT_STATE.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/PROJECT_STATE.md) — Memoria viva dell'agente, Project Profile e baseline test
-- [0_REQUIREMENTS.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/0_REQUIREMENTS.md) — Requisiti funzionali e use cases del sistema
-- [1_PROJECT_CONTEXT.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/1_PROJECT_CONTEXT.md) — Contesto di progetto e requisiti non funzionali (NFR)
-- [2_ARCHITECTURE.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/2_ARCHITECTURE.md) — Architettura di sistema, stack, ERD e contratti API
-  - [Domini Architetturali](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/domains)
-- [3_TASK_LIST.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/3_TASK_LIST.md) — Backlog operativo e task attivi
-- [4_CHANGELOG.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/4_CHANGELOG.md) — Storico task completati (Milestone 1, 1.1, 1.2)
+```powershell
+docker compose up --build
+```
+
+UI: http://localhost:3000 · API health: http://localhost:8080/api/v1/health. Configurazione, prerequisiti e limiti sono in [DEPLOYMENT](docs/06-devops/DEPLOYMENT.md). Usare un ambiente locale di sviluppo con valori propri; consultare `.env.example` senza condividere credenziali.
+
+Per sviluppo nativo: [backend](docs/04-development/BACKEND_SETUP.md) e [frontend](docs/04-development/FRONTEND_SETUP.md).
+
+## Documentazione e collaborazione
+
+- [Indice documenti](docs/README.md): prodotto, UX, architettura, sviluppo, QA e DevOps.
+- [Task e debito tecnico](docs/04-development/TASK_LIST.md).
+- [Changelog](CHANGELOG.md).
+- [Contratto operativo Codex](AGENTS.md) e [ruoli/playbook](.agent/README.md).
+
+I test e i criteri di verifica sono in [TEST_PLAN](docs/05-qa/TEST_PLAN.md); gli esiti reali sono registrati nello stato del progetto.

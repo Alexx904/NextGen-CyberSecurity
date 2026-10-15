@@ -38,3 +38,6 @@ Thumbs.db
 # Docker
 .docker/
 
+# Temporary agent evidence (screenshots, recordings, logs)
+.agent/artifacts/
+

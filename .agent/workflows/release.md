@@ -5,9 +5,9 @@ description: Preparazione al rilascio di versione, aggiornamento changelog, semv
 Segui le regole di `AGENTS.md`. Questo workflow prepara un rilascio formale di Milestone o Minor version della piattaforma.
 
 1. **Verifica Pre-Rilascio (Pre-flight Checks):**
-   - Verifica che il branch di lavoro sia sincronizzato con `main`.
-   - Verifica che nessun task nella lista attiva di `docs/3_TASK_LIST.md` sia in stato `[!]` (bloccato) o `[~]` (in attesa di accettazione).
-   - Verifica lo stato del debito tecnico in `3_TASK_LIST.md`: nessun debito con priorità "Critica" deve essere aperto.
+   - Verifica branch, working tree e scostamento da `main`; non eseguire fetch/pull o merge impliciti.
+   - Verifica che nessun task nella lista attiva di `docs/04-development/TASK_LIST.md` sia in stato `[!]` (bloccato) o `[~]` (in attesa di accettazione).
+   - Verifica lo stato del debito tecnico in `docs/04-development/TASK_LIST.md`: nessun debito con priorità "Critica" deve essere aperto.
 
 2. **Suite Completa di Baseline (Zero-Assumption):**
    - Esegui i test backend: `go test ./...` (tutti i package devono essere PASS).
@@ -21,10 +21,10 @@ Segui le regole di `AGENTS.md`. Questo workflow prepara un rilascio formale di M
      - `MAJOR` (X): rotture architetturali, cambi radicali di protocollo/DB.
      - `MINOR` (Y): nuova Milestone, nuove feature o domini introdotti.
      - `PATCH` (Z): bugfix, rifiniture, hardening.
-   - Aggiorna il numero di versione nei manifest applicativi (es. `frontend/package.json` o costanti di sistema).
+   - Aggiorna il numero di versione nei manifest applicativi solo dopo conferma della versione da parte del PO.
 
 4. **Archiviazione Changelog & Task:**
-   - Sposta i task accettati `[x]` dallo Sprint attivo in `docs/3_TASK_LIST.md` al file di archivio storico `docs/4_CHANGELOG.md` sotto l'intestazione della nuova versione `## [vX.Y.Z] - YYYY-MM-DD`.
+   - Sposta i task accettati `[x]` dallo Sprint attivo in `docs/04-development/TASK_LIST.md` al file di archivio storico `CHANGELOG.md` sotto l'intestazione della nuova versione `## [vX.Y.Z] - YYYY-MM-DD`.
    - Includi una sintesi discorsiva ad alto livello dei benefici per gli stakeholder e la lista dei contributi principali.
 
 5. **Allineamento Stato di Progetto:**
@@ -35,5 +35,5 @@ Segui le regole di `AGENTS.md`. Questo workflow prepara un rilascio formale di M
 
 6. **Proposta di Tag e Merge al Product Owner:**
    - Prepara il messaggio di commit Conventional Commits: `chore(release): release vX.Y.Z`.
-   - Proponi al Product Owner il comando di tag `git tag -a vX.Y.Z -m "Release vX.Y.Z"` senza eseguire push né merge senza esplicita conferma.
+   - Proponi commit e tag. Creazione del tag, merge, push e deploy richiedono ciascuno richiesta esplicita del PO.
 

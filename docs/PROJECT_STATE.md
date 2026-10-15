@@ -3,9 +3,9 @@
 > Memoria viva dell'agente. Letta a inizio sessione, aggiornata a fine di ogni turno.
 > Non cancellare sezioni: se vuote, scrivi "nessuno".
 
-**Ultimo aggiornamento:** 2026-10-15 17:15  
+**Ultimo aggiornamento:** 2026-10-15
 **Modalità progetto:** esistente (onboarded formalmente sul branch chore/agent-onboarding)  
-**Fase:** Epic 27.1 (Semplificazione Centro Scansioni & Scanning Studio 360°) implementata e verificata al 100%; Pacchetto di Accettazione sottoposto al Product Owner.
+**Fase:** Pulizia degli artefatti agentici obsoleti completata e in attesa di accettazione; governance Codex v7.1 approvata.
 
 ## Project Profile
 
@@ -20,7 +20,7 @@ Comando lint/format:     go vet ./... (backend)
 Percorsi per livello:    unit=backend/pkg, backend/internal/domain, backend/internal/scanner; service=backend/internal/service; integration=backend/internal/delivery, backend/internal/repository/postgres; frontend=frontend/src/tests, frontend/src/**/*.test.tsx
 Prerequisiti ambiente:   Docker & Docker Compose (PostgreSQL 16, Nmap su Linux container)
 Come avviare l'app:      docker compose up --build (oppure 'go run ./cmd/server' + 'cd frontend && npm run dev')
-Branch principale:       main (allineato e sincronizzato)
+Branch principale:       main (allineamento remoto non verificato durante la migrazione documentale)
 Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git push --force, DROP database senza conferma esplicita
 ```
 
@@ -40,6 +40,10 @@ Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git
 
 ## Accettati recentemente dal PO (`[x]`)
 
+- **AGENT-SDLC-02 · Struttura documentale e orchestrazione per feature:**
+  - Validato e accettato dal PO in data 2026-10-15.
+  - Documentazione canonica organizzata in `01-product`–`06-devops`, changelog in root, sette ruoli specializzati e gate proporzionati alla singola feature.
+  - Confermata l'assunzione operativa: ruoli attivati quando pertinenti, validazione tecnica autonoma del Tech Lead e accettazione funzionale riservata al PO.
 - **Epic 27 · Gestione Aziende, Reparti & Filtro Globale (E27-S1-T1 .. E27-S1-T6)**:
   - Validato e accettato dal PO in data 2026-10-11.
   - **CompanyContext & Scope Globale:** Selettore Azienda persistente in sidebar desktop/drawer mobile; calcolo automatico di tutti i reparti e IP appartenenti all'azienda attiva.
@@ -59,6 +63,16 @@ Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git
 
 ## In attesa di accettazione utente
 
+- **AGENT-CLEAN-03 · Pulizia repository:** rimossi cinque stub documentali, lo script screenshot Antigravity, la guida funzionale destinata agli utenti e 20 screenshot (3.250.486 byte). Eliminate le relative directory vuote. In `docs/` restano indice, memoria, requisiti, design, architettura, domini, sviluppo, QA e DevOps necessari agli agenti.
+  - Indicazione PO: `docs/` riservata alla documentazione agentica. Evidenze visuali temporanee in `.agent/artifacts/<task-id>/`, ignorate da Git; workflow e verificatore aggiornati per rispettare il vincolo.
+  - Evidenze: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-agent-docs.ps1` PASS (exit 0: struttura agentica, 24 documenti obbligatori, 53 Markdown, 104 link/ancore, registry e fence); `git diff --check` PASS. Self-review dei riferimenti completata.
+  - Recuperabilità: i 27 file rimossi durante la pulizia sono tracciati da Git e recuperabili dalla cronologia; le directory vuote non contenevano dati.
+
+- **AGENT-CODEX-01 · Migrazione governance Antigravity → Codex:**
+  - `AGENTS.md` riscritto come entry point nativo Codex con bootstrap, gerarchia delle istruzioni, tutela della working tree, permessi, fallback capability-aware e quality gate evidence-first.
+  - Aggiunto `.agent/README.md` come registry; portati i workflow esistenti e creati i playbook mancanti per `init`, `fix`, `refactor`, `verify`, `sync-docs`, `audit`, `status` e `commit`.
+  - Formalizzato ADR-11 e allineati contesto, task list e memoria viva. Nessuna modifica al codice applicativo.
+
 - **Epic 27.1 · Semplificazione Centro Scansioni & Scanning Studio 360° (E27.1-S1-T1 .. E27.1-S1-T3)**:
   - Riorganizzazione unificata di `NewScanModal.tsx` con architettura a 2 livelli:
     1. **Livello 1 (1-Click Launch):** 4 Master Presets intelligenti (Audit 360° Sicurezza Generale, Ricognizione Rapida Fast Sweep, Audit Vulnerabilità & CVE Exploit, Perimetro Web App & API Surface) con indicazione visiva di durata, invasività e target focus, oltre a pulsante rapido per aprire e personalizzare i parametri nello Studio.
@@ -73,14 +87,19 @@ Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git
 
 ## Assunzioni confermate
 
-- Struttura documentale autonoma v6.0 approvata dal Product Owner.
-- Archiviazione storica dei file legacy in `docs/_legacy/` e [4_CHANGELOG.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/4_CHANGELOG.md) confermata.
+- Struttura documentale SDLC v7.1 e orchestrazione per feature approvate dal Product Owner; la precedente migrazione base Codex AGENT-CODEX-01 resta formalmente in attesa.
+- `docs/` contiene solo documentazione necessaria agli agenti; manuali utente, screenshot, allegati binari e archivi sono esclusi, come richiesto dal PO.
+- Storico consolidato nel [CHANGELOG.md](../CHANGELOG.md); stub e cartella legacy rimossi dopo la migrazione alle fonti canoniche.
 - Pipeline CI/CD GitHub Actions e bundle splitting implementati.
 - Milestone 2 completata sia su Backend Go che su Frontend React.
 - Roadmap di hardening sicurezza (Epiche SEC-P0, SEC-P1, SEC-P2) implementata al 100%.
 
 ## Decisioni recenti (ultime 10, dettagli negli ADR)
 
+- **ADR-13 (2026-10-15):** Documentazione `docs/` riservata agli agenti; rimossi manuale e screenshot, evidenze temporanee fuori da `docs/`, controllo strutturale automatizzato.
+- **ADR-12 (2026-10-15):** Documentazione per fasi SDLC, ruoli con input/output e handoff, gate per feature, fonti canoniche distinte e migrazione senza duplicare i documenti storici. Dettagli in `docs/03-architecture/ADR/README.md`.
+
+- **ADR-11 (2026-10-15):** `AGENTS.md` è l'entry point nativo Codex; `.agent/workflows/` è una libreria di playbook indicizzata, non un registro di slash command. Introdotti bootstrap evidence-first, tutela delle modifiche preesistenti, fallback per browser/subagent e permessi espliciti per commit, push, merge, tag e deploy.
 - **ADR-10 (2026-10-15):** Standard Operativo Software House: Context Layering su 4 livelli gerarchici per contenimento token bloat e azzeramento allucinazioni; Mappa Documenti Full-Stack estesa a frontend React (`pages`, `components`, `context`), backend Go e migrazioni SQL; protocollo Contract-First (allineamento preventivo DTO TypeScript e Go struct prima del codice di business); verifica di backward & rollback (`down.sql`) per le migrazioni DB; DoD standard a 4 punti per ogni task; istituzione del Tech Debt & Refactoring Backlog formale in `3_TASK_LIST.md`; nuovi workflow operativi `.agent/workflows/` (`review.md`, `db-migrate.md`, `release.md`).
 - **ADR-09 (2026-10-11):** Roadmap Strategica Milestones 3, 4, 5: Approvazione trittico evolutivo: Milestone 3 (Active Defense & SOAR Light: Chokepoint Auto-Remediation, Virtual Patching, Alerting Hub), Milestone 4 (Continuous Compliance: NIS2, DORA, ISO 27001, Scorecard, Dossier PDF) e Milestone 5 (AI Remediation Copilot & Assistant).
 - **PO-04 (2026-10-11):** Approvazione priorità strategiche e inclusione formale nella roadmap attiva di Opzione 2 (Active Defense), Opzione 3 (Compliance Frameworks) e Opzione 5 (AI Remediation Copilot).
@@ -88,9 +107,12 @@ Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git
 - **ADR-07 (2026-10-10):** Integrazione serializzazione `Invasiveness` in `ProfileResponse` API e seeding profilo `All-in-One 360° Comprehensive Audit`.
 - **ADR-06 (2026-10-10):** Attack Path Probabilistic Risk Formula $1 - \prod(1 - p_i)$, bound 50 cammini, archi inferiti tratteggiati con confidenza, e Scan Diff `GET /api/v1/scans/{id}/diff` con stati NEW/RESOLVED/PERSISTENT.
 - **ADR-05 (2026-10-10):** Profilo specialistico UDP, tassonomia di invasività con gate UI, modello finding arricchito con confidence/detection_method/cpe, hardening container capabilities (solo `CAP_NET_RAW`), migrazione PDF a `go-pdf/fpdf v0.9.0`.
-- **ADR-04 (2026-10-10):** Stream-Ticket monouso memoria thread-safe (TTL 30s) per SSE e WebSocket; delimitatore POSIX `--` in Nmap; deny-list target interni e Docker bridge con anti-rebinding DNS; nohup watchdog remoto firewall rollback.
-- **PO-01 (2026-10-09):** Approvazione implementazione pipeline CI/CD GitHub Actions per backend e frontend.
-- **PO-02 (2026-10-09):** Approvazione ottimizzazione bundle frontend tramite code-splitting e `React.lazy`.
+
+## Contesto operativo della migrazione
+
+- Le baseline applicative sopra sono storiche, non rieseguite per la modifica a documenti e verificatore documentale; nessun codice applicativo è stato modificato.
+- Working tree già modificata dalla migrazione Codex precedente; le eliminazioni legacy preesistenti sono state mantenute e ora risultano coerenti con la pulizia delle vecchie strutture.
+- Documenti canonici e indice: `docs/README.md`; task attivi: `docs/04-development/TASK_LIST.md`. Nessun commit, push o deploy eseguito.
 
 ## Prossimi passi
 
@@ -100,9 +122,9 @@ Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git
 
 ## Log sessioni (ultime 5, la più recente in alto)
 
+- 2026-10-15 · AGENT-CLEAN-03 esteso su richiesta PO: rimossi anche manuale funzionale e 20 screenshot; `docs/` riservata ai documenti agentici. Aggiornati percorsi delle evidenze temporanee, task, workflow e verifica automatica della struttura. In attesa di accettazione PO.
+- 2026-10-15 · AGENT-SDLC-02 accettato dal PO: task promosso a `[x]`, assunzione sui ruoli confermata, voce spostata dalle attese agli accettati e registrata nel changelog. Nessuna modifica applicativa.
+- 2026-10-15 · Migrazione agentica Antigravity → Codex (AGENT-CODEX-01): riscritto `AGENTS.md` come entry point Codex; introdotto `.agent/README.md`; aggiunti otto playbook mancanti; adattati feature, feedback, onboarding, review, release e migrazioni alle capability e ai permessi reali; formalizzato ADR-11 e completato il Doc Sync della governance. Verifica documentale eseguita senza modificare codice applicativo.
 - 2026-10-15 17:15 · Esecuzione Onboarding Formale (/onboard): creata snapshot sicura pre-onboard e branch `chore/agent-onboarding`; eseguita ricognizione completa inventario repository, mapping contratti API e verifica baseline con zero assunzioni: `go vet` PASS (0 warning), `go test ./...` PASS (14/14 package), `go build ./...` PASS, `vitest run` PASS (18/18 file, 107/107 test), `npm run build` PASS (0 errori, 7.25s); confermato 100% allineamento documentale full-stack e assenza di TODO/FIXME o segreti esposti nel codice
-- 2026-10-15 17:05 · Evoluzione dell'Agente e della Governance di Progetto allo Standard "Software House Enterprise" (v6.2): aggiornato [AGENTS.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/AGENTS.md) con Context Layering su 4 livelli gerarchici per abbattere i consumi di token e prevenire degradazioni dell'attenzione; estesa la Mappa Documenti in [2_ARCHITECTURE.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/2_ARCHITECTURE.md) a una copertura Full-Stack bidirezionale (frontend, backend e migrazioni DB); formalizzato ADR-10; istituito il `Tech Debt & Refactoring Backlog` in [3_TASK_LIST.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/3_TASK_LIST.md) con DoD standard a 4 punti; potenziato `feature.md` con Contract-First e hostile review; creati i workflow operativi [.agent/workflows/review.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/.agent/workflows/review.md), [.agent/workflows/db-migrate.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/.agent/workflows/db-migrate.md) e [.agent/workflows/release.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/.agent/workflows/release.md)
-- 2026-10-15 16:47 · Implementazione e verifica zero-assumption completata di Epic 27.1 (Semplificazione Centro Scansioni & Scanning Studio 360°): riprogettata l'interfaccia unificata di `NewScanModal.tsx` introducendo i 4 Master Presets intelligenti a 1-clic (Audit 360° Sicurezza Generale, Ricognizione Rapida Fast Sweep, Audit Vulnerabilità & CVE Exploit, Perimetro Web App & API Surface) e il pulsante per passare con 1 clic allo Scanning Studio 360° con i parametri precaricati; integrato il pannello Fine-Tuning 360° con controlli granulari (scope porte, timing template T1-T5, sonde attive, script vuln NSE, probe UDP critici -sU e salvataggio custom profiles); implementato il calcolo dinamico e real-time dell'invasività con Live Invasiveness Meter e blocco tassativo dell'avvio finché non viene fornita la spunta sul Gate di Consenso Obbligatorio; eseguiti 14/14 test Vitest PASS su NewScanModal, 18/18 file e 107/107 test frontend PASS al 100%, compilazione di produzione TypeScript / Vite `npm run build` PASS (0 errori, 10.64s), backend Go test 14/14 package PASS (0 errori)
-- 2026-10-15 16:25 · Intake & Design per Epic 27.1 (Semplificazione Centro Scansioni & Scanning Studio 360°): chiarito il concetto del Gate di Consenso Obbligatorio; eseguita analisi tecnica di cybersecurity sui 14 profili attuali evidenziando sovraccarico cognitivo e ridondanze; formulata proposta architetturale di unificazione a 2 livelli (3-4 Master Presets + Pannello Fine-Tuning 360°); creati i relativi task E27.1-S1-T1..T3 in [3_TASK_LIST.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/3_TASK_LIST.md)
-- 2026-10-13 19:47 · Integrazione e approfondimento esaustivo di Feature 6 (Centro Scansioni di Sicurezza) in [GUIDA_FUNZIONALE_PIATTAFORMA.md](file:///c:/Users/aless/Desktop/Sviluppo/GitHub/NextGen-CyberSecurity/docs/GUIDA_FUNZIONALE_PIATTAFORMA.md): aggiunta spiegazione dettagliata dell'architettura di esecuzione Nmap (assenza shell, delimitatore POSIX `--`, zero scritture su disco `-oX -`, deny-list e anti-rebinding, isolamento container solo `CAP_NET_RAW`), ciclo di vita dell'Orchestratore (worker pool a 2 Goroutine, 5 fasi SSE in tempo reale, filtro Alive-Only, annullamento graceful con SIGTERM/SIGKILL), vocabolario di tutti i flag Nmap ed enciclopedia completa di tutti i 14 profili operativi implementati
+- 2026-10-15 17:05 · Evoluzione dell'Agente e della Governance di Progetto allo Standard "Software House Enterprise" (v6.2): aggiornato [AGENTS.md](../AGENTS.md) con Context Layering; estesa la Mappa Documenti in [2_ARCHITECTURE.md](03-architecture/HLD.md); formalizzato ADR-10; istituito il Tech Debt Backlog in [3_TASK_LIST.md](04-development/TASK_LIST.md); creati i workflow `review.md`, `db-migrate.md` e `release.md`.
 
