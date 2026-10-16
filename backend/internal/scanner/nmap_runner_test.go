@@ -23,6 +23,12 @@ func TestHelperProcess(t *testing.T) {
 
 	mode := os.Getenv("HELPER_MODE")
 	switch mode {
+	case "progress":
+		if !strings.Contains(strings.Join(os.Args, " "), "--stats-every 5s -- 192.168.1.10") {
+			os.Exit(2)
+		}
+		fmt.Print(`<nmaprun><taskprogress task="SYN Stealth Scan" percent="25" remaining="90"/></nmaprun>`)
+		os.Exit(0)
 	case "success":
 		fmt.Print(`<?xml version="1.0" encoding="UTF-8"?><nmaprun scanner="nmap" args="nmap -oX - 192.168.1.1"></nmaprun>`)
 		os.Exit(0)
@@ -96,52 +102,52 @@ func TestGetDefaultProfiles(t *testing.T) {
 
 func TestBuildSafeArguments_Success(t *testing.T) {
 	tests := []struct {
-		name         string
-		profileArgs  []string
-		target       string
-		expectedLast string
+		name          string
+		profileArgs   []string
+		target        string
+		expectedLast  string
 		shouldContain []string
 	}{
 		{
-			name:         "Fast Discovery con IP",
-			profileArgs:  []string{"-T4", "-F"},
-			target:       "192.168.1.10",
-			expectedLast: "192.168.1.10",
+			name:          "Fast Discovery con IP",
+			profileArgs:   []string{"-T4", "-F"},
+			target:        "192.168.1.10",
+			expectedLast:  "192.168.1.10",
 			shouldContain: []string{"-oX", "-", "-T4", "-F"},
 		},
 		{
-			name:         "LAN Discovery con ARP ping e CIDR",
-			profileArgs:  []string{"-sn", "-PR", "-T4"},
-			target:       "192.168.1.0/24",
-			expectedLast: "192.168.1.0/24",
+			name:          "LAN Discovery con ARP ping e CIDR",
+			profileArgs:   []string{"-sn", "-PR", "-T4"},
+			target:        "192.168.1.0/24",
+			expectedLast:  "192.168.1.0/24",
 			shouldContain: []string{"-oX", "-", "-sn", "-PR", "-T4"},
 		},
 		{
-			name:         "Standard Service Scan con CIDR",
-			profileArgs:  []string{"-sV", "-T4"},
-			target:       "10.0.0.0/24",
-			expectedLast: "10.0.0.0/24",
+			name:          "Standard Service Scan con CIDR",
+			profileArgs:   []string{"-sV", "-T4"},
+			target:        "10.0.0.0/24",
+			expectedLast:  "10.0.0.0/24",
 			shouldContain: []string{"-oX", "-", "-sV", "-T4"},
 		},
 		{
-			name:         "Full Deep Scan con FQDN",
-			profileArgs:  []string{"-p-", "-sV", "-O", "-T4"},
-			target:       "scanme.nmap.org",
-			expectedLast: "scanme.nmap.org",
+			name:          "Full Deep Scan con FQDN",
+			profileArgs:   []string{"-p-", "-sV", "-O", "-T4"},
+			target:        "scanme.nmap.org",
+			expectedLast:  "scanme.nmap.org",
 			shouldContain: []string{"-oX", "-", "-p-", "-sV", "-O", "-T4"},
 		},
 		{
-			name:         "Porte specifiche composte",
-			profileArgs:  []string{"-p", "80,443", "-sV"},
-			target:       "172.16.0.5",
-			expectedLast: "172.16.0.5",
+			name:          "Porte specifiche composte",
+			profileArgs:   []string{"-p", "80,443", "-sV"},
+			target:        "172.16.0.5",
+			expectedLast:  "172.16.0.5",
 			shouldContain: []string{"-p80,443", "-sV"},
 		},
 		{
-			name:         "IPv6 auto-flag -6 injection",
-			profileArgs:  []string{"-T4", "-F"},
-			target:       "2001:db8::1",
-			expectedLast: "2001:db8::1",
+			name:          "IPv6 auto-flag -6 injection",
+			profileArgs:   []string{"-T4", "-F"},
+			target:        "2001:db8::1",
+			expectedLast:  "2001:db8::1",
 			shouldContain: []string{"-6", "-T4", "-F"},
 		},
 	}
@@ -513,4 +519,3 @@ func TestNmapRunner_LargeStderrBuffer_NoDeadlock(t *testing.T) {
 		t.Fatal("timeout: deadlock rilevato nella lettura del buffer stderr di Nmap")
 	}
 }
-

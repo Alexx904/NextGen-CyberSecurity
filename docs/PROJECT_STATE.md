@@ -3,9 +3,9 @@
 > Memoria viva dell'agente. Letta a inizio sessione, aggiornata a fine di ogni turno.
 > Non cancellare sezioni: se vuote, scrivi "nessuno".
 
-**Ultimo aggiornamento:** 2026-10-15
+**Ultimo aggiornamento:** 2026-10-16
 **Modalità progetto:** esistente (onboarded formalmente sul branch chore/agent-onboarding)
-**Fase:** Pulizia degli artefatti agentici obsoleti completata e in attesa di accettazione; governance Codex v7.1 approvata.
+**Fase:** SCAN-UX-01, SCAN-TIME-01 e SCAN-COPY-01 accettati dal PO dopo test delle scansioni. Consegna autorizzata sul branch feat/nmap-scan-workflow-review; nessun merge/deploy incluso.
 
 ## Project Profile
 
@@ -26,6 +26,10 @@ Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git
 
 ## Baseline test (prima di ogni intervento)
 
+Verifica pre-push 2026-10-16: `npm.cmd test` PASS (21 file, 145 test), `npm.cmd run build` PASS (12,65 s); `go test ./...`, `go build ./...`, `go vet ./...` PASS, tutti exit 0. Prove funzionali delle scansioni eseguite e confermate dal PO. Fetch origin eseguito; branch inizialmente allineato a origin/main (0 commit di divergenza). Messaggio previsto: `feat(scanner): simplify scan workflows and add batch progress estimates`; destinazione origin/feat/nmap-scan-workflow-review.
+
+Ultima ricognizione `/status` (2026-10-16): branch `feat/nmap-scan-workflow-review`, working tree con modifiche scanner/documenti non committate e nuovi file non tracciati. SCAN-COPY-01 accettato; SCAN-UX-01 e SCAN-TIME-01 implementati ma con gate visuale/laboratorio pendente. Ultime verifiche applicative del 2026-10-16: frontend 145 test e build PASS, backend suite/build/vet PASS. Nessuna suite applicativa rieseguita per questa richiesta di stato. La tabella del 2026-10-15 sotto è storica e non rappresenta la baseline più recente.
+
 Verifica pre-push del 2026-10-15: `go test ./...`, `go build ./...`, `go vet ./...` PASS; frontend `npm.cmd test` PASS (18 file, 107 test), `npm.cmd run build` PASS (12,41 s). Verifica documentale PASS (24 documenti, 53 Markdown, 101 link/ancore). Controllo whitespace esteso al diff da `origin/main` PASS dopo normalizzazione. Comandi applicativi eseguiti con permessi estesi dopo blocchi locali della sandbox; nessuna modifica di logica applicativa introdotta nella preparazione.
 
 
@@ -39,9 +43,13 @@ Verifica pre-push del 2026-10-15: `go test ./...`, `go build ./...`, `go vet ./.
 
 ## In corso
 
-- (nessuno)
+- Nessuno sviluppo applicativo in corso. Commit/push della consegna scanner esplicitamente autorizzati dal PO; esito della pubblicazione verificabile dai riferimenti Git. Nessun merge su main né deploy richiesto.
 
 ## Accettati recentemente dal PO (`[x]`)
+
+- **SCAN-UX-01 / SCAN-TIME-01:** accettati il 2026-10-16. Il PO riferisce di avere testato le scansioni e ne conferma il corretto funzionamento, autorizzando il push di tutte le modifiche. Prova funzionale del PO distinta dai test automatici dell'agente; nessuno screenshot autonomo o benchmark di accuratezza ETA dichiarato. Assunzioni operative confermate dall'accettazione: T3, stime indicative, profili/ID storici preservati e monitor dell'intero gruppo. TECH-DEBT-05 sul consenso API resta aperto.
+
+- **SCAN-COPY-01 · Descrizioni dei profili:** accettato dal PO con OK il 2026-10-16. Otto descrizioni focalizzate su scopo e attività; rimosso suggerimento Discovery sotto il selettore. Nessuna assunzione da confermare. Evidenze precedenti: frontend 145 test, build e controlli documentali PASS, exit 0. Accettazione limitata ai testi; SCAN-UX-01 e SCAN-TIME-01 mantengono i rispettivi stati.
 
 - **AGENT-SDLC-02 · Struttura documentale e orchestrazione per feature:**
   - Validato e accettato dal PO in data 2026-10-15.
@@ -86,7 +94,7 @@ Verifica pre-push del 2026-10-15: `go test ./...`, `go build ./...`, `go vet ./.
 
 ## Bloccati / Domande aperte per l'utente
 
-- (nessuno)
+- Nessun blocco sulla consegna scanner: il PO ha eseguito i test delle scansioni e confermato il corretto funzionamento il 2026-10-16. Verifica browser autonoma e benchmark ETA non effettuati dall'agente; debito TECH-DEBT-05 sul consenso API mantenuto.
 
 ## Assunzioni confermate
 
@@ -98,6 +106,10 @@ Verifica pre-push del 2026-10-15: `go test ./...`, `go build ./...`, `go vet ./.
 - Roadmap di hardening sicurezza (Epiche SEC-P0, SEC-P1, SEC-P2) implementata al 100%.
 
 ## Decisioni recenti (ultime 10, dettagli negli ADR)
+
+- **ADR-15 (2026-10-16):** telemetria XML Nmap, snapshot attivi e lettura batch per monitor lotto; API additive, nessuna migrazione DB, ETA esplicitamente euristica. Durate indicative richieste dal PO dopo la precedente rimozione delle stime promozionali.
+
+- **ADR-14 (2026-10-15):** profili espliciti + editor Nmap entro allowlist, API/DB compatibili, matching argomenti/timeout e classificazione server dei custom. Nessuna promessa di penetration test/conformità; Discovery rispetta l'opzione porte.
 
 - **ADR-13 (2026-10-15):** Documentazione `docs/` riservata agli agenti; rimossi manuale e screenshot, evidenze temporanee fuori da `docs/`, controllo strutturale automatizzato.
 - **ADR-12 (2026-10-15):** Documentazione per fasi SDLC, ruoli con input/output e handoff, gate per feature, fonti canoniche distinte e migrazione senza duplicare i documenti storici. Dettagli in `docs/03-architecture/ADR/README.md`.
@@ -125,8 +137,12 @@ Verifica pre-push del 2026-10-15: `go test ./...`, `go build ./...`, `go vet ./.
 
 ## Log sessioni (ultime 5, la più recente in alto)
 
-- 2026-10-15 · Il PO richiede pubblicazione di tutte le modifiche su `main`: verificati branch/remoto e relazione fast-forward, suite applicative e documentali PASS; preparato commit di normalizzazione whitespace prima dell'integrazione e push. Nessun tag o rilascio applicativo richiesto; accettazioni funzionali pendenti mantenute.
-- 2026-10-15 · AGENT-CLEAN-03 esteso su richiesta PO: rimossi anche manuale funzionale e 20 screenshot; `docs/` riservata ai documenti agentici. Aggiornati percorsi delle evidenze temporanee, task, workflow e verifica automatica della struttura. In attesa di accettazione PO.
-- 2026-10-15 · AGENT-SDLC-02 accettato dal PO: task promosso a `[x]`, assunzione sui ruoli confermata, voce spostata dalle attese agli accettati e registrata nel changelog. Nessuna modifica applicativa.
-- 2026-10-15 · Migrazione agentica Antigravity → Codex (AGENT-CODEX-01): riscritto `AGENTS.md` come entry point Codex; introdotto `.agent/README.md`; aggiunti otto playbook mancanti; adattati feature, feedback, onboarding, review, release e migrazioni alle capability e ai permessi reali; formalizzato ADR-11 e completato il Doc Sync della governance. Verifica documentale eseguita senza modificare codice applicativo.
-- 2026-10-15 17:15 · Esecuzione Onboarding Formale (/onboard): creata snapshot sicura pre-onboard e branch `chore/agent-onboarding`; eseguita ricognizione completa inventario repository, mapping contratti API e verifica baseline con zero assunzioni: `go vet` PASS (0 warning), `go test ./...` PASS (14/14 package), `go build ./...` PASS, `vitest run` PASS (18/18 file, 107/107 test), `npm run build` PASS (0 errori, 7.25s); confermato 100% allineamento documentale full-stack e assenza di TODO/FIXME o segreti esposti nel codice
+- 2026-10-16 · SCAN-UX-01 e SCAN-TIME-01 accettati dopo test dichiarati dal PO, push di tutte le modifiche autorizzato. Rieseguite suite frontend (145 test), backend, build/vet PASS exit 0. Audit circoscritto del diff da 88f0ef2: nessuna nuova dipendenza/migrazione/skip, perimetro tenant, allowlist, lifecycle snapshot e polling verificati; TECH-DEBT-05 resta aperto. Destinazione branch feature, nessun merge/deploy implicito.
+
+- 2026-10-16 · SCAN-COPY-01 accettato dal PO: task promosso a `[x]`, rimosso dalle attese e registrato nel changelog. Applicato feedback.md ramo accettazione, nessuna modifica applicativa né commit/push/deploy; stati degli altri task invariati.
+
+- 2026-10-16 · SCAN-COPY-01: otto descrizioni riscritte sul solo scopo; eliminati confronti, formulazioni negative e suggerimento Discovery sotto i profili. Frontend 145 test e build PASS exit 0, Doc Sync e self-review completati; working tree precedente preservata, nessun commit/push/deploy.
+
+- 2026-10-16 · SCAN-TIME-01: PO richiede stime e conferma scope intero gruppo. Implementati intervalli per otto preset, telemetria XML Nmap, API snapshot tenant/batch e monitor lotto con coda/ETA. Frontend 145 test, backend completo, build/vet PASS exit 0; Doc Sync e self-review. Gate visuale/lab pendente per ambiente; nessun commit/push/deploy, modifiche precedenti preservate.
+
+- 2026-10-15 · SCAN-UX-01: sostituita UX a tre modalità con Profili/Comando Nmap; corrette incoerenze preset e parser e port scan non richiesto in Discovery. Suite frontend 136 test, backend completo, build/vet PASS (exit 0). Self-review eseguita. Gate visuale bloccato dal runtime; rilevato gap di attestazione server consenso (TECH-DEBT-05). Nessun commit/push/deploy.

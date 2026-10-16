@@ -18,6 +18,7 @@ export interface ScanSummaryStats {
 }
 
 export interface ScanItem {
+  progress?: ScanProgressPayload;
   id: string;
   tenant_id: string;
   target_id: string;
@@ -48,6 +49,10 @@ export interface ScanPhasePayload {
 }
 
 export interface ScanProgressPayload {
+  observed_at?: string;
+  phase?: string;
+  phase_percentage?: number;
+  remaining_seconds?: number;
   scan_id: string;
   percentage: number;
   message: string;

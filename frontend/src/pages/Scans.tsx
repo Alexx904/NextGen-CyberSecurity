@@ -32,6 +32,7 @@ import { ScheduleItem, ScheduleListResponseData } from '../types/schedule';
 import { TargetItem, TargetGroupNode, TargetListResponseData } from '../types/target';
 import { ScanProgressBadge } from '../components/ScanProgressBadge';
 import { NewScanModal } from '../components/NewScanModal';
+import { ScanBatchProgress } from '../components/scans/ScanBatchProgress';
 import { downloadReportFile } from '../utils/download';
 import { useCompany } from '../context/CompanyContext';
 
@@ -50,6 +51,7 @@ export const Scans: React.FC = () => {
   const [scans, setScans] = useState<ScanItem[]>([]);
   const [loadingScans, setLoadingScans] = useState<boolean>(true);
   const [scansError, setScansError] = useState<string | null>(null);
+  const [batch, setBatch] = useState<{ ids: string[]; companyId: string | null; initialScans: ScanItem[] } | null>(null);
 
   // Modalità di visualizzazione: Raggruppata per Cartella/Azienda vs Tabella Lineare
   const [viewMode, setViewMode] = useState<'GROUPED' | 'TABLE'>('GROUPED');
@@ -89,7 +91,17 @@ export const Scans: React.FC = () => {
     try {
       const response = await apiClient.get<ApiResponse<ScanListResponseData>>('/scans?limit=50');
       if (response.data?.data) {
-        setScans(response.data.data.items || []);
+        const items = response.data.data.items || [];
+        setScans(items);
+        const tenant = items[0]?.tenant_id;
+        if (tenant) {
+          try {
+            const saved = JSON.parse(sessionStorage.getItem(`nmap-batch:${tenant}`) || 'null');
+            if (saved && Array.isArray(saved.ids) && saved.ids.length > 0 && saved.ids.length <= 1000 && saved.ids.every((id: unknown) => typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id))) {
+              setBatch((current) => current || { ids: [...new Set<string>(saved.ids)], companyId: typeof saved.companyId === 'string' ? saved.companyId : null, initialScans: items.filter((item) => saved.ids.includes(item.id)) });
+            }
+          } catch { /* Storage is optional; monitoring still works for the current page. */ }
+        }
       }
     } catch (err: any) {
       if (!silent) {
@@ -490,6 +502,7 @@ export const Scans: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {batch && (!selectedCompanyId || selectedCompanyId === batch.companyId) && <ScanBatchProgress key={batch.ids.join(',')} ids={batch.ids} initialScans={batch.initialScans} />}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -1338,7 +1351,12 @@ export const Scans: React.FC = () => {
         isOpen={isNewScanModalOpen}
         defaultGroupId={selectedGroupFilter || selectedCompanyId || undefined}
         onClose={() => setIsNewScanModalOpen(false)}
-        onScanLaunched={() => {
+        onScanLaunched={(launched) => {
+          if (launched?.length && launched.every((scan) => !!scan.id)) {
+            const ids = launched.map((scan) => scan.id);
+            setBatch({ ids, companyId: selectedCompanyId, initialScans: launched });
+            try { sessionStorage.setItem(`nmap-batch:${launched[0].tenant_id}`, JSON.stringify({ ids, companyId: selectedCompanyId })); } catch { /* Storage may be disabled. */ }
+          }
           fetchScans();
           setActiveTab('SCANS');
         }}

@@ -357,6 +357,47 @@ func TestScanHandler_List_Success(t *testing.T) {
 	}
 }
 
+func TestScanHandler_ListBatchProgress(t *testing.T) {
+	tenantID, scanID := uuid.New(), uuid.New()
+	for _, tc := range []struct {
+		name, query string
+		denied      bool
+		status      int
+	}{
+		{"snapshot", scanID.String() + "," + scanID.String(), false, 200},
+		{"invalid", "not-a-uuid", false, 400},
+		{"empty", "", false, 400},
+		{"too-many", strings.Repeat(scanID.String()+",", 100) + scanID.String(), false, 400},
+		{"foreign-tenant", scanID.String(), true, 404},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			svc := &mockScanService{getScanFunc: func(ctx context.Context, tenant, id uuid.UUID) (*domain.Scan, error) {
+				calls++
+				if tenant != tenantID || id != scanID {
+					t.Fatal("incorrect tenant or id")
+				}
+				if tc.denied {
+					return nil, domain.ErrNotFound
+				}
+				return &domain.Scan{ID: id, TenantID: tenant, Status: domain.ScanStatusRunning, Progress: &domain.ScanProgressPayload{Percentage: 35}}, nil
+			}}
+			req := withSecOpsContext(httptest.NewRequest(http.MethodGet, "/scans?ids="+tc.query, nil), tenantID)
+			rec := httptest.NewRecorder()
+			setupScanRouter(handler.NewScanHandler(svc, nil)).ServeHTTP(rec, req)
+			if rec.Code != tc.status {
+				t.Fatalf("status=%d, want %d: %s", rec.Code, tc.status, rec.Body.String())
+			}
+			if tc.status == 200 && (calls != 1 || !strings.Contains(rec.Body.String(), `"percentage":35`)) {
+				t.Fatal("missing snapshot or duplicate lookup", rec.Body.String())
+			}
+			if tc.status == 400 && calls != 0 {
+				t.Fatal("looked up invalid ids")
+			}
+		})
+	}
+}
+
 func TestScanHandler_GetFindings_Success(t *testing.T) {
 	tenantID := uuid.New()
 	scanID := uuid.New()
@@ -760,4 +801,3 @@ func TestScanHandler_GetDiff(t *testing.T) {
 		}
 	})
 }
-

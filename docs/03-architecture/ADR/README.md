@@ -4,6 +4,23 @@
 
 ## 7. Architecture Decision Records (ADR)
 
+### ADR-15 · Telemetria Nmap e monitor del lotto (2026-10-16)
+
+- Contesto: il PO richiede durate per preset, progresso totale ed ETA dell'intero gruppo, non del solo target. Le precedenti percentuali di fase erano fisse.
+- Decisione: statistiche XML interne ogni 5s, callback runner opzionale e snapshot volatili nell'orchestratore; GET scans per ID multipli con verifica tenant per ogni membro. Aggregazione client soltanto sugli ID del lancio, polling a blocchi senza sovrapposizione, ripristino lotto per tenant nella sessione. SSE mantenuto per dettaglio singolo.
+- Conseguenze: niente connessioni SSE per ogni job del lotto, nessuna migrazione DB né nuova dipendenza. DTO/SSE estesi con campi opzionali. Percentuali e ETA totali restano euristiche; 100% di job terminati distingue successi/errori. Statistiche assenti/scadute non generano tempi inventati. In deployment multi-processo gli snapshot sono locali al processo: con routing su altri processi la UI può non avere ETA, senza fingere che sia disponibile; il deployment corrente usa singolo backend.
+- Fonte e dettagli: [SCAN_PROGRESS_PLAN](../../04-development/SCAN_PROGRESS_PLAN.md).
+
+<a id="adr-14"></a>
+
+### ADR-14 · Profili espliciti ed editor Nmap (2026-10-15)
+
+- **Contesto:** Tre modalità sovrapposte, nomi che promettono penetration test/compliance e preset selezionati per nomi non equivalenti agli argomenti dichiarati.
+- **Decisione:** Due modalità: Profili con opzioni canoniche ed editor di argomenti entro allowlist. Riutilizzo soltanto per argomenti e timeout equivalenti. Target e XML restano gestiti dal backend; validazione semantica e invasività custom centralizzate sul server. Distinguere discovery di asset e scansioni persistite, con sovrapposizione dichiarata sulle porte frequenti.
+- **Compatibilità:** Nessuna modifica DTO/schema né migrazione dei nomi/ID storici, per non alterare scansioni e scheduler esistenti. I nomi storici non sono più esposti nel catalogo della nuova modale. Nessuna dipendenza aggiunta.
+- **Conseguenze:** Meno controlli duplicati e promesse tecnicamente corrette. Non è una CLI illimitata, un penetration test o una certificazione. Attestazione server di consenso resta un gap preesistente (TECH-DEBT-05); verifica visuale bloccata dal runtime senza browser.
+- **Riferimento:** [Analisi e piano](../../04-development/NMAP_SCAN_REVIEW.md), [dominio scanner](../../domains/scanning_and_discovery.md).
+
 - **ADR-01 (Modularizzazione Documentazione per Domini):** Scomposizione dei dettagli architetturali in `docs/domains/` mantenendo `2_ARCHITECTURE.md` snello per contratti globali ed ERD.
 - **ADR-02 (Preservazione Storica Legacy):** Archiviazione storica dei documenti preesistenti in `docs/_legacy/` con tracciamento mapping.
 - **ADR-03 (Branching Strategy):** Utilizzo di branch tematici dedicati per feature (`feat/`) e manutenzione (`chore/agent-onboarding`).

@@ -6,6 +6,10 @@
 
 La piattaforma adotta un'architettura containerizzata multi-servizio Clean Architecture con disaccoppiamento tra il layer API REST/SSE/WebSocket, il motore di ricognizione/scansione Nmap, il gestore di connessioni SSH sicure e firewall, il database relazionale PostgreSQL e la Single Page Application (SPA).
 
+Allineamento scanner 2026-10-15 (working tree, SCAN-UX-01): profili espliciti ed editor Nmap nella modale, senza matching per nome o compositore duplicato. Parser semantico e classificazione custom nel backend, API/DB compatibili; [contratto di dominio](../domains/scanning_and_discovery.md). Discovery distingue host discovery e arricchimento porte richiesto. Decisione in [ADR-14](ADR/README.md#adr-14).
+
+Allineamento 2026-10-16 (SCAN-TIME-01): statistiche XML periodiche Nmap → callback runner → snapshot attivi/SSE → monitor lotto con polling batch autenticato. Nessun cambiamento DB, dettagli in [API_SPEC](LLD/API_SPEC.md) e [piano](../04-development/SCAN_PROGRESS_PLAN.md). Snapshot in memoria eliminati a fine job; ETA dichiaratamente euristica, non timeout né promessa di durata.
+
 ```mermaid
 graph TD
     Client["Browser / Utente (SecOps / Admin / Auditor)"]

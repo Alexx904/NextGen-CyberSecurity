@@ -7,6 +7,19 @@
 
 ---
 
+## Testi profili scanner · 2026-10-16
+
+### Scanner Nmap e monitor del gruppo · Accettati dal PO
+
+- [x] **SCAN-UX-01:** interfaccia Profili/Comando Nmap, otto preset con scopo tecnico, matching degli argomenti, validazione semantica e classificazione custom; corretto include_common_ports di Discovery.
+- [x] **SCAN-TIME-01:** durate indicative per profilo, telemetria XML Nmap, snapshot API tenant e monitor lotto con avanzamento/ETA, coda ed esiti distinti, ripristino sessione.
+- **Accettazione:** 2026-10-16; il PO dichiara di aver eseguito i test e conferma il funzionamento delle scansioni, autorizzando il push di tutte le modifiche. Debito TECH-DEBT-05 sul consenso API ancora aperto; stime non certificate da benchmark.
+
+### Descrizioni dei profili
+
+- [x] **SCAN-COPY-01:** accettata dal PO la revisione delle otto descrizioni, focalizzate su scopo e attività della scansione. Rimosso il suggerimento Discovery sotto il selettore. Parametri, tempi e comportamento invariati; nessuna accettazione implicita degli altri task scanner.
+- Verifiche precedenti: frontend 145 test e build PASS, controlli documentali PASS (exit 0).
+
 ## Governance agentica v7.1 - 2026-10-15
 
 ### AGENT-SDLC-02 · Struttura documentale e orchestrazione per feature

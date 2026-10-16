@@ -1,1979 +1,258 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import {
-  X,
-  Play,
-  Calendar,
-  Terminal,
-  AlertCircle,
-  Check,
-  ShieldAlert,
-  Crosshair,
-  Globe,
-  FileCheck2,
-  Sliders,
-  Sparkles,
-  Save,
-  Trash2,
-  Compass,
-  HelpCircle,
-  ChevronDown,
-  ChevronUp,
-  Folder,
-  Bug,
-  AlertTriangle,
-  Server,
-  Cpu,
-  Layers,
-  ArrowRight,
-} from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { X, Play, Terminal } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { ApiResponse } from '../types/auth';
-import { TargetItem, TargetListResponseData, TargetGroupNode } from '../types/target';
-import { ScanItem, ScanProfileItem, ScanProfileCategory } from '../types/scan';
-import { ScheduleItem } from '../types/schedule';
-import { getGroupAndDescendantIds } from './TreeExplorer';
-import { useCompany } from '../context/CompanyContext';
+import { TargetGroupNode, TargetItem, TargetListResponseData } from '../types/target';
+import { ScanItem, ScanProfileItem } from '../types/scan';
+import { getAllDescendantGroupIds, useCompany } from '../context/CompanyContext';
+import { SCAN_PRESETS, canonicalArgs, commandError, isIntrusive, normalizeNmapInput, profileDurationLabel } from './scans/scanConfiguration';
 
 interface NewScanModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onScanLaunched: () => void;
+  onScanLaunched: (scans?: ScanItem[]) => void;
   onScheduleCreated?: () => void;
   defaultGroupId?: string;
 }
 
 const CRON_PRESETS = [
-  { label: 'Ogni 6 ore', value: '0 */6 * * *', desc: '4 volte al giorno' },
-  { label: 'Ogni notte alle 02:00', value: '0 2 * * *', desc: 'Scansione notturna quotidiana' },
-  { label: 'Ogni Lunedì alle 03:00', value: '0 3 * * 1', desc: 'Scansione settimanale di audit' },
-  { label: 'Primo giorno del mese (04:00)', value: '0 4 1 * *', desc: 'Verifica mensile di conformità' },
-  { label: 'Personalizzato...', value: 'CUSTOM', desc: 'Definisci una stringa cron a 5 campi' },
+  { label: 'Ogni 6 ore', value: '0 */6 * * *' },
+  { label: 'Ogni notte alle 02:00', value: '0 2 * * *' },
+  { label: 'Ogni lunedì alle 03:00', value: '0 3 * * 1' },
+  { label: 'Primo giorno del mese alle 04:00', value: '0 4 1 * *' },
+  { label: 'Personalizzato', value: 'CUSTOM' },
 ];
 
-export interface MasterPreset {
-  id: string;
-  name: string;
-  badge: string;
-  duration: string;
-  invasiveness: 'SAFE' | 'INTRUSIVE';
-  icon: React.ComponentType<{ className?: string }>;
-  description: string;
-  targetFocus: string;
-  nmapArgs: string;
-  recommended?: boolean;
-  matchingNames: string[];
-  associatedCategory: ScanProfileCategory;
-  fineTuning: {
-    portPreset: string;
-    customPorts?: string;
-    timing: string;
-    synStealth: boolean;
-    ackProbe: boolean;
-    serviceVersion: boolean;
-    deepVersion: boolean;
-    osDetection: boolean;
-    vulnScripts: boolean;
-    udpScan?: boolean;
-    noPing: boolean;
-    onlyOpen: boolean;
-  };
+function errorMessage(error: unknown): string {
+  const response = error as { response?: { data?: { error?: { message?: string } } }; message?: string };
+  return response.response?.data?.error?.message || response.message || 'Impossibile completare la richiesta.';
 }
 
-export const MASTER_PRESETS: MasterPreset[] = [
-  {
-    id: 'PRESET_360',
-    name: 'Audit 360° Sicurezza Generale',
-    badge: 'Consigliato · Bilanciato',
-    duration: '15 - 30 min',
-    invasiveness: 'SAFE',
-    icon: Compass,
-    recommended: true,
-    targetFocus: 'Host vivi, top 1000 porte, rilevamento OS e versioni demoni',
-    description: 'Scansione generalista a 360°: identifica tutti i servizi attivi, il sistema operativo e verifica lo stato delle porte standard senza sovraccaricare la rete.',
-    nmapArgs: '-sS -sV -O -T4 --open',
-    matchingNames: ['All-in-One 360° Comprehensive Audit', 'Standard Service Scan'],
-    associatedCategory: 'ALL_IN_ONE',
-    fineTuning: {
-      portPreset: 'STANDARD',
-      timing: '-T4',
-      synStealth: true,
-      ackProbe: false,
-      serviceVersion: true,
-      deepVersion: false,
-      osDetection: true,
-      vulnScripts: false,
-      udpScan: false,
-      noPing: false,
-      onlyOpen: true,
-    },
-  },
-  {
-    id: 'PRESET_QUICK',
-    name: 'Ricognizione Rapida (Fast Sweep)',
-    badge: 'Mappatura LAN · Lampo',
-    duration: '1 - 3 min',
-    invasiveness: 'SAFE',
-    icon: Sparkles,
-    targetFocus: 'Mappatura host accesi e top 100 porte TCP essenziali',
-    description: 'Verifica rapida per inventariare gli host vivi e individuare immediatamente le porte essenziali senza ritardi né stress per la rete.',
-    nmapArgs: '-F -sS -T4 --open',
-    matchingNames: ['Fast Discovery', 'Fast Ping & Host Sweep (LAN)', 'LAN Discovery'],
-    associatedCategory: 'DISCOVERY',
-    fineTuning: {
-      portPreset: 'FAST',
-      timing: '-T4',
-      synStealth: true,
-      ackProbe: false,
-      serviceVersion: false,
-      deepVersion: false,
-      osDetection: false,
-      vulnScripts: false,
-      udpScan: false,
-      noPing: false,
-      onlyOpen: true,
-    },
-  },
-  {
-    id: 'PRESET_CVE',
-    name: 'Audit Vulnerabilità & CVE Exploit',
-    badge: 'Offensive · Script Vuln CVE',
-    duration: '30 - 60 min',
-    invasiveness: 'INTRUSIVE',
-    icon: ShieldAlert,
-    targetFocus: 'Script NSE attivi (--script=vuln) e probing intensivo CVE',
-    description: 'Audit profondo di penetrazione con esecuzione di script attivi Nmap (--script=vuln) per scovare exploit noti, falle RCE e configurazioni deboli.',
-    nmapArgs: '-sV -O --version-intensity 7 --script=vuln -T4 --open',
-    matchingNames: ['OS & System Daemon Flaws Audit', 'Full Deep Scan', 'Critical Services & RCE Surface'],
-    associatedCategory: 'SYSTEM_FLAWS',
-    fineTuning: {
-      portPreset: 'STANDARD',
-      timing: '-T4',
-      synStealth: true,
-      ackProbe: false,
-      serviceVersion: true,
-      deepVersion: true,
-      osDetection: true,
-      vulnScripts: true,
-      udpScan: false,
-      noPing: false,
-      onlyOpen: true,
-    },
-  },
-  {
-    id: 'PRESET_WEB',
-    name: 'Perimetro Web App & API Surface',
-    badge: 'Superfici Web & API',
-    duration: '5 - 15 min',
-    invasiveness: 'SAFE',
-    icon: Globe,
-    targetFocus: 'Porte HTTP/HTTPS/API e fingerprinting stack applicativi',
-    description: 'Ispezione mirata dei server web, portali aziendali, API REST e reverse proxy (porte 80, 443, 8000, 8080, 8443, 9000).',
-    nmapArgs: '-sV -p 80,443,8000,8080,8443,8888,3000,5000,9000 -T4 --open',
-    matchingNames: ['Web & API Surface Audit', 'Full Web Stack Deep Versioning'],
-    associatedCategory: 'WEB_APP',
-    fineTuning: {
-      portPreset: 'WEB',
-      timing: '-T4',
-      synStealth: true,
-      ackProbe: false,
-      serviceVersion: true,
-      deepVersion: false,
-      osDetection: false,
-      vulnScripts: false,
-      udpScan: false,
-      noPing: false,
-      onlyOpen: true,
-    },
-  },
-];
+const fieldClass = 'w-full rounded-lg border border-cyber-border bg-slate-950 p-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-500';
 
-const CATEGORIES: {
-  id: ScanProfileCategory;
-  name: string;
-  badge: string;
-  icon: React.ComponentType<{ className?: string }>;
-  description: string;
-  color: string;
-}[] = [
-  {
-    id: 'ALL_IN_ONE',
-    name: 'Tutto in Uno (360°)',
-    badge: 'Consigliato · Completo',
-    icon: Compass,
-    description: 'Audit generalista a 360°: host vivi, porte, versioni demoni e rilevamento OS',
-    color: 'from-blue-600/30 to-indigo-600/20 border-blue-500/50 text-blue-300 ring-1 ring-blue-500/40',
-  },
-  {
-    id: 'PEN_TEST',
-    name: 'Penetration Testing',
-    badge: 'Offensive & Probing',
-    icon: Crosshair,
-    description: 'Stealth SYN probing, bypass firewall ed enumeration aggressiva',
-    color: 'from-rose-500/20 to-red-600/10 border-rose-500/40 text-rose-400',
-  },
-  {
-    id: 'SYSTEM_FLAWS',
-    name: 'Falle di Sistema',
-    badge: 'Vulnerability Audit',
-    icon: ShieldAlert,
-    description: 'Audit OS, fingerprinting demoni e rilevamento superfici RCE critiche',
-    color: 'from-amber-500/20 to-orange-600/10 border-amber-500/40 text-amber-400',
-  },
-  {
-    id: 'WEB_APP',
-    name: 'Web App & API',
-    badge: 'Web Surface',
-    icon: Globe,
-    description: 'Scansione porte HTTP/HTTPS/API e fingerprinting stack applicativi',
-    color: 'from-emerald-500/20 to-teal-600/10 border-emerald-500/40 text-emerald-400',
-  },
-  {
-    id: 'COMPLIANCE',
-    name: 'Compliance & Hardening',
-    badge: 'Baseline Security',
-    icon: FileCheck2,
-    description: 'Verifica protocolli legacy insicuri (Telnet, FTP, SMB) e standard baseline',
-    color: 'from-purple-500/20 to-indigo-600/10 border-purple-500/40 text-purple-400',
-  },
-  {
-    id: 'CUSTOM',
-    name: 'Profili Custom',
-    badge: 'Tenant Presets',
-    icon: Sliders,
-    description: 'Profili personalizzati configurati e salvati dal tuo team',
-    color: 'from-slate-500/20 to-slate-700/10 border-slate-500/40 text-slate-300',
-  },
-];
-
-const CATEGORY_HELP_GUIDE: Record<
-  ScanProfileCategory,
-  {
-    simpleExplanation: string;
-    whenToUse: string;
-    estimatedDuration: string;
-    networkImpact: string;
-    whatItDetects: string;
-  }
-> = {
-  ALL_IN_ONE: {
-    simpleExplanation:
-      'Controllo a 360° globale: trova tutti gli host accesi, tutte le porte principali, le versioni precise dei servizi e il sistema operativo.',
-    whenToUse:
-      'Consigliato se vuoi un quadro completo e affidabile su un server o dispositivo senza tralasciare nulla.',
-    estimatedDuration: '15 - 45 minuti',
-    networkImpact: 'Bilanciato e sicuro (nessun disturbo ai servizi di produzione)',
-    whatItDetects: 'OS (Linux/Windows), porte aperte, versioni demoni, vulnerabilità di superficie',
-  },
-  PEN_TEST: {
-    simpleExplanation:
-      'Simula un attaccante esterno: invia pacchetti discreti (SYN stealth) per mappare la rete eludendo o testando i firewall perimetrali.',
-    whenToUse:
-      'Per verificare se i tuoi sistemi di difesa (firewall/IDS) bloccano accessi indesiderati.',
-    estimatedDuration: '30 - 60 minuti',
-    networkImpact: 'Basso rumore, pacchetti half-open senza handshake completo',
-    whatItDetects: 'Filtri firewall permissivi, porte fantasma, apparati esposti',
-  },
-  SYSTEM_FLAWS: {
-    simpleExplanation:
-      'Scava nei demoni di gestione di sistema (Windows RDP, Linux SSH, database MySQL/Postgres, cartelle SMB).',
-    whenToUse:
-      'Se vuoi identificare software obsoleto o falle critiche sfruttabili per esecuzione di codice remoto (RCE).',
-    estimatedDuration: '20 - 40 minuti',
-    networkImpact: 'Mirato sui servizi applicativi di sistema',
-    whatItDetects: 'Versioni software vulnerabili a CVE note, protocolli di gestione aperti',
-  },
-  WEB_APP: {
-    simpleExplanation:
-      'Controlla solo le porte dedicate al web (HTTP, HTTPS, API REST, reverse proxy e microservizi).',
-    whenToUse:
-      'Se gestisci un sito web aziendale, un e-commerce o API e vuoi verificare i server web prima o dopo il deploy.',
-    estimatedDuration: '10 - 20 minuti',
-    networkImpact: 'Molto leggero, solo traffico web standard',
-    whatItDetects: 'Versioni web server (Nginx/Apache), intestazioni TLS, endpoint API esposti',
-  },
-  DISCOVERY: {
-    simpleExplanation:
-      'Mappatura lampo: invia ping rapidi per dirti chi è acceso nella rete locale senza fare scansioni di porte pesanti.',
-    whenToUse:
-      'Per inventariare rapidamente gli apparati (PC, stampanti, server) in pochi secondi.',
-    estimatedDuration: '1 - 3 minuti',
-    networkImpact: 'Minimo assoluto, traffico trascurabile',
-    whatItDetects: 'Elenco indirizzi IP attivi e host vivi nella LAN',
-  },
-  COMPLIANCE: {
-    simpleExplanation:
-      'Verifica di conformità e sicurezza standard: cerca vecchi protocolli insicuri che trasmettono dati in chiaro.',
-    whenToUse:
-      'Per audit periodici di conformità aziendale (ISO 27001, NIS2) per eliminare software deprecato.',
-    estimatedDuration: '5 - 15 minuti',
-    networkImpact: 'Molto leggero',
-    whatItDetects: 'Protocolli obsoleti (Telnet, FTP, TFTP, condivisioni legacy)',
-  },
-  CUSTOM: {
-    simpleExplanation:
-      'I profili personalizzati creati e salvati dal tuo team con parametri specifici su misura.',
-    whenToUse:
-      'Per riapplicare una configurazione frequente con un solo clic.',
-    estimatedDuration: 'In base al timeout configurato',
-    networkImpact: 'Dipende dai parametri scelti',
-    whatItDetects: 'Definito dalla configurazione personalizzata',
-  },
-};
-
-interface ObjectiveOption {
-  id: string;
-  label: string;
-  simpleDesc: string;
-  ports?: string[];
-  flags?: string[];
-  icon: React.ComponentType<{ className?: string }>;
-}
-
-const OBJECTIVE_OPTIONS: ObjectiveOption[] = [
-  {
-    id: 'OBJ_WEB',
-    label: 'Siti Web, Portali & API',
-    simpleDesc: 'Ispeziona server HTTP/HTTPS, proxy e API (porte 80, 443, 8000, 8080, 8443, 9000)',
-    ports: ['80', '443', '8000', '8080', '8443', '8888', '3000', '5000', '9000'],
-    icon: Globe,
-  },
-  {
-    id: 'OBJ_SERVICES',
-    label: 'Servizi Critici & Accesso Remoto',
-    simpleDesc: 'Controlla database (MySQL, Postgres, MSSQL), desktop remoto (RDP), SSH e cartelle SMB',
-    ports: ['21', '22', '23', '25', '53', '110', '135', '139', '143', '445', '1433', '1521', '3306', '3389', '5432', '5900', '6379'],
-    icon: Server,
-  },
-  {
-    id: 'OBJ_VERSIONS',
-    label: 'Identifica Versioni Servizi (-sV)',
-    simpleDesc: 'Interroga i banner dei programmi per identificare la versione esatta e scovare vulnerabilità CVE',
-    flags: ['-sV'],
-    icon: ShieldAlert,
-  },
-  {
-    id: 'OBJ_OS',
-    label: 'Riconosci Sistema Operativo (-O)',
-    simpleDesc: 'Identifica se il dispositivo monta Windows, Linux, macOS o router/firewall di rete',
-    flags: ['-O'],
-    icon: Cpu,
-  },
-  {
-    id: 'OBJ_STEALTH',
-    label: 'Modalità Silenziosa Stealth (-sS)',
-    simpleDesc: 'Invia pacchetti SYN senza completare la connessione per eludere o non intasare i log dei firewall',
-    flags: ['-sS'],
-    icon: Crosshair,
-  },
-  {
-    id: 'OBJ_LEGACY',
-    label: 'Controllo Protocolli Legacy Insicuri',
-    simpleDesc: 'Scova servizi non crittografati che trasmettono credenziali in chiaro (Telnet, FTP, TFTP)',
-    ports: ['21', '23', '69', '79', '110', '143', '512', '513', '514'],
-    icon: FileCheck2,
-  },
-  {
-    id: 'OBJ_NO_PING',
-    label: 'Bypass Filtro Ping (-Pn)',
-    simpleDesc: 'Forza la scansione anche se l’host blocca i pacchetti ping ICMP o ha firewall attivi',
-    flags: ['-Pn'],
-    icon: Terminal,
-  },
-  {
-    id: 'OBJ_VULN_SCRIPTS',
-    label: 'Script Vulnerabilità Nmap (--script=vuln)',
-    simpleDesc: 'Esegue script attivi Nmap (--script=vuln) per scovare CVE note (EternalBlue, SSL, RCE, default credentials)',
-    flags: ['--script=vuln'],
-    icon: Bug,
-  },
-];
-
-const PORT_PRESETS = [
-  { id: 'FAST', label: 'Top 100 Porte (-F)', value: '-F' },
-  { id: 'STANDARD', label: 'Top 1000 Standard', value: '' },
-  {
-    id: 'CRITICAL',
-    label: 'Servizi Critici & RCE',
-    value: '-p 21,22,23,25,53,80,110,135,139,143,443,445,1433,1521,3306,3389,5432,5900,6379,8080,8443',
-  },
-  {
-    id: 'WEB',
-    label: 'Web & API Ports',
-    value: '-p 80,443,8000,8080,8443,8888,3000,5000,9000',
-  },
-  { id: 'ALL', label: 'Tutte le 65535 Porte (-p-)', value: '-p-' },
-  { id: 'CUSTOM', label: 'Porte Personalizzate...', value: 'CUSTOM' },
-];
-
-export const NewScanModal: React.FC<NewScanModalProps> = ({
-  isOpen,
-  onClose,
-  onScanLaunched,
-  onScheduleCreated,
-  defaultGroupId,
-}) => {
+export const NewScanModal: React.FC<NewScanModalProps> = ({ isOpen, onClose, onScanLaunched, onScheduleCreated, defaultGroupId }) => {
   const { selectedCompanyId } = useCompany();
-  const effectiveInitialGroupId = defaultGroupId || selectedCompanyId || '';
-
-  const [activeTab, setActiveTab] = useState<'ON_DEMAND' | 'SCHEDULED'>('ON_DEMAND');
-  const [configMode, setConfigMode] = useState<'GUIDED' | 'MULTI_OBJECTIVE' | 'PROFESSIONAL'>('GUIDED');
-  const [showHelpGuide, setShowHelpGuide] = useState<boolean>(false);
-
-  const [targetGroups, setTargetGroups] = useState<TargetGroupNode[]>([]);
+  const dialogRef = useRef<HTMLElement>(null);
+  const [mode, setMode] = useState<'PRESETS' | 'COMMAND'>('PRESETS');
+  const [groups, setGroups] = useState<TargetGroupNode[]>([]);
   const [targets, setTargets] = useState<TargetItem[]>([]);
   const [profiles, setProfiles] = useState<ScanProfileItem[]>([]);
-  const [loadingData, setLoadingData] = useState<boolean>(false);
-
-  const [selectedGroupId, setSelectedGroupId] = useState<string>(effectiveInitialGroupId);
-  const [selectedProfileId, setSelectedProfileId] = useState<string>('');
-  const [selectedCategory, setSelectedCategory] = useState<ScanProfileCategory>('ALL_IN_ONE');
-  const [selectedPresetId, setSelectedPresetId] = useState<string>('PRESET_360');
-
-  // Campi Modalità Multi-Obiettivo (default bilanciato standard)
-  const [selectedObjectiveIds, setSelectedObjectiveIds] = useState<string[]>([
-    'OBJ_WEB',
-    'OBJ_SERVICES',
-    'OBJ_VERSIONS',
-    'OBJ_OS',
-  ]);
-
-  // Campi Scanning Studio 360° (Fine-Tuning Professionale)
-  const [selectedPortPreset, setSelectedPortPreset] = useState<string>('FAST');
-  const [customPortInput, setCustomPortInput] = useState<string>('80,443,8080-8090');
-  const [timingTemplate, setTimingTemplate] = useState<string>('-T4');
-  const [flagSynStealth, setFlagSynStealth] = useState<boolean>(true);
-  const [flagAckProbe, setFlagAckProbe] = useState<boolean>(false);
-  const [flagServiceVersion, setFlagServiceVersion] = useState<boolean>(true);
-  const [flagDeepVersion, setFlagDeepVersion] = useState<boolean>(false);
-  const [flagOsDetection, setFlagOsDetection] = useState<boolean>(false);
-  const [flagVulnScripts, setFlagVulnScripts] = useState<boolean>(false);
-  const [flagUdpScan, setFlagUdpScan] = useState<boolean>(false);
-  const [flagOnlyOpen, setFlagOnlyOpen] = useState<boolean>(true);
-  const [flagNoPing, setFlagNoPing] = useState<boolean>(false);
-
-  // Salvataggio profilo custom
-  const [saveAsCustomProfile, setSaveAsCustomProfile] = useState<boolean>(false);
-  const [customProfileName, setCustomProfileName] = useState<string>('');
-  const [customProfileDesc, setCustomProfileDesc] = useState<string>('');
-  const [customProfileCategory, setCustomProfileCategory] = useState<ScanProfileCategory>('PEN_TEST');
-  const [customTimeoutMinutes, setCustomTimeoutMinutes] = useState<number>(30);
-
-  // Campi Scheduler
-  const [selectedCronPreset, setSelectedCronPreset] = useState<string>('0 2 * * *');
-  const [customCron, setCustomCron] = useState<string>('0 2 * * *');
-
-  const [intrusiveConfirmed, setIntrusiveConfirmed] = useState<boolean>(false);
-  const [submitting, setSubmitting] = useState<boolean>(false);
+  const [groupId, setGroupId] = useState('');
+  const [presetId, setPresetId] = useState(SCAN_PRESETS[0].id);
+  const [command, setCommand] = useState(SCAN_PRESETS[0].args);
+  const [profileName, setProfileName] = useState('');
+  const [timeout, setTimeoutMinutes] = useState(60);
+  const [scheduled, setScheduled] = useState(false);
+  const [cronPreset, setCronPreset] = useState('0 2 * * *');
+  const [customCron, setCustomCron] = useState('0 2 * * *');
+  const [confirmed, setConfirmed] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Caricamento dati
-  const fetchProfiles = async () => {
-    try {
-      const res = await apiClient.get<ApiResponse<{ items: ScanProfileItem[]; total: number }>>('/scan-profiles');
-      if (res.data?.data?.items) {
-        setProfiles(res.data.data.items);
-      }
-    } catch (err: any) {
-      console.error('Errore recupero profili:', err);
-    }
-  };
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [completedScheduleIds, setCompletedScheduleIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (isOpen) {
-      setError(null);
-      setLoadingData(true);
+    if (!isOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    dialogRef.current?.focus();
+    return () => { previous?.focus(); };
+  }, [isOpen]);
 
-      Promise.all([
-        apiClient.get<ApiResponse<TargetGroupNode[]>>('/target-groups'),
-        apiClient.get<ApiResponse<TargetListResponseData>>('/targets?limit=200'),
-        apiClient.get<ApiResponse<{ items: ScanProfileItem[]; total: number }>>('/scan-profiles'),
-      ])
-        .then(([groupsRes, targetsRes, profilesRes]) => {
-          let loadedGroups: TargetGroupNode[] = [];
-          if (groupsRes.data?.data) {
-            loadedGroups = groupsRes.data.data;
-            setTargetGroups(loadedGroups);
-          }
+  function handleDialogKey(event: React.KeyboardEvent<HTMLElement>) {
+    if (event.key === 'Escape' && !submitting) { onClose(); return; }
+    if (event.key !== 'Tab') return;
+    const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button, select, input, textarea, summary') || [])
+      .filter((element) => !element.matches(':disabled') && !element.closest('details:not([open]) > :not(summary)'));
+    const first = focusable[0]; const last = focusable[focusable.length - 1];
+    if (!first) { event.preventDefault(); return; }
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === dialogRef.current)) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && (document.activeElement === last || document.activeElement === dialogRef.current)) { event.preventDefault(); first.focus(); }
+  }
 
-          if (targetsRes.data?.data?.items) {
-            setTargets(targetsRes.data.data.items);
-          }
-
-          if (effectiveInitialGroupId) {
-            setSelectedGroupId(effectiveInitialGroupId);
-          } else if (loadedGroups.length > 0) {
-            setSelectedGroupId((prev) => (prev ? prev : loadedGroups[0].id));
-          }
-
-          if (profilesRes.data?.data?.items) {
-            const profileList = profilesRes.data.data.items;
-            setProfiles(profileList);
-
-            // Default: All-in-One 360 se presente, altrimenti primo disponibile
-            const defaultProf =
-              profileList.find((p) => p.name === 'All-in-One 360° Comprehensive Audit') ||
-              profileList.find((p) => p.category === 'ALL_IN_ONE') ||
-              profileList[0];
-            if (defaultProf) {
-              setSelectedProfileId(defaultProf.id);
-            }
-          }
-        })
-        .catch((err) => {
-          setError(err.response?.data?.error?.message || 'Impossibile recuperare cartelle o profili');
-        })
-        .finally(() => {
-          setLoadingData(false);
-        });
-    }
-  }, [isOpen, defaultGroupId]);
-
-  // Filtra profili per categoria nella vista catalogo
-  const filteredProfiles = useMemo(() => {
-    return profiles.filter((p) => {
-      if (selectedCategory === 'CUSTOM') {
-        return p.is_custom === true;
-      }
-      return p.category === selectedCategory;
-    });
-  }, [profiles, selectedCategory]);
-
-  // Helper per appiattire l'albero dei gruppi con profondità e bersagli associati
-  const flattenedGroups = useMemo(() => {
-    const list: {
-      id: string;
-      name: string;
-      depth: number;
-      color_tag?: string;
-      targetCount: number;
-      targets: TargetItem[];
-    }[] = [];
-
-    const recurse = (nodes: TargetGroupNode[], depth = 0) => {
-      for (const node of nodes) {
-        const descendantIds = new Set(getGroupAndDescendantIds(node));
-        const matchingTargets = targets.filter((t) => t.group_id && descendantIds.has(t.group_id));
-        list.push({
-          id: node.id,
-          name: node.name,
-          depth,
-          color_tag: node.color_tag || undefined,
-          targetCount: matchingTargets.length,
-          targets: matchingTargets,
-        });
-        if (node.children && node.children.length > 0) {
-          recurse(node.children, depth + 1);
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    setLoading(true); setLoadFailed(false); setError(null); setConfirmed(false); setCompletedScheduleIds(new Set());
+    async function load() {
+      try {
+        const [groupRes, profileRes] = await Promise.all([
+          apiClient.get<ApiResponse<TargetGroupNode[]>>('/target-groups'),
+          apiClient.get<ApiResponse<{ items: ScanProfileItem[] }>>('/scan-profiles'),
+        ]);
+        if (!groupRes.data.success || !groupRes.data.data || !profileRes.data.success || !profileRes.data.data) throw new Error('Impossibile caricare gruppi e profili.');
+        const loadedTargets: TargetItem[] = [];
+        let offset = 0;
+        while (true) {
+          const res = await apiClient.get<ApiResponse<TargetListResponseData>>(`/targets?limit=200&offset=${offset}`);
+          if (!res.data.success || !res.data.data) throw new Error('Impossibile caricare i target.');
+          const page = res.data.data;
+          loadedTargets.push(...page.items);
+          offset += page.items.length;
+          if (offset >= page.total) break;
+          if (!page.items.length) throw new Error('Elenco target incompleto. Riapri la finestra per riprovare.');
         }
-      }
-    };
-
-    const rootNodes = selectedCompanyId
-      ? targetGroups.filter((n) => n.id === selectedCompanyId)
-      : targetGroups;
-
-    recurse(rootNodes.length > 0 ? rootNodes : targetGroups);
-    return list;
-  }, [targetGroups, targets, selectedCompanyId]);
-
-  const selectedGroupInfo = useMemo(() => {
-    return flattenedGroups.find((g) => g.id === selectedGroupId) || null;
-  }, [flattenedGroups, selectedGroupId]);
-
-  // Aggiorna profilo selezionato quando cambia categoria nella vista avanzata
-  useEffect(() => {
-    if (configMode === 'GUIDED' && filteredProfiles.length > 0) {
-      const alreadyIncluded = filteredProfiles.some((p) => p.id === selectedProfileId);
-      if (!alreadyIncluded) {
-        setSelectedProfileId(filteredProfiles[0].id);
+        if (cancelled) return;
+        setGroups(groupRes.data.data); setProfiles(profileRes.data.data.items); setTargets(loadedTargets);
+        setGroupId(defaultGroupId || selectedCompanyId || groupRes.data.data[0]?.id || '');
+      } catch (err) {
+        if (!cancelled) { setError(errorMessage(err)); setLoadFailed(true); }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     }
-  }, [selectedCategory, filteredProfiles, configMode, selectedProfileId]);
+    void load();
+    return () => { cancelled = true; };
+  }, [isOpen, defaultGroupId, selectedCompanyId]);
 
-  // Costruzione dinamica del comando Nmap per lo Scanning Studio 360° (Professionale)
-  const generatedNmapArgs = useMemo(() => {
-    const parts: string[] = [];
-
-    // Scan type
-    if (flagSynStealth) {
-      parts.push('-sS');
-    } else if (flagAckProbe) {
-      parts.push('-sA');
-    }
-
-    // Version Detection
-    if (flagServiceVersion) {
-      parts.push('-sV');
-      if (flagDeepVersion) {
-        parts.push('--version-intensity 7');
-      }
-    }
-
-    // OS Detection
-    if (flagOsDetection) {
-      parts.push('-O');
-    }
-
-    // Timing
-    if (timingTemplate) {
-      parts.push(timingTemplate);
-    }
-
-    // Ports
-    if (selectedPortPreset === 'CUSTOM') {
-      const cleaned = customPortInput.trim().replace(/\s+/g, '');
-      if (cleaned) {
-        parts.push(`-p ${cleaned}`);
-      }
-    } else {
-      const preset = PORT_PRESETS.find((p) => p.id === selectedPortPreset);
-      if (preset && preset.value) {
-        parts.push(preset.value);
-      }
-    }
-
-    // Flags opzionali
-    if (flagVulnScripts) parts.push('--script=vuln');
-    if (flagUdpScan) parts.push('-sU -p U:53,69,123,161,514,623,5353');
-    if (flagNoPing) parts.push('-Pn');
-    if (flagOnlyOpen) parts.push('--open');
-
-    return parts.join(' ');
-  }, [
-    flagSynStealth,
-    flagAckProbe,
-    flagServiceVersion,
-    flagDeepVersion,
-    flagOsDetection,
-    flagVulnScripts,
-    flagUdpScan,
-    timingTemplate,
-    selectedPortPreset,
-    customPortInput,
-    flagNoPing,
-    flagOnlyOpen,
-  ]);
-
-  // Costruzione dinamica del comando Nmap per la modalità Multi-Obiettivo
-  const generatedMultiObjectiveArgs = useMemo(() => {
-    const selectedObjs = OBJECTIVE_OPTIONS.filter((o) => selectedObjectiveIds.includes(o.id));
-
-    const parts: string[] = [];
-
-    // Stealth SYN
-    if (selectedObjectiveIds.includes('OBJ_STEALTH')) {
-      parts.push('-sS');
-    }
-
-    // Version Detection
-    if (selectedObjectiveIds.includes('OBJ_VERSIONS')) {
-      parts.push('-sV');
-    }
-
-    // OS Detection
-    if (selectedObjectiveIds.includes('OBJ_OS')) {
-      parts.push('-O');
-    }
-
-    // Timing
-    parts.push('-T4');
-
-    // Porte da unire
-    const allPortsSet = new Set<number>();
-    selectedObjs.forEach((o) => {
-      if (o.ports) {
-        o.ports.forEach((p) => {
-          const num = parseInt(p, 10);
-          if (!isNaN(num)) allPortsSet.add(num);
-        });
-      }
+  const availableGroups = useMemo(() => {
+    const all: { node: TargetGroupNode; depth: number }[] = [];
+    const visit = (nodes: TargetGroupNode[], depth: number) => nodes.forEach((node) => {
+      all.push({ node, depth }); visit(node.children || [], depth + 1);
     });
+    visit(groups, 0);
+    const company = all.find(({ node }) => node.id === selectedCompanyId)?.node;
+    if (selectedCompanyId && !company) return [];
+    const scope = company ? new Set(getAllDescendantGroupIds(company)) : null;
+    return all.filter(({ node }) => !scope || scope.has(node.id));
+  }, [groups, selectedCompanyId]);
+  const selectedGroup = availableGroups.find(({ node }) => node.id === groupId)?.node;
+  const scopedTargets = useMemo(() => {
+    if (!selectedGroup) return [];
+    const ids = new Set(getAllDescendantGroupIds(selectedGroup));
+    return targets.filter((target) => target.group_id && ids.has(target.group_id));
+  }, [targets, selectedGroup]);
+  const eligibleTargets = scopedTargets.filter((target) => !target.is_blacklisted);
+  const preset = SCAN_PRESETS.find((item) => item.id === presetId) || SCAN_PRESETS[0];
+  const args = mode === 'PRESETS' ? preset.args : normalizeNmapInput(command);
+  const validationError = mode === 'COMMAND' ? commandError(command) : null;
+  const matchingProfile = profiles.find((profile) => canonicalArgs(profile.nmap_args) === canonicalArgs(args)
+    && profile.timeout_seconds === (mode === 'PRESETS' ? preset.timeout : timeout * 60)
+    && (!profileName.trim() || mode === 'PRESETS' || profile.name === profileName.trim()));
+  const intrusive = isIntrusive(args) || matchingProfile?.invasiveness === 'INTRUSIVE' || matchingProfile?.invasiveness === 'DANGEROUS';
+  const timeoutInvalid = mode === 'COMMAND' && (!Number.isInteger(timeout) || timeout < 1 || timeout > 1440);
+  const cron = cronPreset === 'CUSTOM' ? customCron.trim() : cronPreset;
+  const cronInvalid = scheduled && cron.split(/\s+/).length !== 5;
+  useEffect(() => { setConfirmed(false); }, [args, groupId, scheduled, cron, timeout]);
+  useEffect(() => { setCompletedScheduleIds(new Set()); }, [args, groupId, cron, timeout, scheduled]);
+  const disabled = loading || loadFailed || submitting || !selectedGroup || eligibleTargets.length === 0 || !!validationError || timeoutInvalid || cronInvalid || (intrusive && !confirmed);
 
-    if (allPortsSet.size > 0) {
-      const sortedPorts = Array.from(allPortsSet).sort((a, b) => a - b);
-      parts.push(`-p ${sortedPorts.join(',')}`);
-    }
-
-    // Script di vulnerabilità Nmap
-    if (selectedObjectiveIds.includes('OBJ_VULN_SCRIPTS')) {
-      parts.push('--script=vuln');
-    }
-
-    // No ping se richiesto
-    if (selectedObjectiveIds.includes('OBJ_NO_PING')) {
-      parts.push('-Pn');
-    }
-
-    parts.push('--open');
-
-    return parts.join(' ');
-  }, [selectedObjectiveIds]);
-
-  // Calcolo dinamico in tempo reale dell'invasività del profilo
-  const calculatedInvasiveness: 'SAFE' | 'INTRUSIVE' = useMemo(() => {
-    if (configMode === 'GUIDED') {
-      const selectedProf = profiles.find((p) => p.id === selectedProfileId);
-      if (selectedProf && (selectedProf.invasiveness === 'INTRUSIVE' || selectedProf.invasiveness === 'DANGEROUS')) {
-        return 'INTRUSIVE';
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (disabled) return;
+    setError(null); setSubmitting(true);
+    try {
+      let profile = matchingProfile;
+      if (!profile) {
+        const res = await apiClient.post<ApiResponse<ScanProfileItem>>('/scan-profiles', {
+          name: mode === 'PRESETS' ? preset.name : profileName.trim() || `Nmap personalizzato ${new Date().toISOString()}`,
+          description: mode === 'PRESETS' ? preset.description : 'Opzioni Nmap definite dall’operatore. Target e output gestiti dalla piattaforma.',
+          nmap_args: args, timeout_seconds: mode === 'PRESETS' ? preset.timeout : timeout * 60, category: 'CUSTOM',
+        });
+        if (!res.data.success || !res.data.data) throw new Error(res.data.error?.message || 'Creazione profilo fallita.');
+        profile = res.data.data;
+        const created = profile;
+        setProfiles((previous) => [...previous, created]);
       }
-      const currentPreset = MASTER_PRESETS.find((p) => p.id === selectedPresetId);
-      if (currentPreset?.invasiveness === 'INTRUSIVE') {
-        return 'INTRUSIVE';
+      if (!scheduled) {
+        const res = await apiClient.post<ApiResponse<ScanItem[] | ScanItem>>('/scans', { group_id: groupId, profile_id: profile.id });
+        if (!res.data.success) throw new Error(res.data.error?.message || 'Avvio scansione fallito.');
+        onScanLaunched(res.data.data ? Array.isArray(res.data.data) ? res.data.data : [res.data.data] : []);
+      } else {
+        const pending = eligibleTargets.filter((target) => !completedScheduleIds.has(target.id));
+        const profileId = profile.id;
+        const results = await Promise.allSettled(pending.map(async (target) => {
+          const res = await apiClient.post<ApiResponse<unknown>>('/schedules', { target_id: target.id, profile_id: profileId, cron_expression: cron, is_active: true });
+          if (!res.data.success) throw new Error(res.data.error?.message || 'Creazione pianificazione fallita.');
+          return target.id;
+        }));
+        const succeeded = new Set(completedScheduleIds);
+        results.forEach((result) => { if (result.status === 'fulfilled') succeeded.add(result.value); });
+        setCompletedScheduleIds(succeeded);
+        const failures = results.filter((result) => result.status === 'rejected');
+        if (failures.length) {
+          onScheduleCreated?.();
+          throw new Error(`${succeeded.size} pianificazioni create; ${failures.length} non riuscite. Riprova per completare solo quelle mancanti.`);
+        }
+        onScheduleCreated?.();
       }
-      return 'SAFE';
-    }
-
-    if (configMode === 'MULTI_OBJECTIVE') {
-      if (selectedObjectiveIds.includes('OBJ_VULN_SCRIPTS')) return 'INTRUSIVE';
-      return 'SAFE';
-    }
-
-    if (configMode === 'PROFESSIONAL') {
-      if (flagVulnScripts) return 'INTRUSIVE';
-      if (flagDeepVersion && selectedPortPreset === 'ALL') return 'INTRUSIVE';
-      return 'SAFE';
-    }
-
-    return 'SAFE';
-  }, [
-    configMode,
-    selectedProfileId,
-    selectedPresetId,
-    profiles,
-    selectedObjectiveIds,
-    flagVulnScripts,
-    flagDeepVersion,
-    selectedPortPreset,
-  ]);
-
-  const targetIpPreview = useMemo(() => {
-    if (selectedGroupInfo) {
-      if (selectedGroupInfo.targets.length > 0) {
-        const preview = selectedGroupInfo.targets.map((t) => t.value).slice(0, 3).join(', ');
-        return `${selectedGroupInfo.name} [${selectedGroupInfo.targets.length} IP: ${preview}${selectedGroupInfo.targets.length > 3 ? '...' : ''}]`;
-      }
-      return `${selectedGroupInfo.name} [0 IP censiti]`;
-    }
-    return '<CARTELLA_AZIENDA>';
-  }, [selectedGroupInfo]);
-
-  // Argomenti Nmap mostrati nel Live Preview
-  const currentLiveNmapArgs = useMemo(() => {
-    if (configMode === 'GUIDED') {
-      const prof = profiles.find((p) => p.id === selectedProfileId);
-      if (prof) return prof.nmap_args;
-      const preset = MASTER_PRESETS.find((p) => p.id === selectedPresetId);
-      return preset?.nmapArgs || '-sS -sV -O -T4 --open';
-    }
-    if (configMode === 'MULTI_OBJECTIVE') {
-      return generatedMultiObjectiveArgs;
-    }
-    return generatedNmapArgs;
-  }, [configMode, selectedProfileId, selectedPresetId, profiles, generatedMultiObjectiveArgs, generatedNmapArgs]);
+      onClose();
+    } catch (err) { setError(errorMessage(err)); }
+    finally { setSubmitting(false); }
+  }
 
   if (!isOpen) return null;
-
-  // Selezione di un Master Preset e sincronizzazione
-  const handleSelectMasterPreset = (preset: MasterPreset) => {
-    setSelectedPresetId(preset.id);
-    setSelectedCategory(preset.associatedCategory);
-
-    // Cerca un profilo di sistema corrispondente nel DB
-    const matching = profiles.find((p) =>
-      preset.matchingNames.some((m) => p.name.toLowerCase().includes(m.toLowerCase()))
-    );
-
-    if (matching) {
-      setSelectedProfileId(matching.id);
-    }
-  };
-
-  // Switch a Scanning Studio con precaricamento parametri dal preset
-  const handleOpenInFineTuningStudio = (preset: MasterPreset) => {
-    setSelectedPortPreset(preset.fineTuning.portPreset);
-    setTimingTemplate(preset.fineTuning.timing);
-    setFlagSynStealth(preset.fineTuning.synStealth);
-    setFlagAckProbe(preset.fineTuning.ackProbe);
-    setFlagServiceVersion(preset.fineTuning.serviceVersion);
-    setFlagDeepVersion(preset.fineTuning.deepVersion);
-    setFlagOsDetection(preset.fineTuning.osDetection);
-    setFlagVulnScripts(preset.fineTuning.vulnScripts);
-    setFlagUdpScan(Boolean(preset.fineTuning.udpScan));
-    setFlagNoPing(preset.fineTuning.noPing);
-    setFlagOnlyOpen(preset.fineTuning.onlyOpen);
-    setConfigMode('PROFESSIONAL');
-  };
-
-  // Cancellazione profilo custom
-  const handleDeleteCustomProfile = async (profileId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!window.confirm('Sei sicuro di voler eliminare questo profilo personalizzato?')) return;
-
-    try {
-      await apiClient.delete(`/scan-profiles/${profileId}`);
-      await fetchProfiles();
-    } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Errore durante la cancellazione del profilo custom');
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-
-    if (!selectedGroupId) {
-      setError('Seleziona un\'azienda o cartella valida da scansionare');
-      return;
-    }
-
-    if (!selectedGroupInfo || selectedGroupInfo.targets.length === 0) {
-      setError('La cartella o azienda selezionata non contiene alcun indirizzo IP. Aggiungi target prima di avviare la scansione.');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      let finalProfileId = selectedProfileId;
-
-      if (configMode === 'GUIDED') {
-        // Se non c'è un profilo già assegnato direttamente, cerca la corrispondenza col preset
-        if (!finalProfileId) {
-          const currentPreset = MASTER_PRESETS.find((p) => p.id === selectedPresetId);
-          if (currentPreset) {
-            const matched = profiles.find((p) =>
-              currentPreset.matchingNames.some((m) => p.name.toLowerCase().includes(m.toLowerCase()))
-            );
-            if (matched) {
-              finalProfileId = matched.id;
-            } else {
-              // Crea il profilo di preset al volo
-              const createRes = await apiClient.post<ApiResponse<ScanProfileItem>>('/scan-profiles', {
-                name: currentPreset.name,
-                nmap_args: currentPreset.nmapArgs,
-                description: currentPreset.description,
-                timeout_seconds: 3600,
-                category: currentPreset.associatedCategory,
-              });
-              if (createRes.data?.data) {
-                finalProfileId = createRes.data.data.id;
-              }
-            }
-          }
-        }
-      } else if (configMode === 'MULTI_OBJECTIVE') {
-        if (selectedObjectiveIds.length === 0) {
-          setError('Seleziona almeno un obiettivo di scansione per continuare');
-          setSubmitting(false);
-          return;
-        }
-
-        const selectedObjs = OBJECTIVE_OPTIONS.filter((o) => selectedObjectiveIds.includes(o.id));
-        const objNames = selectedObjs.map((o) => o.label).join(', ');
-        const profileName = `Multi-Audit ${new Date().toISOString().slice(11, 19)} (${selectedObjectiveIds.length} Obiettivi)`;
-        const profileDesc = `Scansione multi-obiettivo combinata: ${objNames}`;
-
-        const createRes = await apiClient.post<ApiResponse<ScanProfileItem>>('/scan-profiles', {
-          name: profileName,
-          nmap_args: generatedMultiObjectiveArgs,
-          description: profileDesc,
-          timeout_seconds: 3600,
-          category: 'CUSTOM',
-        });
-
-        if (!createRes.data || !createRes.data.success || !createRes.data.data) {
-          throw new Error(createRes.data?.error?.message || 'Errore nella creazione del profilo multi-obiettivo');
-        }
-
-        finalProfileId = createRes.data.data.id;
-        fetchProfiles();
-      } else if (configMode === 'PROFESSIONAL') {
-        const profileName = saveAsCustomProfile && customProfileName.trim()
-          ? customProfileName.trim()
-          : `Custom PenTest ${new Date().toISOString().slice(11, 19)}`;
-
-        const profileDesc = customProfileDesc.trim() || 'Configurazione specialistica avanzata Nmap (Studio 360°)';
-        const timeoutSeconds = Math.max(60, customTimeoutMinutes * 60);
-
-        const createRes = await apiClient.post<ApiResponse<ScanProfileItem>>('/scan-profiles', {
-          name: profileName,
-          nmap_args: generatedNmapArgs,
-          description: profileDesc,
-          timeout_seconds: timeoutSeconds,
-          category: customProfileCategory,
-        });
-
-        if (!createRes.data || !createRes.data.success || !createRes.data.data) {
-          throw new Error(createRes.data?.error?.message || 'Errore nella creazione del profilo custom');
-        }
-
-        finalProfileId = createRes.data.data.id;
-        fetchProfiles();
-      }
-
-      if (!finalProfileId) {
-        setError('Nessun profilo di scansione valido selezionato o creato');
-        setSubmitting(false);
-        return;
-      }
-
-      // Esecuzione lancio On-Demand o Creazione Scheduler
-      if (activeTab === 'ON_DEMAND') {
-        const response = await apiClient.post<ApiResponse<ScanItem[] | ScanItem>>('/scans', {
-          group_id: selectedGroupId,
-          profile_id: finalProfileId,
-        });
-
-        if (response.data && response.data.success) {
-          onScanLaunched();
-          onClose();
-        } else {
-          setError(response.data?.error?.message || "Errore durante l'avvio della scansione");
-        }
-      } else {
-        // Scheduled
-        const cronExpr = selectedCronPreset === 'CUSTOM' ? customCron.trim() : selectedCronPreset;
-        if (!cronExpr) {
-          setError("Specifica un'espressione cron valida");
-          setSubmitting(false);
-          return;
-        }
-
-        const validTargets = selectedGroupInfo.targets.filter((t) => !t.is_blacklisted);
-        if (validTargets.length === 0) {
-          setError('Nessun target valido (non in blacklist) nella cartella da pianificare');
-          setSubmitting(false);
-          return;
-        }
-
-        await Promise.all(
-          validTargets.map((t) =>
-            apiClient.post<ApiResponse<ScheduleItem>>('/schedules', {
-              target_id: t.id,
-              profile_id: finalProfileId,
-              cron_expression: cronExpr,
-              is_active: true,
-            })
-          )
-        );
-
-        if (onScheduleCreated) onScheduleCreated();
-        onClose();
-      }
-    } catch (err: any) {
-      setError(
-        err.response?.data?.error?.message ||
-        err.message ||
-        'Impossibile completare la richiesta'
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const isIntrusive = calculatedInvasiveness === 'INTRUSIVE';
-  const isSubmitDisabled = Boolean(
-    submitting ||
-    !selectedGroupId ||
-    (selectedGroupInfo && selectedGroupInfo.targets.length === 0) ||
-    (isIntrusive && !intrusiveConfirmed)
-  );
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="max-w-3xl w-full max-h-[92vh] flex flex-col bg-[#111726] border border-cyber-border rounded-2xl shadow-2xl overflow-hidden relative">
-        {/* Header */}
-        <div className="p-4 sm:p-5 border-b border-cyber-border flex items-center justify-between shrink-0 bg-slate-900/40">
-          <div className="flex items-center space-x-3">
-            <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.2)]">
-              <Terminal className="w-5 h-5" />
-            </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3" onClick={() => { if (!submitting) onClose(); }}>
+      <section ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="new-scan-title" className="flex max-h-[94vh] w-full max-w-2xl flex-col rounded-xl border border-cyber-border bg-slate-900 shadow-xl" onClick={(event) => event.stopPropagation()} onKeyDown={handleDialogKey}>
+        <header className="flex items-center justify-between border-b border-cyber-border p-5">
+          <div><h2 id="new-scan-title" className="text-lg font-semibold text-white">Nuova scansione Nmap</h2><p className="mt-1 text-xs text-slate-400">Porte, servizi e controlli di vulnerabilità su target autorizzati.</p></div>
+          <button type="button" aria-label="Chiudi" disabled={submitting} onClick={onClose} className="rounded p-2 text-slate-400 focus:ring-2 focus:ring-cyan-500"><X className="h-5 w-5" /></button>
+        </header>
+        <form onSubmit={submit} className="overflow-y-auto p-5 space-y-5">
+          {error && <p role="alert" className="rounded-lg border border-rose-500/40 bg-rose-950/30 p-3 text-sm text-rose-300">{error}</p>}
+          {loading && <p role="status" className="text-sm text-slate-400">Caricamento target e profili…</p>}
+          <fieldset disabled={submitting || loading || loadFailed} className="space-y-5 disabled:opacity-60">
             <div>
-              <div className="flex items-center space-x-2">
-                <h3 className="text-base font-bold text-white">Nuova Scansione di Vulnerabilità</h3>
-                <span className="text-[10px] uppercase font-mono tracking-wider px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
-                  Studio 360°
-                </span>
-              </div>
-              <p className="text-xs text-slate-400">
-                Master Presets intelligenti a 1-clic o configurazione granulare ad alta precisione
-              </p>
+              <label htmlFor="scan-group" className="mb-2 block text-sm text-slate-200">Azienda / reparto</label>
+              <select id="scan-group" className={fieldClass} value={groupId} onChange={(event) => setGroupId(event.target.value)}>
+                <option value="">Seleziona un gruppo</option>
+                {availableGroups.map(({ node, depth }) => <option key={node.id} value={node.id}>{'— '.repeat(depth)}{node.name}</option>)}
+              </select>
+              <p className="mt-2 text-xs text-slate-400">{eligibleTargets.length} target disponibili · {scopedTargets.length - eligibleTargets.length} esclusi dalla blacklist · reparti inclusi</p>
+              {!loading && !eligibleTargets.length && <p className="mt-1 text-xs text-amber-300">Nessun target disponibile nel gruppo selezionato.</p>}
             </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Tab Selector: On-Demand vs Scheduled & Modalità di Configurazione */}
-        <div className="flex flex-wrap items-center justify-between border-b border-cyber-border bg-slate-900/70 px-4 sm:px-6 pt-2 shrink-0 gap-2">
-          {/* On-Demand / Scheduled */}
-          <div className="flex space-x-1 sm:space-x-2">
-            <button
-              type="button"
-              onClick={() => setActiveTab('ON_DEMAND')}
-              className={`pb-2.5 px-3 text-xs font-semibold flex items-center space-x-1.5 border-b-2 transition-colors ${
-                activeTab === 'ON_DEMAND'
-                  ? 'border-cyan-500 text-cyan-400'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Play className="w-3.5 h-3.5" />
-              <span>Lancio On-Demand</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('SCHEDULED')}
-              className={`pb-2.5 px-3 text-xs font-semibold flex items-center space-x-1.5 border-b-2 transition-colors ${
-                activeTab === 'SCHEDULED'
-                  ? 'border-cyan-500 text-cyan-400'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Calendar className="w-3.5 h-3.5" />
-              <span>Schedulazione Cron</span>
-            </button>
-          </div>
-
-          {/* Mode Selector: Guidata (1-Click) vs Multi-Obiettivo vs Scanning Studio (Pro) */}
-          <div className="pb-2 flex flex-wrap items-center gap-1.5">
-            <div className="flex items-center space-x-1 bg-slate-950/60 p-1 rounded-lg border border-cyber-border">
-              <button
-                type="button"
-                onClick={() => setConfigMode('GUIDED')}
-                className={`px-2.5 py-1 rounded text-xs font-medium flex items-center space-x-1.5 transition-all ${
-                  configMode === 'GUIDED'
-                    ? 'bg-cyan-500 text-slate-950 font-semibold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Sparkles className="w-3 h-3" />
-                <span>Guidata (1-Click)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfigMode('MULTI_OBJECTIVE')}
-                className={`px-2.5 py-1 rounded text-xs font-medium flex items-center space-x-1.5 transition-all ${
-                  configMode === 'MULTI_OBJECTIVE'
-                    ? 'bg-cyan-500 text-slate-950 font-semibold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Layers className="w-3 h-3" />
-                <span>Componi Multi-Obiettivo</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfigMode('PROFESSIONAL')}
-                className={`px-2.5 py-1 rounded text-xs font-medium flex items-center space-x-1.5 transition-all ${
-                  configMode === 'PROFESSIONAL'
-                    ? 'bg-cyan-500 text-slate-950 font-semibold shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Sliders className="w-3 h-3" />
-                <span>Professionale (Pro)</span>
-              </button>
+            <div className="flex gap-2" role="group" aria-label="Modalità scansione">
+              <button type="button" aria-pressed={mode === 'PRESETS'} onClick={() => setMode('PRESETS')} className={`flex-1 rounded-lg border p-2 text-sm ${mode === 'PRESETS' ? 'border-cyan-500 text-cyan-300 bg-cyan-500/10' : 'border-cyber-border text-slate-400'}`}>Profili</button>
+              <button type="button" aria-pressed={mode === 'COMMAND'} onClick={() => { if (mode !== 'COMMAND') { setCommand(args); setTimeoutMinutes(preset.timeout / 60); } setMode('COMMAND'); }} className={`flex-1 rounded-lg border p-2 text-sm ${mode === 'COMMAND' ? 'border-cyan-500 text-cyan-300 bg-cyan-500/10' : 'border-cyber-border text-slate-400'}`}>Comando Nmap</button>
             </div>
-
-            <button
-              type="button"
-              onClick={() => setShowHelpGuide(!showHelpGuide)}
-              className="px-2.5 py-1 rounded-lg text-xs font-medium text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 border border-amber-500/30 flex items-center space-x-1 transition-colors"
-            >
-              <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">Guida Semplice</span>
-              {showHelpGuide ? <ChevronUp className="w-3 h-3 ml-0.5" /> : <ChevronDown className="w-3 h-3 ml-0.5" />}
-            </button>
-          </div>
-        </div>
-
-        {/* Scrollable Form Body */}
-        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1">
-          {error && (
-            <div className="p-3.5 rounded-lg border border-rose-800/50 bg-rose-950/30 text-rose-300 text-xs flex items-start space-x-2 animate-in fade-in">
-              <AlertCircle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
-              <span>{error}</span>
+            {mode === 'PRESETS' ? <div>
+              <label htmlFor="scan-preset" className="mb-2 block text-sm text-slate-200">Tipo di scansione</label>
+              <select id="scan-preset" className={fieldClass} value={presetId} onChange={(event) => setPresetId(event.target.value)}>{SCAN_PRESETS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
+              <p className="mt-2 text-sm text-slate-400">{preset.description}</p>
+              <p className="mt-2 text-xs text-cyan-300">Durata indicativa per IP: {profileDurationLabel(preset.id)}</p>
+              <p className="mt-1 text-xs text-slate-500">Ipotesi: singolo IP raggiungibile, LAN stabile, T3. Filtri, UDP, NSE, subnet e coda possono allungare i tempi oltre questo intervallo. Non è il timeout.</p>
+            </div> : <div className="space-y-3">
+              <label htmlFor="nmap-command" className="block text-sm text-slate-200">Comando / opzioni Nmap</label>
+              <textarea id="nmap-command" aria-describedby="nmap-command-help" aria-invalid={!!validationError} rows={3} className={`${fieldClass} font-mono`} value={command} onChange={(event) => setCommand(event.target.value)} spellCheck={false} />
+              <p id="nmap-command-help" className="text-xs text-slate-400">Esempio: nmap -sS -sV -p 22,80,443 -T3. Inserisci solo opzioni: target, binario e output XML sono gestiti dalla piattaforma. Sono ammessi solo i flag supportati e gli script vuln / vulners.</p>
+              {validationError && <p role="alert" className="text-xs text-amber-300">{validationError}</p>}
+              <details className="text-sm text-slate-300"><summary className="cursor-pointer">Profili salvati e timeout</summary><div className="mt-3 space-y-3">
+                <label htmlFor="saved-profile" className="block">Carica profilo salvato</label>
+                <select id="saved-profile" value="" className={fieldClass} onChange={(event) => {
+                  const saved = profiles.find((item) => item.id === event.target.value);
+                  if (saved) { setCommand(saved.nmap_args); setTimeoutMinutes(saved.timeout_seconds / 60); setProfileName(''); }
+                }}><option value="">Seleziona una configurazione</option>{profiles.filter((item) => item.is_custom).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
+                <label htmlFor="profile-name" className="block">Nome profilo (facoltativo)</label><input id="profile-name" className={fieldClass} value={profileName} onChange={(event) => setProfileName(event.target.value)} maxLength={120} />
+                <label htmlFor="scan-timeout" className="block">Timeout per target (minuti)</label><input id="scan-timeout" type="number" min={1} max={1440} className={fieldClass} value={timeout} onChange={(event) => setTimeoutMinutes(Number(event.target.value))} />
+                {timeoutInvalid && <p role="alert" className="text-xs text-amber-300">Il timeout deve essere un intero tra 1 e 1440 minuti.</p>}
+                <p className="text-xs text-slate-500">Le nuove configurazioni vengono salvate nel tenant per riuso e pianificazione. Il timeout è un limite, non una stima di durata.</p>
+              </div></details>
+            </div>}
+            <div className="rounded-lg border border-cyber-border bg-slate-950 p-3 space-y-2">
+              <p className="flex items-center gap-2 text-xs text-slate-400"><Terminal className="h-4 w-4" />Anteprima per ciascun target</p>
+              <code data-testid="nmap-preview" className="block break-all text-xs text-cyan-300">nmap -oX - {args} --stats-every 5s -- {'<target>'}</code>
+              <p className="text-xs text-slate-500">Validazione definitiva sul server al salvataggio. IPv6: -6 aggiunto automaticamente. Nessuna durata o assenza di impatto garantita.</p>
             </div>
-          )}
-
-          {/* Pannello Espandibile: Guida Semplice alla Scelta */}
-          {showHelpGuide && (
-            <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-950/20 text-xs space-y-3 animate-in fade-in">
-              <div className="flex items-center justify-between pb-2 border-b border-amber-500/20">
-                <div className="flex items-center space-x-2 text-amber-300 font-semibold">
-                  <HelpCircle className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span>💡 Guida Semplice: Come Scegliere la Scansione Ideale per la Tua Rete</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowHelpGuide(false)}
-                  className="text-amber-400 hover:text-amber-200 p-1"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              <p className="text-[11px] text-slate-300 leading-relaxed">
-                Non sai quale scegliere? Consulta la guida rapida qui sotto per capire quale obiettivo fa al caso tuo:
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-60 overflow-y-auto pr-1">
-                {CATEGORIES.map((cat) => {
-                  const guide = CATEGORY_HELP_GUIDE[cat.id];
-                  if (!guide) return null;
-                  return (
-                    <div key={cat.id} className="p-2.5 rounded-lg border border-slate-800 bg-slate-900/90 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-white">{cat.name}</span>
-                        <span className="text-[10px] text-cyan-400 font-mono">{guide.estimatedDuration}</span>
-                      </div>
-                      <p className="text-[11px] text-slate-300 leading-snug">{guide.simpleExplanation}</p>
-                      <div className="text-[10px] text-slate-400 pt-1 border-t border-slate-800">
-                        <strong className="text-amber-300">Quando usarlo:</strong> {guide.whenToUse}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {loadingData ? (
-            <div className="py-12 text-center text-xs text-slate-400">
-              <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-cyan-500 border-t-transparent mb-2"></div>
-              <p>Caricamento asset e catalogo profili...</p>
-            </div>
-          ) : (
-            <>
-              {/* Selezione Azienda / Cartella Target */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-medium text-slate-300">
-                    Azienda / Cartella Target da Scansionare <span className="text-red-400">*</span>
-                  </label>
-                  <span className="text-[11px] text-slate-400">
-                    Audit consolidato per tutti gli IP della cartella
-                  </span>
-                </div>
-
-                {flattenedGroups.length === 0 ? (
-                  <div className="p-3 rounded-lg border border-cyber-border bg-slate-900 text-xs text-amber-400">
-                    Nessuna cartella o azienda configurata. Crea prima una cartella nella sezione Target & Scope.
-                  </div>
-                ) : (
-                  <select
-                    value={selectedGroupId}
-                    onChange={(e) => setSelectedGroupId(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-900 border border-cyber-border rounded-lg text-xs text-slate-200 focus:outline-none focus:border-cyan-500 font-sans"
-                    required
-                  >
-                    <option value="" disabled>Seleziona un'azienda o cartella...</option>
-                    {flattenedGroups.map((g) => (
-                      <option key={g.id} value={g.id}>
-                        {'\u00A0'.repeat(g.depth * 3) + (g.depth > 0 ? '↳ 📁 ' : '🏢 ') + g.name} ({g.targetCount} IP censiti)
-                      </option>
-                    ))}
-                  </select>
-                )}
-
-                {/* Card preview dell'azienda / cartella selezionata */}
-                {selectedGroupInfo && (
-                  <div className="mt-2.5 p-3 rounded-xl border border-cyan-500/30 bg-cyan-950/20 text-xs">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <Folder className="w-4 h-4 text-cyan-400 shrink-0" />
-                        <span className="font-bold text-white">{selectedGroupInfo.name}</span>
-                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-900 border border-cyber-border text-cyan-300 font-mono">
-                          {selectedGroupInfo.targetCount} IP inclusi
-                        </span>
-                      </div>
-                    </div>
-                    {selectedGroupInfo.targets.length > 0 ? (
-                      <div className="mt-2 flex flex-wrap gap-1.5 max-h-20 overflow-y-auto pr-1">
-                        {selectedGroupInfo.targets.map((t) => (
-                          <span
-                            key={t.id}
-                            className={`px-2 py-0.5 rounded text-[11px] font-mono border ${
-                              t.is_blacklisted
-                                ? 'bg-rose-950/30 text-rose-400 border-rose-800/40 line-through'
-                                : 'bg-slate-900 text-slate-300 border-cyber-border'
-                            }`}
-                          >
-                            {t.value}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="mt-1.5 text-[11px] text-amber-400/90">
-                        ⚠️ Questa cartella non ha ancora alcun indirizzo IP assegnato. Aggiungi prima dei bersagli per avviare la scansione.
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* SEZIONE 1: MODALITÀ GUIDATA (MASTER PRESETS + CATALOGO DETTAGLIATO) */}
-              {configMode === 'GUIDED' && (
-                <div className="space-y-4">
-                  {/* MASTER PRESETS GRID */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="text-xs font-semibold text-white flex items-center space-x-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-                        <span>Master Presets Intelligenti (1-Click Launch)</span>
-                      </label>
-                      <span className="text-[11px] text-slate-400">
-                        Consigliati per il 90% delle operazioni quotidiane
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      {MASTER_PRESETS.map((preset) => {
-                        const Icon = preset.icon;
-                        const isSelected = selectedPresetId === preset.id;
-
-                        return (
-                          <div
-                            key={preset.id}
-                            onClick={() => handleSelectMasterPreset(preset)}
-                            className={`p-3.5 rounded-xl border cursor-pointer transition-all relative flex flex-col justify-between ${
-                              isSelected
-                                ? 'border-cyan-500 bg-gradient-to-br from-cyan-950/40 via-slate-900 to-indigo-950/30 shadow-[0_0_15px_rgba(6,182,212,0.2)] ring-1 ring-cyan-500/50'
-                                : 'border-cyber-border bg-slate-900/60 hover:border-slate-700 text-slate-300'
-                            }`}
-                          >
-                            <div>
-                              <div className="flex items-center justify-between mb-1.5">
-                                <div className="flex items-center space-x-2">
-                                  <div className={`p-1.5 rounded-lg border ${
-                                    isSelected
-                                      ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-300'
-                                      : 'bg-slate-800/80 border-slate-700 text-slate-400'
-                                  }`}>
-                                    <Icon className="w-4 h-4" />
-                                  </div>
-                                  <span className="font-bold text-xs text-white leading-tight">
-                                    {preset.name}
-                                  </span>
-                                </div>
-                                <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-bold border ${
-                                  preset.invasiveness === 'SAFE'
-                                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
-                                    : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-                                }`}>
-                                  {preset.invasiveness === 'SAFE' ? 'SAFE' : 'Intrusivo'}
-                                </span>
-                              </div>
-
-                              <p className="text-[11px] text-slate-400 leading-snug line-clamp-2 mt-1">
-                                {preset.description}
-                              </p>
-
-                              <div className="mt-2 text-[10px] text-slate-500 flex items-center space-x-2">
-                                <span className="font-mono text-cyan-400">{preset.duration}</span>
-                                <span>•</span>
-                                <span className="truncate">{preset.targetFocus}</span>
-                              </div>
-                            </div>
-
-                            {/* Shortcut per fine-tuning se selezionato */}
-                            {isSelected && (
-                              <div className="mt-3 pt-2.5 border-t border-cyan-500/20 flex items-center justify-between text-[11px]">
-                                <span className="text-cyan-300 font-medium flex items-center space-x-1">
-                                  <Check className="w-3.5 h-3.5 text-cyan-400" />
-                                  <span>Selezionato</span>
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleOpenInFineTuningStudio(preset);
-                                  }}
-                                  className="text-cyan-400 hover:text-cyan-200 flex items-center space-x-1 font-semibold group"
-                                  title="Apri i parametri di questo preset nello Studio 360° per personalizzarli"
-                                >
-                                  <span>Personalizza parametri</span>
-                                  <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* SEZIONE CATALOGO COMPLETO PROFILI & CATEGORIE */}
-                  <div className="pt-2 border-t border-cyber-border/60 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-semibold text-white flex items-center space-x-1.5">
-                        <Sliders className="w-3.5 h-3.5 text-cyan-400" />
-                        <span>Catalogo Profili Specialistici & Categorie ({profiles.length} disponibili)</span>
-                      </label>
-                      <span className="text-[10px] text-slate-400">
-                        Seleziona per categoria per audit specifici
-                      </span>
-                    </div>
-
-                    <div className="space-y-3">
-                      {/* Selettore Categorie (Pills con icone) */}
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                          {CATEGORIES.map((cat) => {
-                            const Icon = cat.icon;
-                            const isSelected = selectedCategory === cat.id;
-                            const count = profiles.filter((p) =>
-                              cat.id === 'CUSTOM' ? p.is_custom : p.category === cat.id
-                            ).length;
-
-                            return (
-                              <div
-                                key={cat.id}
-                                onClick={() => setSelectedCategory(cat.id)}
-                                className={`p-2 rounded-xl border cursor-pointer transition-all ${
-                                  isSelected
-                                    ? `bg-gradient-to-br ${cat.color} shadow-[0_0_15px_rgba(6,182,212,0.15)] ring-1 ring-cyan-500/60`
-                                    : 'border-cyber-border bg-slate-900/60 hover:border-slate-700 text-slate-400'
-                                }`}
-                              >
-                                <div className="flex items-center justify-between mb-1">
-                                  <Icon
-                                    className={`w-3.5 h-3.5 ${
-                                      isSelected ? 'text-cyan-400' : 'text-slate-400'
-                                    }`}
-                                  />
-                                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-800 text-slate-300 font-mono">
-                                    {count}
-                                  </span>
-                                </div>
-                                <div className="font-semibold text-xs text-white leading-tight">
-                                  {cat.name}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {/* Lista Profili per la Categoria Selezionata */}
-                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                          {filteredProfiles.map((p) => {
-                            const isSelected = selectedProfileId === p.id;
-                            return (
-                              <div
-                                key={p.id}
-                                onClick={() => setSelectedProfileId(p.id)}
-                                className={`p-2.5 rounded-xl border cursor-pointer transition-all ${
-                                  isSelected
-                                    ? 'border-cyan-500 bg-cyan-500/10 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
-                                    : 'border-cyber-border bg-slate-900/60 hover:border-slate-700'
-                                }`}
-                              >
-                                <div className="flex items-center justify-between text-xs mb-1">
-                                  <div className="flex items-center space-x-2">
-                                    <span
-                                      className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
-                                        isSelected
-                                          ? 'border-cyan-400 bg-cyan-400'
-                                          : 'border-slate-600'
-                                      }`}
-                                    >
-                                      {isSelected && (
-                                        <Check className="w-2.5 h-2.5 text-slate-950" />
-                                      )}
-                                    </span>
-                                    <span className="font-semibold text-white">{p.name}</span>
-                                    {p.is_custom && (
-                                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/40 font-mono">
-                                        CUSTOM
-                                      </span>
-                                    )}
-                                    {p.invasiveness && (
-                                      <span
-                                        className={`text-[9px] px-1.5 py-0.2 rounded border font-mono font-bold ${
-                                          p.invasiveness === 'SAFE'
-                                            ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
-                                            : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-                                        }`}
-                                      >
-                                        {p.invasiveness}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center space-x-2">
-                                    <span className="text-[10px] text-slate-400 font-mono">
-                                      {Math.round(p.timeout_seconds / 60)}m
-                                    </span>
-                                    {p.is_custom && (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => handleDeleteCustomProfile(p.id, e)}
-                                        className="p-1 text-slate-500 hover:text-rose-400 hover:bg-slate-800 rounded transition-colors"
-                                        title="Elimina profilo custom"
-                                      >
-                                        <Trash2 className="w-3 h-3" />
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                                <p className="text-[11px] text-slate-400 pl-5.5 leading-relaxed">
-                                  {p.description}
-                                </p>
-                                <div className="mt-1.5 pl-5.5 flex items-center space-x-2">
-                                  <code className="text-[10px] font-mono bg-slate-950/80 px-2 py-0.5 rounded text-cyan-300 border border-cyan-900/40">
-                                    {p.nmap_args}
-                                  </code>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-              )}
-
-              {/* SEZIONE 2: MODALITÀ MULTI-OBIETTIVO (COMPOSIZIONE LIBERA) */}
-              {configMode === 'MULTI_OBJECTIVE' && (
-                <div className="space-y-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <label className="text-xs font-medium text-slate-300">
-                        Seleziona uno o più Obiettivi di Scansione
-                      </label>
-                      <p className="text-[11px] text-slate-400">
-                        Scegli gli audit desiderati: il motore unisce le porte e attiva i flag Nmap sicuri.
-                      </p>
-                    </div>
-                    <div className="flex space-x-2 text-[11px]">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedObjectiveIds(OBJECTIVE_OPTIONS.map((o) => o.id))}
-                        className="text-cyan-400 hover:underline"
-                      >
-                        Seleziona tutti
-                      </button>
-                      <span className="text-slate-600">|</span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSelectedObjectiveIds([
-                            'OBJ_WEB',
-                            'OBJ_SERVICES',
-                            'OBJ_VERSIONS',
-                            'OBJ_OS',
-                          ])
-                        }
-                        className="text-slate-400 hover:text-white"
-                      >
-                        Standard 360°
-                      </button>
-                      <span className="text-slate-600">|</span>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedObjectiveIds([])}
-                        className="text-rose-400 hover:underline"
-                      >
-                        Deseleziona
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {OBJECTIVE_OPTIONS.map((obj) => {
-                      const Icon = obj.icon;
-                      const isChecked = selectedObjectiveIds.includes(obj.id);
-                      return (
-                        <label
-                          key={obj.id}
-                          className={`flex items-start space-x-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                            isChecked
-                              ? 'border-cyan-500 bg-cyan-500/10 shadow-[0_0_12px_rgba(6,182,212,0.15)] ring-1 ring-cyan-500/40'
-                              : 'border-cyber-border bg-slate-900/60 hover:border-slate-700'
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedObjectiveIds((prev) => [...prev, obj.id]);
-                              } else {
-                                setSelectedObjectiveIds((prev) => prev.filter((id) => id !== obj.id));
-                              }
-                            }}
-                            className="mt-1 rounded border-slate-700 text-cyan-500 focus:ring-0"
-                          />
-                          <div className="flex-1">
-                            <div className="flex items-center space-x-1.5">
-                              <Icon className={`w-3.5 h-3.5 ${isChecked ? 'text-cyan-400' : 'text-slate-400'}`} />
-                              <span className="text-xs font-semibold text-white">{obj.label}</span>
-                            </div>
-                            <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
-                              {obj.simpleDesc}
-                            </p>
-                            {obj.ports && (
-                              <div className="mt-1 text-[10px] text-slate-500 font-mono">
-                                Porte: {obj.ports.slice(0, 6).join(', ')}
-                                {obj.ports.length > 6 ? ` (+altre ${obj.ports.length - 6})` : ''}
-                              </div>
-                            )}
-                          </div>
-                        </label>
-                      );
-                    })}
-                  </div>
-
-                  <div className="p-3 rounded-xl border border-slate-800 bg-slate-900/60 flex items-center justify-between text-xs text-slate-300">
-                    <div className="flex items-center space-x-2">
-                      <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-                      <span>
-                        Obiettivi attivi: <strong className="text-white font-mono">{selectedObjectiveIds.length}</strong> su{' '}
-                        {OBJECTIVE_OPTIONS.length}
-                      </span>
-                    </div>
-                    <span className="text-[11px] text-cyan-300 font-mono bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-800/40">
-                      Unione porte & flag automatica
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* SEZIONE 3: SCANNING STUDIO 360° (PROFESSIONALE / FINE-TUNING) */}
-              {configMode === 'PROFESSIONAL' && (
-                <div className="space-y-4">
-                  {/* Selettore Scope Porte */}
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                      Scope Porte Bersaglio
-                    </label>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-2">
-                      {PORT_PRESETS.map((preset) => {
-                        const isSelected = selectedPortPreset === preset.id;
-                        return (
-                          <button
-                            type="button"
-                            key={preset.id}
-                            onClick={() => setSelectedPortPreset(preset.id)}
-                            className={`p-2 rounded-lg border text-left text-xs transition-colors ${
-                              isSelected
-                                ? 'border-cyan-500 bg-cyan-500/10 text-white font-medium'
-                                : 'border-cyber-border bg-slate-900/60 text-slate-400 hover:border-slate-700'
-                            }`}
-                          >
-                            <div className="truncate">{preset.label}</div>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {selectedPortPreset === 'CUSTOM' && (
-                      <div className="mt-2">
-                        <input
-                          type="text"
-                          value={customPortInput}
-                          onChange={(e) => setCustomPortInput(e.target.value)}
-                          placeholder="es: 22,80,443,8000-8090,3389"
-                          className="w-full px-3 py-2 bg-slate-900 border border-cyber-border rounded-lg text-xs font-mono text-cyan-400 focus:outline-none focus:border-cyan-500"
-                        />
-                        <span className="text-[10px] text-slate-500 mt-1 block">
-                          Formati accettati: numeri singoli separati da virgola o range (es. 1000-2000).
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Timing Template (T1 - T5) */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-xs font-medium text-slate-300">
-                        Timing & Aggressiveness Template
-                      </label>
-                      <span className="text-[11px] font-mono text-cyan-400">
-                        {timingTemplate === '-T1' && 'T1: Sneaky (Max Evasion)'}
-                        {timingTemplate === '-T2' && 'T2: Polite (Low Bandwidth)'}
-                        {timingTemplate === '-T3' && 'T3: Normal (Balanced)'}
-                        {timingTemplate === '-T4' && 'T4: Aggressive (Recommended)'}
-                        {timingTemplate === '-T5' && 'T5: Insane (Lab/LAN Only)'}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-5 gap-1.5">
-                      {[
-                        { flag: '-T1', label: 'T1', sub: 'Sneaky' },
-                        { flag: '-T2', label: 'T2', sub: 'Polite' },
-                        { flag: '-T3', label: 'T3', sub: 'Normal' },
-                        { flag: '-T4', label: 'T4', sub: 'Aggressive' },
-                        { flag: '-T5', label: 'T5', sub: 'Insane' },
-                      ].map((t) => {
-                        const isSelected = timingTemplate === t.flag;
-                        return (
-                          <button
-                            type="button"
-                            key={t.flag}
-                            onClick={() => setTimingTemplate(t.flag)}
-                            className={`py-1.5 rounded-lg border text-center transition-all ${
-                              isSelected
-                                ? 'border-cyan-500 bg-cyan-500/20 text-white font-bold shadow-[0_0_10px_rgba(6,182,212,0.2)]'
-                                : 'border-cyber-border bg-slate-900/60 text-slate-400 hover:border-slate-700'
-                            }`}
-                          >
-                            <div className="text-xs">{t.label}</div>
-                            <div className="text-[9px] text-slate-500">{t.sub}</div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Penetration Testing & Scanner Flags (Checkboxes) */}
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-2">
-                      Flag di Scansione & Penetration Testing
-                    </label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                      {/* SYN Stealth */}
-                      <label className="flex items-center space-x-2 p-2 rounded-lg border border-cyber-border bg-slate-900/50 cursor-pointer hover:border-slate-700">
-                        <input
-                          type="checkbox"
-                          checked={flagSynStealth}
-                          onChange={(e) => {
-                            setFlagSynStealth(e.target.checked);
-                            if (e.target.checked) setFlagAckProbe(false);
-                          }}
-                          className="rounded border-slate-700 text-cyan-500 focus:ring-0"
-                        />
-                        <div className="flex-1">
-                          <span className="text-white font-medium">SYN Stealth (-sS)</span>
-                          <p className="text-[10px] text-slate-500">Half-open TCP scan senza handshake</p>
-                        </div>
-                      </label>
-
-                      {/* ACK Probe */}
-                      <label className="flex items-center space-x-2 p-2 rounded-lg border border-cyber-border bg-slate-900/50 cursor-pointer hover:border-slate-700">
-                        <input
-                          type="checkbox"
-                          checked={flagAckProbe}
-                          onChange={(e) => {
-                            setFlagAckProbe(e.target.checked);
-                            if (e.target.checked) setFlagSynStealth(false);
-                          }}
-                          className="rounded border-slate-700 text-cyan-500 focus:ring-0"
-                        />
-                        <div className="flex-1">
-                          <span className="text-white font-medium">ACK Firewall Probe (-sA)</span>
-                          <p className="text-[10px] text-slate-500">Mappa regole firewall stateful/filtrate</p>
-                        </div>
-                      </label>
-
-                      {/* Service Version */}
-                      <label className="flex items-center space-x-2 p-2 rounded-lg border border-cyber-border bg-slate-900/50 cursor-pointer hover:border-slate-700">
-                        <input
-                          type="checkbox"
-                          checked={flagServiceVersion}
-                          onChange={(e) => setFlagServiceVersion(e.target.checked)}
-                          className="rounded border-slate-700 text-cyan-500 focus:ring-0"
-                        />
-                        <div className="flex-1">
-                          <span className="text-white font-medium">Service Versioning (-sV)</span>
-                          <p className="text-[10px] text-slate-500">Banner grabbing e versione demoni</p>
-                        </div>
-                      </label>
-
-                      {/* OS Detection */}
-                      <label className="flex items-center space-x-2 p-2 rounded-lg border border-cyber-border bg-slate-900/50 cursor-pointer hover:border-slate-700">
-                        <input
-                          type="checkbox"
-                          checked={flagOsDetection}
-                          onChange={(e) => setFlagOsDetection(e.target.checked)}
-                          className="rounded border-slate-700 text-cyan-500 focus:ring-0"
-                        />
-                        <div className="flex-1">
-                          <span className="text-white font-medium">OS Fingerprinting (-O)</span>
-                          <p className="text-[10px] text-slate-500">Rileva Sistema Operativo remoto</p>
-                        </div>
-                      </label>
-
-                      {/* Version Intensity */}
-                      <label className="flex items-center space-x-2 p-2 rounded-lg border border-cyber-border bg-slate-900/50 cursor-pointer hover:border-slate-700">
-                        <input
-                          type="checkbox"
-                          checked={flagDeepVersion}
-                          disabled={!flagServiceVersion}
-                          onChange={(e) => setFlagDeepVersion(e.target.checked)}
-                          className="rounded border-slate-700 text-cyan-500 focus:ring-0 disabled:opacity-40"
-                        />
-                        <div className="flex-1">
-                          <span className="text-white font-medium">Deep Intensity (Level 7)</span>
-                          <p className="text-[10px] text-slate-500">Sonde aggressive per CVE detection</p>
-                        </div>
-                      </label>
-
-                      {/* No Ping */}
-                      <label className="flex items-center space-x-2 p-2 rounded-lg border border-cyber-border bg-slate-900/50 cursor-pointer hover:border-slate-700">
-                        <input
-                          type="checkbox"
-                          checked={flagNoPing}
-                          onChange={(e) => setFlagNoPing(e.target.checked)}
-                          className="rounded border-slate-700 text-cyan-500 focus:ring-0"
-                        />
-                        <div className="flex-1">
-                          <span className="text-white font-medium">No Ping / Treat Up (-Pn)</span>
-                          <p className="text-[10px] text-slate-500">Salta ICMP se l'host blocca ping</p>
-                        </div>
-                      </label>
-
-                      {/* Script Vulnerabilità Nmap */}
-                      <label className="flex items-center space-x-2 p-2 rounded-lg border border-cyber-border bg-slate-900/50 cursor-pointer hover:border-slate-700 sm:col-span-2">
-                        <input
-                          type="checkbox"
-                          checked={flagVulnScripts}
-                          onChange={(e) => setFlagVulnScripts(e.target.checked)}
-                          className="rounded border-slate-700 text-cyan-500 focus:ring-0"
-                        />
-                        <div className="flex-1">
-                          <span className="text-white font-medium">Script Vulnerabilità Nmap (--script=vuln)</span>
-                          <p className="text-[10px] text-slate-500">Esegue script attivi di rilevamento vulnerabilità e falle critiche CVE note</p>
-                        </div>
-                      </label>
-
-                      {/* Sonde UDP Critiche */}
-                      <label className="flex items-center space-x-2 p-2 rounded-lg border border-cyber-border bg-slate-900/50 cursor-pointer hover:border-slate-700 sm:col-span-2">
-                        <input
-                          type="checkbox"
-                          checked={flagUdpScan}
-                          onChange={(e) => setFlagUdpScan(e.target.checked)}
-                          className="rounded border-slate-700 text-cyan-500 focus:ring-0"
-                        />
-                        <div className="flex-1">
-                          <span className="text-white font-medium">Sonde UDP Critiche (-sU)</span>
-                          <p className="text-[10px] text-slate-500">Audit su servizi UDP esposti ad alto rischio (DNS 53, TFTP 69, NTP 123, SNMP 161, IPMI 623)</p>
-                        </div>
-                      </label>
-
-                      {/* Only Open */}
-                      <label className="flex items-center space-x-2 p-2 rounded-lg border border-cyber-border bg-slate-900/50 cursor-pointer hover:border-slate-700 sm:col-span-2">
-                        <input
-                          type="checkbox"
-                          checked={flagOnlyOpen}
-                          onChange={(e) => setFlagOnlyOpen(e.target.checked)}
-                          className="rounded border-slate-700 text-cyan-500 focus:ring-0"
-                        />
-                        <div className="flex-1">
-                          <span className="text-white font-medium">Mostra solo porte aperte (--open)</span>
-                          <p className="text-[10px] text-slate-500">Ignora porte chiuse/filtrate per ridurre rumore</p>
-                        </div>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Opzione Salva come Profilo Custom */}
-                  <div className="p-3 rounded-xl border border-cyber-border bg-slate-900/40 space-y-3">
-                    <label className="flex items-center space-x-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={saveAsCustomProfile}
-                        onChange={(e) => setSaveAsCustomProfile(e.target.checked)}
-                        className="rounded border-slate-700 text-cyan-500 focus:ring-0"
-                      />
-                      <span className="text-xs font-semibold text-white flex items-center space-x-1.5">
-                        <Save className="w-3.5 h-3.5 text-cyan-400" />
-                        <span>Salva questa configurazione come nuovo Profilo Custom</span>
-                      </span>
-                    </label>
-
-                    {saveAsCustomProfile && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2 border-t border-cyber-border/60">
-                        <div>
-                          <label className="block text-[11px] text-slate-400 mb-1">
-                            Nome Profilo <span className="text-red-400">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            value={customProfileName}
-                            onChange={(e) => setCustomProfileName(e.target.value)}
-                            placeholder="es. Internal Web & DB Audit"
-                            className="w-full px-2.5 py-1.5 bg-slate-950 border border-cyber-border rounded-lg text-xs text-white focus:outline-none focus:border-cyan-500"
-                            required={saveAsCustomProfile}
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[11px] text-slate-400 mb-1">
-                            Categoria di Riferimento
-                          </label>
-                          <select
-                            value={customProfileCategory}
-                            onChange={(e) => setCustomProfileCategory(e.target.value as ScanProfileCategory)}
-                            className="w-full px-2.5 py-1.5 bg-slate-950 border border-cyber-border rounded-lg text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
-                          >
-                            <option value="PEN_TEST">Penetration Testing</option>
-                            <option value="SYSTEM_FLAWS">Falle di Sistema</option>
-                            <option value="WEB_APP">Web App & API</option>
-                            <option value="COMPLIANCE">Compliance</option>
-                          </select>
-                        </div>
-
-                        <div className="sm:col-span-2">
-                          <label className="block text-[11px] text-slate-400 mb-1">
-                            Descrizione
-                          </label>
-                          <input
-                            type="text"
-                            value={customProfileDesc}
-                            onChange={(e) => setCustomProfileDesc(e.target.value)}
-                            placeholder="es. Audit porte applicative e probing versioni per testing interno"
-                            className="w-full px-2.5 py-1.5 bg-slate-950 border border-cyber-border rounded-lg text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[11px] text-slate-400 mb-1">
-                            Timeout Massimo (minuti)
-                          </label>
-                          <input
-                            type="number"
-                            min="1"
-                            max="360"
-                            value={customTimeoutMinutes}
-                            onChange={(e) => setCustomTimeoutMinutes(Number(e.target.value))}
-                            className="w-full px-2.5 py-1.5 bg-slate-950 border border-cyber-border rounded-lg text-xs text-white focus:outline-none focus:border-cyan-500"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* LIVE COMMAND PREVIEW CON LIVE INVASIVENESS METER */}
-              <div className="p-3.5 rounded-xl border border-cyan-900/40 bg-slate-950 font-mono text-xs space-y-2">
-                <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-400 gap-1.5">
-                  <span className="flex items-center space-x-1.5 text-cyan-400">
-                    <Terminal className="w-3.5 h-3.5" />
-                    <span className="font-semibold">Live Nmap Command Preview</span>
-                  </span>
-                  <div className="flex items-center space-x-2">
-                    <span
-                      className={`text-[10px] px-2 py-0.5 rounded border font-mono font-bold ${
-                        calculatedInvasiveness === 'SAFE'
-                          ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/40'
-                          : 'bg-amber-950/60 text-amber-400 border-amber-800/40 animate-pulse'
-                      }`}
-                    >
-                      Invasività: {calculatedInvasiveness}
-                    </span>
-                    <span className="text-[10px] text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/40">
-                      Parametri Convalidati & Sicuri
-                    </span>
-                  </div>
-                </div>
-                <div className="text-slate-300 break-all select-all pt-1 bg-slate-900/70 p-2.5 rounded-lg border border-slate-800">
-                  <span className="text-cyan-400 font-bold">$ nmap </span>
-                  <span className="text-amber-300">{currentLiveNmapArgs}</span>{' '}
-                  <span className="text-emerald-300 font-semibold">{targetIpPreview}</span>
-                </div>
-              </div>
-
-              {/* OPZIONI SCHEDA SCHEDULER (CRON) */}
-              {activeTab === 'SCHEDULED' && (
-                <div className="space-y-3 pt-3 border-t border-cyber-border/60">
-                  <label className="block text-xs font-medium text-slate-300">
-                    Frequenza di Esecuzione Ricorrente
-                  </label>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {CRON_PRESETS.map((preset) => {
-                      const isSelected = selectedCronPreset === preset.value;
-                      return (
-                        <div
-                          key={preset.value}
-                          onClick={() => setSelectedCronPreset(preset.value)}
-                          className={`p-2.5 rounded-lg border cursor-pointer text-xs transition-colors ${
-                            isSelected
-                              ? 'border-cyan-500 bg-cyan-500/10 text-white'
-                              : 'border-cyber-border bg-slate-900/60 text-slate-300 hover:border-slate-700'
-                          }`}
-                        >
-                          <div className="font-medium">{preset.label}</div>
-                          <div className="text-[10px] text-slate-500 mt-0.5">{preset.desc}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {selectedCronPreset === 'CUSTOM' && (
-                    <div className="mt-2">
-                      <label className="block text-[11px] text-slate-400 mb-1">
-                        Espressione Cron personalizzata (5 campi: min ora giorno mese dow)
-                      </label>
-                      <input
-                        type="text"
-                        value={customCron}
-                        onChange={(e) => setCustomCron(e.target.value)}
-                        placeholder="es: */30 * * * *"
-                        className="w-full px-3 py-2 bg-slate-900 border border-cyber-border rounded-lg text-xs font-mono text-cyan-400 focus:outline-none focus:border-cyan-500"
-                        required
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-            </>
-          )}
-
-          {/* Gate di sicurezza e autorizzazione per profili intrusivi (SEC-P1-03 & FR-01.3) */}
-          {isIntrusive && (
-            <div className="p-3.5 rounded-xl border border-amber-500/40 bg-amber-500/10 space-y-2 text-xs animate-in fade-in">
-              <div className="flex items-center space-x-2 text-amber-300 font-semibold">
-                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
-                <span>Profilo Invasivo / Offensive (SEC-P1-03 & FR-01.3)</span>
-              </div>
-              <p className="text-[11px] text-slate-300 leading-relaxed">
-                Questo profilo esegue rilevamenti intensivi, fingerprinting o script attivi Nmap di vulnerabilità (--script=vuln).
-              </p>
-              <label className="flex items-center space-x-2 cursor-pointer text-white pt-1">
-                <input
-                  type="checkbox"
-                  checked={intrusiveConfirmed}
-                  onChange={(e) => setIntrusiveConfirmed(e.target.checked)}
-                  className="rounded border-slate-700 text-amber-500 focus:ring-0"
-                />
-                <span className="font-medium text-[11px]">
-                  Confermo di possedere esplicita autorizzazione scritta del proprietario ad eseguire scansioni intrusive su questo target.
-                </span>
-              </label>
-            </div>
-          )}
-
-          {/* Footer Actions */}
-          <div className="pt-3 flex items-center justify-end space-x-3 border-t border-cyber-border/60 shrink-0">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={submitting}
-              className="px-4 py-2 rounded-lg border border-cyber-border bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-medium transition-colors"
-            >
-              Annulla
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitDisabled}
-              className="px-5 py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-semibold transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1.5"
-            >
-              {activeTab === 'ON_DEMAND' ? (
-                <>
-                  <Play className="w-3.5 h-3.5" />
-                  <span>{submitting ? 'Avvio in corso...' : 'Avvia Scansione Ora'}</span>
-                </>
-              ) : (
-                <>
-                  <Calendar className="w-3.5 h-3.5" />
-                  <span>{submitting ? 'Salvataggio...' : 'Crea Pianificazione'}</span>
-                </>
-              )}
-            </button>
-          </div>
+            <label className="flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={scheduled} onChange={(event) => setScheduled(event.target.checked)} />Pianifica scansione ricorrente</label>
+            {scheduled && <div className="space-y-2">
+              <label htmlFor="scan-frequency" className="block text-sm text-slate-300">Frequenza (fuso orario del server)</label>
+              <select id="scan-frequency" className={fieldClass} value={cronPreset} onChange={(event) => setCronPreset(event.target.value)}>{CRON_PRESETS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
+              {cronPreset === 'CUSTOM' && <><label htmlFor="scan-cron" className="block text-sm text-slate-300">Espressione cron a 5 campi</label><input id="scan-cron" className={fieldClass} value={customCron} onChange={(event) => setCustomCron(event.target.value)} /></>}
+              {cronInvalid && <p role="alert" className="text-xs text-amber-300">Inserisci 5 campi cron; la sintassi verrà verificata dal server.</p>}
+            </div>}
+            {intrusive && <div className="rounded-lg border border-amber-500/30 p-3 space-y-2">
+              <p className="text-sm text-amber-300">Configurazione a impatto elevato o con controlli attivi</p>
+              <label className="flex items-start gap-2 text-xs text-slate-300"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />Confermo di possedere esplicita autorizzazione scritta per questa configurazione e questo scope.</label>
+            </div>}
+            <details className="text-xs text-slate-400"><summary className="cursor-pointer">Limiti dei risultati</summary><p className="mt-2">La scansione non è un penetration test né una verifica di conformità. Le versioni, le CVE correlate e gli esiti NSE richiedono validazione professionale; risultati vuoti non dimostrano assenza di vulnerabilità. -Pn salta la verifica preliminare degli host, non aggira i firewall. SYN resta rilevabile.</p></details>
+          </fieldset>
+          <footer className="flex justify-end gap-3 border-t border-cyber-border pt-4">
+            <button type="button" disabled={submitting} onClick={onClose} className="rounded-lg px-3 py-2 text-sm text-slate-400">Annulla</button>
+            <button type="submit" disabled={disabled} className="flex items-center gap-2 rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-40"><Play className="h-4 w-4" />{submitting ? 'Invio…' : scheduled ? 'Crea pianificazione' : 'Avvia scansione'}</button>
+          </footer>
         </form>
-      </div>
+      </section>
     </div>
   );
 };

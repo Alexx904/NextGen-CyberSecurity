@@ -47,12 +47,13 @@ type ScanOrchestrator struct {
 	runner      scanner.Runner
 	logger      *slog.Logger
 
-	findingRepo domain.FindingRepository
-	correlator  Correlator
-	broadcaster EventBroadcaster
-	jobs        chan *ScanJob
-	activeScans map[uuid.UUID]context.CancelFunc
-	activeMu    sync.RWMutex
+	findingRepo    domain.FindingRepository
+	correlator     Correlator
+	broadcaster    EventBroadcaster
+	jobs           chan *ScanJob
+	activeScans    map[uuid.UUID]context.CancelFunc
+	progressByScan map[uuid.UUID]domain.ScanProgressPayload
+	activeMu       sync.RWMutex
 
 	workersWg sync.WaitGroup
 	ctx       context.Context
@@ -76,6 +77,24 @@ func (o *ScanOrchestrator) SetEventBroadcaster(broadcaster EventBroadcaster) {
 }
 
 func (o *ScanOrchestrator) publishEvent(topic string, event domain.SSEEvent) {
+	o.activeMu.Lock()
+	switch payload := event.Data.(type) {
+	case domain.ScanPhasePayload:
+		if o.progressByScan == nil {
+			o.progressByScan = make(map[uuid.UUID]domain.ScanProgressPayload)
+		}
+		o.progressByScan[payload.ScanID] = domain.ScanProgressPayload{ScanID: payload.ScanID, Phase: payload.Phase, Percentage: payload.Percentage, Message: payload.Message, ObservedAt: time.Now().UTC()}
+	case domain.ScanProgressPayload:
+		if o.progressByScan == nil {
+			o.progressByScan = make(map[uuid.UUID]domain.ScanProgressPayload)
+		}
+		o.progressByScan[payload.ScanID] = payload
+	case domain.ScanStatusPayload:
+		if payload.Status != domain.ScanStatusRunning && payload.Status != domain.ScanStatusQueued {
+			delete(o.progressByScan, payload.ScanID)
+		}
+	}
+	o.activeMu.Unlock()
 	if o.broadcaster != nil {
 		o.broadcaster.Publish(topic, event)
 	}
@@ -101,14 +120,15 @@ func NewScanOrchestrator(
 	}
 
 	return &ScanOrchestrator{
-		cfg:         cfg,
-		scanRepo:    scanRepo,
-		profileRepo: profileRepo,
-		targetRepo:  targetRepo,
-		runner:      runner,
-		logger:      logger,
-		jobs:        make(chan *ScanJob, cfg.QueueSize),
-		activeScans: make(map[uuid.UUID]context.CancelFunc),
+		cfg:            cfg,
+		scanRepo:       scanRepo,
+		profileRepo:    profileRepo,
+		targetRepo:     targetRepo,
+		runner:         runner,
+		logger:         logger,
+		jobs:           make(chan *ScanJob, cfg.QueueSize),
+		activeScans:    make(map[uuid.UUID]context.CancelFunc),
+		progressByScan: make(map[uuid.UUID]domain.ScanProgressPayload),
 	}
 }
 
@@ -226,6 +246,18 @@ func (o *ScanOrchestrator) unregisterActiveScan(scanID uuid.UUID) {
 	o.activeMu.Lock()
 	defer o.activeMu.Unlock()
 	delete(o.activeScans, scanID)
+	delete(o.progressByScan, scanID)
+}
+
+// GetProgress is consulted only after the service has verified tenant ownership.
+func (o *ScanOrchestrator) GetProgress(scanID uuid.UUID) *domain.ScanProgressPayload {
+	o.activeMu.RLock()
+	defer o.activeMu.RUnlock()
+	progress, ok := o.progressByScan[scanID]
+	if !ok {
+		return nil
+	}
+	return &progress
 }
 
 // worker gestisce il ciclo di vita del singolo thread consumatore
@@ -336,7 +368,7 @@ func (o *ScanOrchestrator) processJob(job *ScanJob, workerID int) {
 			ScanID:     scan.ID,
 			Phase:      "HOST_DISCOVERY",
 			Message:    "Verifica e censimento host attivi",
-			Percentage: 10.0,
+			Percentage: 0,
 		},
 	})
 
@@ -357,6 +389,20 @@ func (o *ScanOrchestrator) processJob(job *ScanJob, workerID int) {
 		Args:    profileArgs,
 		Timeout: timeout,
 	}
+	progressStarted := time.Now()
+	totalProgress := 0.0
+	profileConfig.OnProgress = func(progress scanner.TaskProgress) {
+		phase, percentage, remaining := estimateScanProgress(progress, time.Since(progressStarted).Seconds(), totalProgress)
+		if phase == "" {
+			return
+		}
+		totalProgress = percentage
+		payload := domain.ScanProgressPayload{
+			ScanID: scan.ID, Phase: phase, PhasePercentage: progress.Percent, Percentage: percentage,
+			RemainingSeconds: remaining, Message: "Statistiche Nmap: " + progress.Task, ObservedAt: time.Now().UTC(),
+		}
+		o.publishEvent(topic, domain.SSEEvent{Event: domain.EventScanProgress, Data: payload})
+	}
 
 	// Notifica avvio scansione porte
 	o.publishEvent(topic, domain.SSEEvent{
@@ -365,7 +411,7 @@ func (o *ScanOrchestrator) processJob(job *ScanJob, workerID int) {
 			ScanID:     scan.ID,
 			Phase:      "PORT_SCAN",
 			Message:    fmt.Sprintf("Scansione porte con profilo %s in corso", profile.Name),
-			Percentage: 25.0,
+			Percentage: 0,
 		},
 	})
 
@@ -415,7 +461,7 @@ func (o *ScanOrchestrator) processJob(job *ScanJob, workerID int) {
 			ScanID:     scan.ID,
 			Phase:      "SERVICE_DETECTION",
 			Message:    "Rilevamento servizi ed estrazione banner",
-			Percentage: 60.0,
+			Percentage: 90.0,
 		},
 	})
 
@@ -426,7 +472,7 @@ func (o *ScanOrchestrator) processJob(job *ScanJob, workerID int) {
 			ScanID:     scan.ID,
 			Phase:      "CVE_CORRELATION",
 			Message:    "Correlazione vulnerabilità CVE/CVSS su feed locale",
-			Percentage: 80.0,
+			Percentage: 92.0,
 		},
 	})
 

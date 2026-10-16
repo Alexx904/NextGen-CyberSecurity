@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -107,9 +108,13 @@ type ScanPhasePayload struct {
 
 // ScanProgressPayload notifica l'avanzamento percentuale stimato dal processo Nmap (--stats-every)
 type ScanProgressPayload struct {
-	ScanID     uuid.UUID `json:"scan_id"`
-	Percentage float64   `json:"percentage"`
-	Message    string    `json:"message"`
+	ObservedAt       time.Time `json:"observed_at"`
+	Phase            string    `json:"phase,omitempty"`
+	PhasePercentage  *float64  `json:"phase_percentage,omitempty"`
+	RemainingSeconds *float64  `json:"remaining_seconds,omitempty"`
+	ScanID           uuid.UUID `json:"scan_id"`
+	Percentage       float64   `json:"percentage"`
+	Message          string    `json:"message"`
 }
 
 // ScanFindingPayload notifica una porta aperta o vulnerabilità persistita incrementalmente su DB
@@ -142,4 +147,3 @@ func DiscoveryTopic(sessionID uuid.UUID) string {
 func ScanTopic(scanID uuid.UUID) string {
 	return "scan:" + scanID.String()
 }
-

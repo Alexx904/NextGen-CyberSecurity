@@ -138,21 +138,17 @@
 
 ---
 
-### FR-16: Personalizzazione Avanzata Profili di Scansione & Categorie Professionali
-- **FR-16.1 (Categorizzazione dei Profili di Scansione):** Il sistema deve organizzare i profili di scansione in macro-categorie specialistiche:
-  1. *Penetration Testing & Probing*: Audit ad alta intensità per simulazioni di attacco, ricognizione furtiva SYN stealth (`-sS`), full port scan (65535 porte `-p-`), verifica bypass firewall (`-sA`);
-  2. *Falle di Sistema & Vulnerability Assessment*: Audit approfondito del sistema operativo (`-O`), correlazione versioni dei demoni di sistema (RPC, SMB, RDP, SSH, database) e mapping CVE;
-  3. *Web Application & API Services*: Audit focalizzato sullo stack web, API gateway e reverse proxy (porte 80, 443, 8080, 8443, 3000, 5000);
-  4. *Network & Asset Discovery*: Ping sweep e ricognizione rapida host UP su LAN/WAN (`-sn -PE -PS...`);
-  5. *Compliance & Hardening Check*: Rilevamento protocolli insicuri o non cifrati (Telnet, FTP, Rsh, VNC non protetto) e baseline di conformità.
-- **FR-16.2 (Configuratore Professionale Custom Scansione):** L'utente deve poter comporre scansioni personalizzate on-the-fly definendo granularmente: range porte (Top 100/1000, Tutte, porte custom separate da virgola o range), timing template (da T1 stealth a T4 aggressive), version intensity, OS detection, solo porte aperte (`--open`), ping bypass (`-Pn`).
-- **FR-16.3 (Live Command Preview Sicuro):** L'interfaccia deve mostrare l'anteprima in tempo reale del comando Nmap generato, con validazione rigorosa per prevenire flag injection (`IsSafeArgument`).
+### FR-16: Profili tecnici ed editor Nmap
+- **FR-16.1 (Profili veritieri):** Due modalità, Profili e Comando Nmap, senza compositore multi-obiettivo duplicato. Nomi espliciti per porte/protocolli, versioni, NSE e filtraggio ACK; nessuna promessa di penetration test, invisibilità, bypass o conformità. Categorie e ID storici restano compatibili nelle API. Dettaglio nel [dominio scanner](../domains/scanning_and_discovery.md).
+- **FR-16.2 (Editor professionale):** Opzioni modificabili direttamente, prefisso nmap facoltativo; porte, timing T0–T5, versioni, OS e sonde entro l'allowlist server. Target separati e output XML gestito. -Pn salta discovery, non aggira firewall. Una sola tecnica TCP e un solo selettore porte; TCP+UDP con lista unica.
+- **FR-16.3 (Anteprima e validazione):** Anteprima delle opzioni realmente inviate, nessun matching per nome/categoria. Controllo client preliminare e validazione backend autorevole di sintassi, combinazioni e intervalli. Nessun badge anticipato «sicuro»; rischio e durata dipendono da rete e target.
 - **FR-16.4 (Gestione e Salvataggio Profili Custom):** Possibilità di salvare una configurazione personalizzata come nuovo profilo riutilizzabile e schedulabile dal tenant, con persistenza su database (`POST /api/v1/scan-profiles`, `DELETE /api/v1/scan-profiles/{id}`).
+- **FR-16.5 (Tempi e progresso del gruppo, SCAN-TIME-01):** Ogni nuovo preset espone una durata indicativa per IP con ipotesi esplicite e timeout distinto. Dopo il lancio del gruppo la pagina Scansioni mostra progresso complessivo del lotto, job in coda/in esecuzione/riusciti/falliti/annullati ed ETA approssimativa quando le statistiche Nmap sono sufficienti. Lotto identificato dagli ID restituiti, non dallo storico. Telemetria assente/scaduta non deve produrre un countdown fittizio; 100% significa tutti i job terminati, anche con errori. Valori orientativi, formula e limiti nel dominio scanner.
 
 ### FR-17: Ricerca Vulnerabilità Online (NVD API 2.0 Cloud Lookup) & Script Vulnerabilità Nmap (--script vuln)
 - **FR-17.1 (Ricerca CVE Online su Feed Ufficiale NIST NVD):** In aggiunta al catalogo locale, il motore di correlazione deve poter interrogare in tempo reale le API REST pubbliche ufficiali (NIST NVD API 2.0) tramite CPE 2.3 URI o keyword di prodotto/versione per identificare CVE note appena pubblicate.
 - **FR-17.2 (Auto-Popolamento e Caching su PostgreSQL):** Ogni CVE recuperata tramite ricerca online deve essere automaticamente memorizzata nella tabella `cve_entries` di PostgreSQL (upsert atomico con indici CVSS), arricchendo in modo incrementale il database locale e garantendo velocità istantanea e resilienza offline per le scansioni successive.
-- **FR-17.3 (Script Engine Nmap per Vulnerabilità Attive `--script vuln`):** I profili specialistici di audit (es. *Falle di Sistema*, *All-in-One 360°*) e il configuratore custom devono supportare l'esecuzione controllata degli script NSE di vulnerabilità (`--script=vuln`), rilevando configurazioni deboli (SMB EternalBlue, SSL POODLE, RDP, exploit web).
+- **FR-17.3 (Script Engine Nmap):** Profilo Controlli vulnerabilità NSE ed editor supportano `--script=vuln` entro l'allowlist. La categoria può includere script intrusivi, richiede conferma UI e classificazione persistita dal server; copertura dipendente dagli script installati, esiti da verificare professionalmente. Non equivale a exploitation completa o penetration test.
 - **FR-17.4 (Parsing XML & Correlazione Risultati Script NSE):** Il parser Nmap e l'orchestratore devono decodificare i tag `<script>` associati a porte e host, estraendo automaticamente CVE ID menzionati nell'output, severità, banner e raccomandazioni di remediation da salvare come finding formali.
 
 ### FR-18: Qualità Grafica, Layout A4 & Coerenza Dati nei Report PDF (Executive & Technical)

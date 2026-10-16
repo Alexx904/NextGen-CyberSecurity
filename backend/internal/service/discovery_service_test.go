@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -51,6 +53,32 @@ var sampleDiscoveryXML = []byte(`<?xml version="1.0" encoding="UTF-8"?>
     <hosts up="2" down="1" total="3"/>
   </runstats>
 </nmaprun>`)
+
+func TestDiscoveryService_RespectsCommonPortsOption(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		t.Run(fmt.Sprintf("include_ports_%v", enabled), func(t *testing.T) {
+			var enrichments atomic.Int32
+			runner := &mockScanRunner{runScanFn: func(ctx context.Context, target string, profile scanner.ProfileConfig) (*scanner.ScanExecutionResult, error) {
+				if profile.Name == "LAN Host Enrichment" {
+					enrichments.Add(1)
+				}
+				return &scanner.ScanExecutionResult{RawXML: sampleDiscoveryXML}, nil
+			}}
+			svc := NewDiscoveryService(runner, nil, nil, nil)
+			_, err := svc.DiscoverSubnet(context.Background(), uuid.New(), domain.DiscoveryRequest{Subnet: "192.168.1.0/24", IncludeCommonPorts: enabled})
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := int32(0)
+			if enabled {
+				want = 2
+			}
+			if got := enrichments.Load(); got != want {
+				t.Fatalf("port scans = %d, want %d", got, want)
+			}
+		})
+	}
+}
 
 func TestDiscoveryService_DiscoverSubnet_Success(t *testing.T) {
 	runner := &mockScanRunner{
@@ -528,6 +556,3 @@ func TestDiscoveryService_GetSessionResults(t *testing.T) {
 		t.Errorf("attesi 2 dispositivi salvati nella sessione, trovati %d", len(res.Devices))
 	}
 }
-
-
-

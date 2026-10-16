@@ -3,6 +3,7 @@ package scanner
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,6 +33,7 @@ const (
 
 // ProfileConfig racchiude le specifiche operative di un profilo di scansione Nmap
 type ProfileConfig struct {
+	OnProgress   func(TaskProgress)         `json:"-"`
 	Name         string                     `json:"name"`
 	Args         []string                   `json:"args"`
 	Timeout      time.Duration              `json:"timeout"`
@@ -160,13 +162,13 @@ func GetDefaultProfiles() map[ProfileType]ProfileConfig {
 
 // Regex per convalidare argomenti con parametri (es: -p80,443 o -p U:53,69 o --top-ports 100 o --max-retries 2)
 var (
-	validPortArgRegex       = regexp.MustCompile(`^-p(([TU]:)?[0-9]{1,5}(-[0-9]{1,5})?,?)+$|^-p-$`)
-	validTimingArgRegex     = regexp.MustCompile(`^-T[0-5]$`)
-	validTopPortsRegex      = regexp.MustCompile(`^[0-9]{1,5}$`)
-	validRateRegex          = regexp.MustCompile(`^[0-9]+$`)
-	validVersionIntRegex    = regexp.MustCompile(`^[0-9]$`)
-	validSYNArgRegex        = regexp.MustCompile(`^-PS([0-9]{1,5},?)+$`)
-	validUDPArgRegex        = regexp.MustCompile(`^-PU([0-9]{1,5},?)+$`)
+	validPortArgRegex    = regexp.MustCompile(`^-p(([TU]:)?[0-9]{1,5}(-[0-9]{1,5})?,?)+$|^-p-$`)
+	validTimingArgRegex  = regexp.MustCompile(`^-T[0-5]$`)
+	validTopPortsRegex   = regexp.MustCompile(`^[0-9]{1,5}$`)
+	validRateRegex       = regexp.MustCompile(`^[0-9]+$`)
+	validVersionIntRegex = regexp.MustCompile(`^[0-9]$`)
+	validSYNArgRegex     = regexp.MustCompile(`^-PS([0-9]{1,5},?)+$`)
+	validUDPArgRegex     = regexp.MustCompile(`^-PU([0-9]{1,5},?)+$`)
 )
 
 // DisallowedFlags elenca i flag Nmap severamente vietati per ragioni di sicurezza e conformità architetturale (NFR-SEC-01)
@@ -178,26 +180,26 @@ var DisallowedFlags = map[string]bool{
 	"--script-updatedb": true,
 
 	// Disabilitazione reindirizzamento output su file su disco (l'output deve transitare via stdout XML)
-	"-oN":               true,
-	"-oX":               true,
-	"-oS":               true,
-	"-oG":               true,
-	"-oA":               true,
-	"--stylesheet":      true,
-	"--no-stylesheet":   true,
+	"-oN":             true,
+	"-oX":             true,
+	"-oS":             true,
+	"-oG":             true,
+	"-oA":             true,
+	"--stylesheet":    true,
+	"--no-stylesheet": true,
 
 	// Disabilitazione caricamento target da file locali
-	"-iL":               true,
-	"-iR":               true,
-	"--resume":          true,
+	"-iL":      true,
+	"-iR":      true,
+	"--resume": true,
 
 	// Disabilitazione modalità interattive o privileged bypass
-	"--interactive":     true,
-	"--privileged":      true,
-	"--unprivileged":    true,
-	"--datadir":         true,
-	"--servicedb":       true,
-	"--versiondb":       true,
+	"--interactive":  true,
+	"--privileged":   true,
+	"--unprivileged": true,
+	"--datadir":      true,
+	"--servicedb":    true,
+	"--versiondb":    true,
 }
 
 // IsSafeArgument verifica se un singolo token/flag Nmap rispetta le policy di sicurezza
@@ -329,7 +331,76 @@ func ParseProfileArgs(argsStr string) ([]string, error) {
 		result = append(result, token)
 	}
 
+	if err := validateScanSemantics(result); err != nil {
+		return nil, err
+	}
 	return result, nil
+}
+
+// validateScanSemantics rejects configurations that Nmap cannot execute coherently.
+func validateScanSemantics(args []string) error {
+	flags := make(map[string]bool)
+	tcpTypes, portSelectors := 0, 0
+	invalid := func(reason string) error { return fmt.Errorf("%w: %s", domain.ErrDisallowedScanOption, reason) }
+	for i, arg := range args {
+		flags[arg] = true
+		switch arg {
+		case "-sS", "-sT", "-sA", "-sN", "-sF", "-sX":
+			tcpTypes++
+		case "-F":
+			portSelectors++
+		case "--top-ports":
+			portSelectors++
+			n, _ := strconv.Atoi(args[i+1]) // ParseProfileArgs already checked arity and syntax.
+			if n < 1 || n > 65535 {
+				return invalid("--top-ports richiede un valore tra 1 e 65535")
+			}
+		}
+		if strings.HasPrefix(arg, "-p") {
+			portSelectors++
+			if arg == "-p-" {
+				continue
+			}
+			for _, entry := range strings.Split(strings.TrimPrefix(arg, "-p"), ",") {
+				entry = strings.TrimPrefix(strings.TrimPrefix(entry, "T:"), "U:")
+				bounds := strings.Split(entry, "-")
+				start, err := strconv.Atoi(bounds[0])
+				if err != nil || start < 0 || start > 65535 {
+					return invalid("porta fuori intervallo 0-65535")
+				}
+				if len(bounds) == 2 {
+					end, err := strconv.Atoi(bounds[1])
+					if err != nil || end < start || end > 65535 {
+						return invalid("intervallo porte non valido")
+					}
+				}
+			}
+		}
+	}
+	if tcpTypes > 1 || portSelectors > 1 {
+		return invalid("scegli una sola tecnica TCP e un solo selettore porte")
+	}
+	if flags["-sn"] && (tcpTypes > 0 || portSelectors > 0 || flags["-sU"] || flags["-sV"] || flags["-O"]) {
+		return invalid("-sn esegue solo host discovery: rimuovi opzioni di port scan, versioni e OS")
+	}
+	if flags["-sA"] && (flags["--open"] || flags["-sV"] || flags["-O"]) {
+		return invalid("ACK misura filtered/unfiltered: incompatibile con --open, -sV e -O")
+	}
+	return nil
+}
+
+// ClassifyInvasiveness is a conservative operational label, never a safety guarantee.
+func ClassifyInvasiveness(args []string) domain.InvasivenessLevel {
+	for _, arg := range args {
+		switch arg {
+		case "--script=vuln", "--script=vulners", "-p-", "-T4", "-T5", "--version-all", "-sA", "--min-rate":
+			return domain.InvasivenessIntrusive
+		}
+		if arg == "-p1-65535" || arg == "-p0-65535" {
+			return domain.InvasivenessIntrusive
+		}
+	}
+	return domain.InvasivenessSafe
 }
 
 // BuildSafeArguments convalida il target e genera la slice ordinata di argomenti per l'invocazione diretta di Nmap
@@ -377,7 +448,7 @@ func BuildSafeArguments(profileArgs []string, target string) ([]string, error) {
 	finalArgs := make([]string, 0, len(validatedArgs)+4)
 	finalArgs = append(finalArgs, "-oX", "-") // Output XML nativo su stdout
 	finalArgs = append(finalArgs, validatedArgs...)
-	finalArgs = append(finalArgs, "--")       // Delimitatore di sicurezza POSIX
+	finalArgs = append(finalArgs, "--") // Delimitatore di sicurezza POSIX
 	finalArgs = append(finalArgs, targetInfo.CleanValue)
 
 	return finalArgs, nil

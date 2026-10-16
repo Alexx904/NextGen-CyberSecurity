@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -26,22 +27,24 @@ type StartScanRequest struct {
 
 // ScanResponse rappresenta il modello pubblico di una scansione
 type ScanResponse struct {
-	ID           string                  `json:"id"`
-	TenantID     string                  `json:"tenant_id"`
-	TargetID     string                  `json:"target_id"`
-	ProfileID    string                  `json:"profile_id"`
-	TriggerType  string                  `json:"trigger_type"`
-	Status       string                  `json:"status"`
-	StartedAt    *time.Time              `json:"started_at,omitempty"`
-	CompletedAt  *time.Time              `json:"completed_at,omitempty"`
-	SummaryStats domain.ScanSummaryStats `json:"summary_stats"`
-	ErrorMessage *string                 `json:"error_message,omitempty"`
-	CreatedAt    time.Time               `json:"created_at"`
-	UpdatedAt    time.Time               `json:"updated_at"`
+	Progress     *domain.ScanProgressPayload `json:"progress,omitempty"`
+	ID           string                      `json:"id"`
+	TenantID     string                      `json:"tenant_id"`
+	TargetID     string                      `json:"target_id"`
+	ProfileID    string                      `json:"profile_id"`
+	TriggerType  string                      `json:"trigger_type"`
+	Status       string                      `json:"status"`
+	StartedAt    *time.Time                  `json:"started_at,omitempty"`
+	CompletedAt  *time.Time                  `json:"completed_at,omitempty"`
+	SummaryStats domain.ScanSummaryStats     `json:"summary_stats"`
+	ErrorMessage *string                     `json:"error_message,omitempty"`
+	CreatedAt    time.Time                   `json:"created_at"`
+	UpdatedAt    time.Time                   `json:"updated_at"`
 }
 
 func toScanResponse(s *domain.Scan) ScanResponse {
 	return ScanResponse{
+		Progress:     s.Progress,
 		ID:           s.ID.String(),
 		TenantID:     s.TenantID.String(),
 		TargetID:     s.TargetID.String(),
@@ -333,6 +336,45 @@ func (h *ScanHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if rawIDs, present := r.URL.Query()["ids"]; present {
+		if len(rawIDs) != 1 || rawIDs[0] == "" {
+			response.Error(w, http.StatusBadRequest, "VALIDATION_ERROR", "Elenco ID non valido")
+			return
+		}
+		parts := strings.Split(rawIDs[0], ",")
+		if len(parts) > 100 {
+			response.Error(w, http.StatusBadRequest, "VALIDATION_ERROR", "Massimo 100 scansioni per richiesta")
+			return
+		}
+		ids := make([]uuid.UUID, 0, len(parts))
+		seen := make(map[uuid.UUID]bool)
+		for _, part := range parts {
+			id, err := uuid.Parse(part)
+			if err != nil || id == uuid.Nil {
+				response.Error(w, http.StatusBadRequest, "VALIDATION_ERROR", "ID scansione non valido")
+				return
+			}
+			if !seen[id] {
+				ids = append(ids, id)
+				seen[id] = true
+			}
+		}
+		items := make([]ScanResponse, 0, len(ids))
+		for _, id := range ids {
+			scan, err := h.scanService.GetScan(r.Context(), tenantID, id)
+			if err != nil {
+				if errors.Is(err, domain.ErrNotFound) {
+					response.Error(w, http.StatusNotFound, "NOT_FOUND", "Scansione non disponibile")
+				} else {
+					response.Error(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Recupero progresso non riuscito")
+				}
+				return
+			}
+			items = append(items, toScanResponse(scan))
+		}
+		response.JSON(w, http.StatusOK, map[string]interface{}{"items": items, "total": len(items), "limit": len(items), "offset": 0})
+		return
+	}
 	limit := 20
 	if l := r.URL.Query().Get("limit"); l != "" {
 		if val, err := strconv.Atoi(l); err == nil && val > 0 && val <= 100 {
@@ -662,4 +704,3 @@ func (h *ScanHandler) GetDiff(w http.ResponseWriter, r *http.Request) {
 
 	response.JSON(w, http.StatusOK, diff)
 }
-

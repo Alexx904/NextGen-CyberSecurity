@@ -1,7 +1,7 @@
 # 3. Interactive Task List & Implementation Backlog
 
 > **Stato:** ATTIVO (Priorità validate dal Product Owner)
-> **Ultimo Aggiornamento:** 2026-10-15
+> **Ultimo Aggiornamento:** 2026-10-16
 > **Autore / Ruolo:** Codex Tech Lead (System Architect & QA)
 > **Documenti Correlati:** [REQUIREMENTS.md](../01-product/REQUIREMENTS.md) | [PRD.md](../01-product/PRD.md) | [HLD.md](../03-architecture/HLD.md) | [CHANGELOG.md](../../CHANGELOG.md)
 
@@ -21,6 +21,33 @@
 ---
 
 ## 🚀 Coda di Sviluppo Attiva (Priorità validate dal PO)
+
+### Revisione scanner Nmap (SCAN-UX-01)
+
+- [x] SCAN-COPY-01 · Descrizioni dei profili focalizzate sullo scopo
+  - File: `frontend/src/components/scans/scanConfiguration.ts`, `frontend/src/components/NewScanModal.tsx`, test modale
+  - Dipende da: SCAN-UX-01 (implementazione presente)
+  - Accettazione PO: 2026-10-16, OK riferito alla revisione dei testi.
+  - Test: regressione frontend e build; verifica documentale e whitespace
+  - Docs: dominio scanner, specifiche UI, PROJECT_STATE
+  - DoD: descrizioni tecniche dirette, nessuna variazione ai comandi; controlli PASS e self-review; limite visuale dichiarato.
+  - Evidenze: `npm.cmd test` PASS (21 file, 145 test); `npm.cmd run build` PASS (17,06 s); verificatore documentale PASS, exit 0. Copy verificato nel DOM e self-review; nessuna nuova verifica visuale di layout per questa modifica testuale. Restano separati i gate visuali SCAN-UX-01/SCAN-TIME-01.
+
+- [x] SCAN-TIME-01 · Stime per profilo, barra totale ed ETA
+  - File: runner/progress scanner e orchestratore Go, payload SSE Go/TypeScript; preset, modale, dettaglio/elenco scansioni e test
+  - Dipende da: SCAN-UX-01 (implementazione presente)
+  - Test: telemetria XML/SSE, stime/monotonicità/stale, gruppi e stati terminali; suite complete, build/vet
+  - Docs: `docs/domains/scanning_and_discovery.md`, `docs/04-development/SCAN_PROGRESS_PLAN.md`
+  - DoD: test mirati PASS; integrazione/UI PASS o limite dichiarato; build/typecheck/vet PASS; Doc Sync e self-review.
+  - Evidenze: frontend 21 file / 145 test e build PASS; backend suite/build/vet PASS, exit 0; doc verifier PASS. Il PO conferma test delle scansioni riusciti e accetta la funzionalità il 2026-10-16. Prova funzionale eseguita dal PO; nessuna prova visuale autonoma o benchmark rete dichiarato dall'agente.
+
+- [x] SCAN-UX-01 · Semplificazione scanner, profili veritieri ed editor Nmap
+  - File: `frontend/src/components/NewScanModal.tsx`, `frontend/src/components/scans/scanConfiguration.ts`, relativi test; `backend/internal/scanner/profiles.go`, `backend/internal/service/scan_service.go`, relativi test
+  - Dipende da: nessuno; sostituisce la UX proposta in E27.1 su richiesta del PO
+  - Test: parser happy/error/edge, payload coerente con preview, scope/blacklist, gate, scheduler; suite Go/frontend, build, vet, verifica documentale e UI locale
+  - Docs: `docs/domains/scanning_and_discovery.md`, `docs/04-development/NMAP_SCAN_REVIEW.md`
+  - DoD: (1) test mirati PASS; (2) integrazione/UI PASS o limite dichiarato; (3) suite/build/vet PASS; (4) Doc Sync e self-review completati.
+  - Accettazione PO: 2026-10-16, test delle scansioni dichiarati correttamente funzionanti. Il PO fornisce la verifica funzionale mancante; nessuno screenshot o controllo visuale autonomo inventato. Il debito TECH-DEBT-05 resta aperto.
 
 ### Pulizia repository · Artefatti obsoleti (AGENT-CLEAN-03)
 
@@ -185,6 +212,7 @@ Registro formale del debito tecnico e delle ottimizzazioni architetturali (regol
 
 | ID | Priorità | Componente / Percorso | Descrizione & Impatto | Piano di Rientro |
 |---|---|---|---|---|
+| `TECH-DEBT-05` | Alta | `backend/internal/delivery/http/handler/scan_handler.go`, scheduler, audit | FR-01.3 incompleto: consenso solo UI, non attestato immutabilmente né imposto dall'API; classificazione impatto euristica. | Definire contratto di attestazione per scope/configurazione, validazione server e registrazione audit; coprire API diretta e pianificazioni con test. Nessuna attestazione di conformità finché il gap resta. |
 | `TECH-DEBT-01` | Media | `frontend/src/` | Ottimizzazione manual chunks in `vite.config.ts` per separare librerie pesanti (`@xterm`, `recharts`, `lucide-react`) e ridurre il bundle iniziale sotto 500kB. | Refactoring bundle-splitting in Milestone 3 |
 | `TECH-DEBT-02` | Media | `backend/internal/repository/migrations` | Verifica sistematica e test automatico di rollback (`down.sql`) per tutte le migrazioni storiche da `000001` a `000007`. | Script CI dedicato `migrate -path ... down` in Docker test |
 | `TECH-DEBT-03` | Bassa | `frontend/src/components/` | Allineamento e standardizzazione componenti modali con componente comune `ModalWrapper` per ridurre duplicazione del backdrop e focus trap. | Da accorpare durante lo sviluppo delle modali di Milestone 3 |

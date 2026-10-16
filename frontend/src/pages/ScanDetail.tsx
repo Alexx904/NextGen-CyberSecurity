@@ -29,6 +29,7 @@ import {
 } from '../types/scan';
 import { FindingItem, FindingListResponseData } from '../types/finding';
 import { ScanProgressBadge } from '../components/ScanProgressBadge';
+import { ProgressEstimate, ScanTotalProgress } from '../components/scans/ScanTotalProgress';
 import { SeverityChart } from '../components/SeverityChart';
 import { FindingsTable } from '../components/FindingsTable';
 import { downloadReportFile } from '../utils/download';
@@ -37,6 +38,7 @@ const SCAN_PHASES = [
   { key: 'HOST_DISCOVERY', label: 'Host Discovery', desc: 'Verifica host alive e ping sweep' },
   { key: 'PORT_SCAN', label: 'Port Scan', desc: 'Analisi porte aperte TCP/UDP' },
   { key: 'SERVICE_DETECTION', label: 'Service Detection', desc: 'Rilevamento servizi e versioni (sV)' },
+  { key: 'NSE', label: 'Script NSE', desc: 'Esecuzione controlli script' },
   { key: 'CVE_CORRELATION', label: 'CVE Correlation', desc: 'Correlazione CPE/CVE vulnerabilità' },
 ];
 
@@ -55,6 +57,8 @@ export const ScanDetail: React.FC = () => {
     message: string;
   } | null>(null);
   const [liveError, setLiveError] = useState<string | null>(null);
+  const [progressEstimate, setProgressEstimate] = useState<ProgressEstimate | null>(null);
+  useEffect(() => { setProgressEstimate(null); setLivePhase(null); }, [id]);
   const [, setNewlyDiscoveredFindingIds] = useState<Set<string>>(new Set());
 
   const [copiedId, setCopiedId] = useState<boolean>(false);
@@ -77,6 +81,7 @@ export const ScanDetail: React.FC = () => {
       if (eventType === 'phase') {
         const payload = data as ScanPhasePayload;
         if (payload) {
+          setProgressEstimate((prev) => ({ percentage: Math.max(prev?.percentage || 0, Math.min(99, payload.percentage)), receivedAt: Date.now() }));
           setLivePhase({
             phase: payload.phase,
             percentage: payload.percentage,
@@ -86,8 +91,13 @@ export const ScanDetail: React.FC = () => {
       } else if (eventType === 'progress') {
         const payload = data as ScanProgressPayload;
         if (payload) {
+          if (!Number.isFinite(payload.percentage)) return;
+          setProgressEstimate((prev) => ({
+            percentage: Math.max(prev?.percentage || 0, Math.max(0, Math.min(99, payload.percentage))),
+            remainingSeconds: payload.remaining_seconds, phasePercentage: payload.phase_percentage, receivedAt: Date.now(),
+          }));
           setLivePhase((prev) => ({
-            phase: prev?.phase || 'PORT_SCAN',
+            phase: payload.phase || prev?.phase || 'PORT_SCAN',
             percentage: payload.percentage,
             message: payload.message || prev?.message || '',
           }));
@@ -161,6 +171,11 @@ export const ScanDetail: React.FC = () => {
 
       if (scanRes.data?.data) {
         setScan(scanRes.data.data);
+        const snapshot = scanRes.data.data.progress;
+        if (snapshot && Number.isFinite(snapshot.percentage)) {
+          setProgressEstimate({ percentage: snapshot.percentage, remainingSeconds: snapshot.remaining_seconds,
+            phasePercentage: snapshot.phase_percentage, receivedAt: Date.parse(snapshot.observed_at || '') || Date.now() - 31000 });
+        }
       }
       if (findingsRes.data?.data) {
         setFindings(findingsRes.data.data.items || []);
@@ -457,6 +472,7 @@ export const ScanDetail: React.FC = () => {
       )}
 
       {/* Live Scan Execution Card & Stepper */}
+      {scan && <ScanTotalProgress status={scan.status} estimate={progressEstimate} />}
       {isLive && (
         <div className="p-5 rounded-2xl border border-cyan-500/40 bg-cyan-950/20 shadow-xl space-y-4 animate-in fade-in duration-300">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -480,7 +496,7 @@ export const ScanDetail: React.FC = () => {
             <div className="flex items-center space-x-3 text-xs font-mono self-end sm:self-auto">
               <span className="text-slate-400">Progresso stimato:</span>
               <span className="text-cyan-400 font-bold text-base">
-                {(livePhase?.percentage ?? (scan?.status === 'RUNNING' ? 20 : 5)).toFixed(0)}%
+                {progressEstimate ? `${progressEstimate.percentage.toFixed(0)}%` : 'In calcolo'}
               </span>
             </div>
           </div>
@@ -527,18 +543,6 @@ export const ScanDetail: React.FC = () => {
             })}
           </div>
 
-          {/* Progress bar fluida */}
-          <div className="w-full h-2 rounded-full bg-slate-900 border border-cyan-900/50 overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-cyan-500 via-teal-400 to-emerald-400 transition-all duration-500 ease-out shadow-[0_0_10px_rgba(6,182,212,0.5)]"
-              style={{
-                width: `${Math.min(
-                  100,
-                  Math.max(5, livePhase?.percentage ?? (scan?.status === 'RUNNING' ? 20 : 5))
-                )}%`,
-              }}
-            />
-          </div>
         </div>
       )}
 

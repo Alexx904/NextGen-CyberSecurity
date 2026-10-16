@@ -1,639 +1,156 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { NewScanModal } from './NewScanModal';
 import { apiClient } from '../api/client';
+import { SCAN_PRESETS } from './scans/scanConfiguration';
 
-vi.mock('../api/client', () => ({
-  apiClient: {
-    get: vi.fn(),
-    post: vi.fn(),
-    delete: vi.fn(),
-  },
+vi.mock('../api/client', () => ({ apiClient: { get: vi.fn(), post: vi.fn() } }));
+const company = vi.hoisted(() => ({ selectedCompanyId: null as string | null }));
+vi.mock('../context/CompanyContext', () => ({
+  useCompany: () => company,
+  getAllDescendantGroupIds: (node: { id: string; children?: { id: string }[] }) => [node.id, ...(node.children || []).map((child) => child.id)],
 }));
 
-describe('NewScanModal Component - Guided & Professional Scan Customization', () => {
-  const mockGroups = [
-    {
-      id: 'group-01',
-      tenant_id: 'tenant-1',
-      name: 'ACME Corporation',
-      description: 'Sede Centrale',
-      color: '#06b6d4',
-      target_count: 2,
-    },
-  ];
+const groups = [{ id: 'company', name: 'ACME', children: [{ id: 'department', name: 'IT', children: [] }] }, { id: 'other', name: 'Other company', children: [] }];
+const targets = [
+  { id: 'one', group_id: 'company', value: '192.168.1.10', is_blacklisted: false },
+  { id: 'two', group_id: 'department', value: '192.168.1.20', is_blacklisted: false },
+  { id: 'blocked', group_id: 'company', value: '192.168.1.30', is_blacklisted: true },
+];
+const success = (data: unknown) => ({ data: { success: true, data } });
+const profiles = [{ id: 'misleading', name: 'All-in-One 360° Comprehensive Audit', nmap_args: '-sS -sV -O --script=vuln -T4 --open', timeout_seconds: 3600, is_custom: false }];
+const get = (url: string) => {
+  if (url === '/target-groups') return Promise.resolve(success(groups));
+  if (url === '/scan-profiles') return Promise.resolve(success({ items: profiles }));
+  return Promise.resolve(success({ items: targets, total: targets.length }));
+};
 
-  const mockTargets = [
-    {
-      id: 'target-01',
-      tenant_id: 'tenant-1',
-      group_id: 'group-01',
-      type: 'IP',
-      value: '192.168.1.100',
-      description: 'Main Web Server',
-      is_blacklisted: false,
-    },
-    {
-      id: 'target-02',
-      tenant_id: 'tenant-1',
-      group_id: 'group-01',
-      type: 'IP',
-      value: '192.168.1.200',
-      description: 'Excluded Gateway',
-      is_blacklisted: true,
-    },
-  ];
+async function open() {
+  const props = { isOpen: true, onClose: vi.fn(), onScanLaunched: vi.fn(), onScheduleCreated: vi.fn() };
+  const view = render(<NewScanModal {...props} />);
+  await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+  return { ...props, ...view };
+}
+const launch = () => screen.getByRole('button', { name: 'Avvia scansione' }) as HTMLButtonElement;
+const edit = () => fireEvent.click(screen.getByRole('button', { name: 'Comando Nmap' }));
+const setCommand = (value: string) => fireEvent.change(screen.getByLabelText('Comando / opzioni Nmap'), { target: { value } });
 
-  const mockProfiles = [
-    {
-      id: 'prof-all-01',
-      name: 'All-in-One 360° Comprehensive Audit',
-      nmap_args: '-sS -sV -O -T4 --open',
-      description: 'Audit generalista a 360°',
-      timeout_seconds: 5400,
-      category: 'ALL_IN_ONE',
-      is_custom: false,
-    },
-    {
-      id: 'prof-pen-01',
-      name: 'Stealth SYN Pen Test',
-      nmap_args: '-sS -Pn -T2 --open',
-      description: 'Offensive probing stealth',
-      timeout_seconds: 1800,
-      category: 'PEN_TEST',
-      is_custom: false,
-    },
-    {
-      id: 'prof-flaw-01',
-      name: 'OS & System Flaws Audit',
-      nmap_args: '-sV -O --version-intensity 7 -T4',
-      description: 'Audit vulnerabilità di sistema',
-      timeout_seconds: 2400,
-      category: 'SYSTEM_FLAWS',
-      is_custom: false,
-    },
-    {
-      id: 'prof-web-01',
-      name: 'Web & API Surface Audit',
-      nmap_args: '-sV -p 80,443,8080,8443 -T4 --open',
-      description: 'Ricognizione endpoint web',
-      timeout_seconds: 1200,
-      category: 'WEB_APP',
-      is_custom: false,
-    },
-    {
-      id: 'prof-disc-01',
-      name: 'Fast Ping & Host Sweep',
-      nmap_args: '-sn -PE -T4 -n',
-      description: 'Sweep veloce host attivi',
-      timeout_seconds: 300,
-      category: 'DISCOVERY',
-      is_custom: false,
-    },
-  ];
+beforeEach(() => {
+  vi.resetAllMocks(); company.selectedCompanyId = null;
+  vi.mocked(apiClient.get).mockImplementation(get as never);
+  vi.mocked(apiClient.post).mockImplementation(((url: string, body: object) => Promise.resolve(success(url === '/scan-profiles' ? { ...body, id: 'created', is_custom: true } : {}))) as never);
+});
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    (apiClient.get as any).mockImplementation((url: string) => {
-      if (url.includes('/target-groups')) {
-        return Promise.resolve({
-          data: {
-            success: true,
-            data: mockGroups,
-          },
-        });
-      }
-      if (url.includes('/targets')) {
-        return Promise.resolve({
-          data: {
-            success: true,
-            data: { items: mockTargets, total: mockTargets.length, limit: 100, offset: 0 },
-          },
-        });
-      }
-      if (url.includes('/scan-profiles')) {
-        return Promise.resolve({
-          data: {
-            success: true,
-            data: { items: mockProfiles, total: mockProfiles.length },
-          },
-        });
-      }
-      return Promise.reject(new Error(`Endpoint non mockato: ${url}`));
-    });
+describe('Minimal Nmap scan workflow', () => {
+  it('contains keyboard focus, closes on Escape and restores the previous focus', async () => {
+    const trigger = document.createElement('button'); document.body.appendChild(trigger); trigger.focus();
+    const props = await open(); const dialog = screen.getByRole('dialog');
+    expect(document.activeElement).toBe(dialog);
+    fireEvent.keyDown(dialog, { key: 'Tab' }); expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Chiudi' }));
+    fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true }); expect(document.activeElement).toBe(launch());
+    fireEvent.keyDown(dialog, { key: 'Escape' }); expect(props.onClose).toHaveBeenCalledOnce();
+    props.unmount(); expect(document.activeElement).toBe(trigger); trigger.remove();
+  });
+  it('has two modes, explicit port profiles and no duplicated composer or legacy catalog', async () => {
+    await open();
+    expect(screen.getByRole('dialog', { name: 'Nuova scansione Nmap' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Profili' })).toBeTruthy();
+    expect(screen.queryByText('Componi Multi-Obiettivo')).toBeNull();
+    expect(screen.queryByText('Penetration Testing')).toBeNull();
+    expect(screen.getByText('Individua le porte aperte tra le 1000 TCP più frequenti e identifica i servizi esposti e le relative versioni.')).toBeTruthy();
+    expect(screen.getByText('Durata indicativa per IP: 1 min – 5 min')).toBeTruthy();
+    expect(screen.getByText(/2 target disponibili · 1 esclusi/)).toBeTruthy();
   });
 
-  it('renders modal and displays category selector with profile counts in guided mode', async () => {
-    render(
-      <NewScanModal
-        isOpen={true}
-        onClose={vi.fn()}
-        onScanLaunched={vi.fn()}
-      />
-    );
-
-    // Titolo e modalità
-    expect(screen.getByText('Nuova Scansione di Vulnerabilità')).toBeTruthy();
-    expect(screen.getByText('Guidata (1-Click)')).toBeTruthy();
-    expect(screen.getByText('Componi Multi-Obiettivo')).toBeTruthy();
-    expect(screen.getByText('Professionale (Pro)')).toBeTruthy();
-
-    // Attendi caricamento dati
-    await waitFor(() => {
-      expect(screen.getByText('Tutto in Uno (360°)')).toBeTruthy();
-      expect(screen.getByText('Penetration Testing')).toBeTruthy();
-      expect(screen.getByText('Falle di Sistema')).toBeTruthy();
-      expect(screen.getByText('Web App & API')).toBeTruthy();
-      expect(screen.getByText('Compliance & Hardening')).toBeTruthy();
-      expect(screen.getByText('Profili Custom')).toBeTruthy();
-      expect(screen.queryByText('Network Discovery')).toBeNull();
-    });
-
-    // Profilo di default categoria ALL_IN_ONE
-    expect(screen.getByText('All-in-One 360° Comprehensive Audit')).toBeTruthy();
-    // Live preview
-    expect(screen.getByText('Live Nmap Command Preview')).toBeTruthy();
+  it('creates the exact preview configuration instead of matching a misleading system name', async () => {
+    const props = await open(); fireEvent.click(launch());
+    await waitFor(() => expect(props.onScanLaunched).toHaveBeenCalledOnce());
+    expect(apiClient.post).toHaveBeenCalledWith('/scan-profiles', expect.objectContaining({ nmap_args: SCAN_PRESETS[0].args, name: SCAN_PRESETS[0].name }));
+    expect(apiClient.post).toHaveBeenCalledWith('/scans', { group_id: 'company', profile_id: 'created' });
+    expect(props.onClose).toHaveBeenCalledOnce();
   });
 
-  it('toggles interactive help guide displaying simple explanations for PO and users', async () => {
-    render(
-      <NewScanModal
-        isOpen={true}
-        onClose={vi.fn()}
-        onScanLaunched={vi.fn()}
-      />
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('Guida Semplice')).toBeTruthy();
-    });
-
-    // Apri guida semplice
-    fireEvent.click(screen.getByText('Guida Semplice'));
-
-    expect(screen.getByText(/Come Scegliere la Scansione Ideale per la Tua Rete/i)).toBeTruthy();
-    expect(screen.getAllByText(/Controllo a 360° globale/i).length).toBeGreaterThanOrEqual(1);
+  it('reuses only an equivalent stored configuration and timeout', async () => {
+    vi.mocked(apiClient.get).mockImplementation(((url: string) => url === '/scan-profiles' ? Promise.resolve(success({ items: [{ ...profiles[0], id: 'exact', nmap_args: SCAN_PRESETS[0].args }] })) : get(url)) as never);
+    await open(); fireEvent.click(launch());
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/scans', { group_id: 'company', profile_id: 'exact' }));
+    expect(apiClient.post).not.toHaveBeenCalledWith('/scan-profiles', expect.anything());
   });
 
-  it('filters profiles dynamically when selecting different categories', async () => {
-    render(
-      <NewScanModal
-        isOpen={true}
-        onClose={vi.fn()}
-        onScanLaunched={vi.fn()}
-      />
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('All-in-One 360° Comprehensive Audit')).toBeTruthy();
-    });
-
-    // Clic su "Falle di Sistema"
-    fireEvent.click(screen.getByText('Falle di Sistema'));
-
-    await waitFor(() => {
-      expect(screen.getByText('OS & System Flaws Audit')).toBeTruthy();
-      expect(screen.queryByText('All-in-One 360° Comprehensive Audit')).toBeNull();
-    });
-
-    // Clic su "Web App & API"
-    fireEvent.click(screen.getByText('Web App & API'));
-
-    await waitFor(() => {
-      expect(screen.getByText('Web & API Surface Audit')).toBeTruthy();
-      expect(screen.queryByText('OS & System Flaws Audit')).toBeNull();
-    });
+  it('preloads the selected preset into the editable command', async () => {
+    await open(); fireEvent.change(screen.getByLabelText('Tipo di scansione'), { target: { value: 'quick' } }); edit();
+    expect((screen.getByLabelText('Comando / opzioni Nmap') as HTMLTextAreaElement).value).toBe(SCAN_PRESETS[1].args);
   });
 
-  it('allows composing multi-objective scan with automatic port and flag union', async () => {
-    const handleLaunched = vi.fn();
-    const handleClose = vi.fn();
-
-    (apiClient.post as any).mockResolvedValueOnce({
-      data: {
-        success: true,
-        data: { id: 'prof-multi-123', name: 'Multi-Audit' },
-      },
-    });
-    (apiClient.post as any).mockResolvedValueOnce({
-      data: {
-        success: true,
-        data: { id: 'scan-multi-999', status: 'QUEUED' },
-      },
-    });
-
-    render(
-      <NewScanModal
-        isOpen={true}
-        onClose={handleClose}
-        onScanLaunched={handleLaunched}
-      />
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('Componi Multi-Obiettivo')).toBeTruthy();
-    });
-
-    // Switch a modalità Multi-Obiettivo
-    fireEvent.click(screen.getByText('Componi Multi-Obiettivo'));
-
-    expect(screen.getByText('Seleziona uno o più Obiettivi di Scansione')).toBeTruthy();
-    expect(screen.getByText('Siti Web, Portali & API')).toBeTruthy();
-    expect(screen.getByText('Servizi Critici & Accesso Remoto')).toBeTruthy();
-
-    // Avvia scansione multi-obiettivo
-    const submitBtn = screen.getByRole('button', { name: /Avvia Scansione Ora/i });
-    fireEvent.click(submitBtn);
-
-    await waitFor(() => {
-      expect(apiClient.post).toHaveBeenCalledWith('/scan-profiles', expect.objectContaining({
-        category: 'CUSTOM',
-      }));
-      expect(apiClient.post).toHaveBeenCalledWith('/scans', {
-        group_id: 'group-01',
-        profile_id: 'prof-multi-123',
-      });
-      expect(handleLaunched).toHaveBeenCalled();
-      expect(handleClose).toHaveBeenCalled();
-    });
+  it('accepts a nmap prefix and sends only options; preview includes managed output', async () => {
+    await open(); edit(); setCommand('nmap -sS -sV -p 22,443 -T3');
+    expect(screen.getByTestId('nmap-preview').textContent).toBe('nmap -oX - -sS -sV -p 22,443 -T3 --stats-every 5s -- <target>');
+    fireEvent.click(launch());
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/scan-profiles', expect.objectContaining({ nmap_args: '-sS -sV -p 22,443 -T3' })));
   });
 
-  it('switches to professional mode and displays port scopes, timing templates, and flags', async () => {
-    render(
-      <NewScanModal
-        isOpen={true}
-        onClose={vi.fn()}
-        onScanLaunched={vi.fn()}
-      />
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('Professionale (Pro)')).toBeTruthy();
-    });
-
-    // Switch a modalità professionale
-    fireEvent.click(screen.getByText('Professionale (Pro)'));
-
-    // Verifica controlli professionali
-    expect(screen.getByText('Scope Porte Bersaglio')).toBeTruthy();
-    expect(screen.getByText('Top 100 Porte (-F)')).toBeTruthy();
-    expect(screen.getByText('Servizi Critici & RCE')).toBeTruthy();
-    expect(screen.getByText('Timing & Aggressiveness Template')).toBeTruthy();
-    expect(screen.getByText('SYN Stealth (-sS)')).toBeTruthy();
-    expect(screen.getByText('ACK Firewall Probe (-sA)')).toBeTruthy();
-    expect(screen.getByText('Service Versioning (-sV)')).toBeTruthy();
-    expect(screen.getByText('OS Fingerprinting (-O)')).toBeTruthy();
-    expect(screen.getByText('Salva questa configurazione come nuovo Profilo Custom')).toBeTruthy();
+  it.each(['nmap -sS 192.168.1.1', '-sS; whoami', '-oX file.xml', '-sS -sA', '-p80 -p443', '-p70000', '-sA --open', '-sn -sV'])('blocks invalid command %s before any request', async (command) => {
+    await open(); edit(); setCommand(command);
+    expect(launch().disabled).toBe(true); expect(screen.getByRole('alert')).toBeTruthy();
+    fireEvent.click(launch()); expect(apiClient.post).not.toHaveBeenCalled();
   });
 
-  it('updates live nmap command preview dynamically in professional mode', async () => {
-    render(
-      <NewScanModal
-        isOpen={true}
-        onClose={vi.fn()}
-        onScanLaunched={vi.fn()}
-      />
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('Professionale (Pro)')).toBeTruthy();
-    });
-
-    fireEvent.click(screen.getByText('Professionale (Pro)'));
-
-    // Clic su porte critiche
-    fireEvent.click(screen.getByText('Servizi Critici & RCE'));
-
-    // Verifica che il live preview contenga i flag generati
-    await waitFor(() => {
-      expect(screen.getByText('Live Nmap Command Preview')).toBeTruthy();
-    });
+  it('gates NSE controls and resets consent after edits', async () => {
+    await open(); edit(); setCommand('-sV --script vuln -T3');
+    expect(launch().disabled).toBe(true);
+    fireEvent.click(screen.getByLabelText(/Confermo di possedere/)); expect(launch().disabled).toBe(false);
+    setCommand('-sV --script=vuln -p443 -T3'); expect(launch().disabled).toBe(true);
   });
 
-  it('submits on-demand scan with selected profile in guided mode', async () => {
-    const handleLaunched = vi.fn();
-    const handleClose = vi.fn();
-
-    (apiClient.post as any).mockResolvedValueOnce({
-      data: {
-        success: true,
-        data: { id: 'scan-123', status: 'QUEUED' },
-      },
-    });
-
-    render(
-      <NewScanModal
-        isOpen={true}
-        onClose={handleClose}
-        onScanLaunched={handleLaunched}
-      />
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('All-in-One 360° Comprehensive Audit')).toBeTruthy();
-    });
-
-    // Clic su "Avvia Scansione Ora"
-    const submitBtn = screen.getByRole('button', { name: /Avvia Scansione Ora/i });
-    fireEvent.click(submitBtn);
-
-    await waitFor(() => {
-      expect(apiClient.post).toHaveBeenCalledWith('/scans', {
-        group_id: 'group-01',
-        profile_id: 'prof-all-01',
-      });
-      expect(handleLaunched).toHaveBeenCalled();
-      expect(handleClose).toHaveBeenCalled();
-    });
+  it('does not call the server when the group is empty or all targets are blocked', async () => {
+    await open(); fireEvent.change(screen.getByLabelText('Azienda / reparto'), { target: { value: 'other' } });
+    expect(launch().disabled).toBe(true); expect(apiClient.post).not.toHaveBeenCalled();
   });
 
-  it('creates custom profile and launches scan when saving custom profile in professional mode', async () => {
-    const handleLaunched = vi.fn();
-    const handleClose = vi.fn();
-
-    // Mock creazione profilo custom
-    (apiClient.post as any).mockResolvedValueOnce({
-      data: {
-        success: true,
-        data: { id: 'new-custom-prof-id', name: 'My Custom Audit' },
-      },
-    });
-
-    // Mock lancio scansione
-    (apiClient.post as any).mockResolvedValueOnce({
-      data: {
-        success: true,
-        data: { id: 'scan-custom-999', status: 'QUEUED' },
-      },
-    });
-
-    render(
-      <NewScanModal
-        isOpen={true}
-        onClose={handleClose}
-        onScanLaunched={handleLaunched}
-      />
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('Professionale (Pro)')).toBeTruthy();
-    });
-
-    fireEvent.click(screen.getByText('Professionale (Pro)'));
-
-    // Attiva checkbox "Salva questa configurazione come nuovo Profilo Custom"
-    const saveCheckbox = screen.getByRole('checkbox', {
-      name: /Salva questa configurazione come nuovo Profilo Custom/i,
-    });
-    fireEvent.click(saveCheckbox);
-
-    // Compila nome profilo
-    const nameInput = screen.getByPlaceholderText('es. Internal Web & DB Audit');
-    fireEvent.change(nameInput, { target: { value: 'My Custom Audit' } });
-
-    // Invia form
-    const submitBtn = screen.getByRole('button', { name: /Avvia Scansione Ora/i });
-    fireEvent.click(submitBtn);
-
-    await waitFor(() => {
-      expect(apiClient.post).toHaveBeenCalledWith('/scan-profiles', expect.objectContaining({
-        name: 'My Custom Audit',
-      }));
-      expect(apiClient.post).toHaveBeenCalledWith('/scans', {
-        group_id: 'group-01',
-        profile_id: 'new-custom-prof-id',
-      });
-      expect(handleLaunched).toHaveBeenCalled();
-      expect(handleClose).toHaveBeenCalled();
-    });
+  it('never falls back to other companies if the active company is absent', async () => {
+    company.selectedCompanyId = 'missing'; await open();
+    expect(screen.queryByRole('option', { name: 'ACME' })).toBeNull(); expect(launch().disabled).toBe(true);
   });
 
-  it('creates scheduled scan with cron expression when scheduled tab is active', async () => {
-    const handleScheduleCreated = vi.fn();
-    const handleClose = vi.fn();
-
-    (apiClient.post as any).mockResolvedValueOnce({
-      data: {
-        success: true,
-        data: { id: 'sched-123', is_active: true },
-      },
-    });
-
-    render(
-      <NewScanModal
-        isOpen={true}
-        onClose={handleClose}
-        onScanLaunched={vi.fn()}
-        onScheduleCreated={handleScheduleCreated}
-      />
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('All-in-One 360° Comprehensive Audit')).toBeTruthy();
-    });
-
-    // Switch a tab Schedulazione Cron
-    fireEvent.click(screen.getByText('Schedulazione Cron'));
-
-    // Verifica presenza opzioni cron
-    expect(screen.getByText('Ogni notte alle 02:00')).toBeTruthy();
-
-    // Invia form
-    const submitBtn = screen.getByRole('button', { name: /Crea Pianificazione/i });
-    fireEvent.click(submitBtn);
-
-    await waitFor(() => {
-      expect(apiClient.post).toHaveBeenCalledWith('/schedules', {
-        target_id: 'target-01',
-        profile_id: 'prof-all-01',
-        cron_expression: '0 2 * * *',
-        is_active: true,
-      });
-      expect(handleScheduleCreated).toHaveBeenCalled();
-      expect(handleClose).toHaveBeenCalled();
-    });
+  it('loads targets beyond the first page', async () => {
+    vi.mocked(apiClient.get).mockImplementation(((url: string) => url.includes('/targets?') ? Promise.resolve(success({ items: url.includes('offset=0') ? targets.slice(0, 1) : targets.slice(1), total: 3 })) : get(url)) as never);
+    await open(); expect(apiClient.get).toHaveBeenCalledWith('/targets?limit=200&offset=1');
+    expect(screen.getByText(/2 target disponibili · 1 esclusi/)).toBeTruthy();
   });
 
-  it('renders company / folder selector and displays preview chips for all contained targets', async () => {
-    render(
-      <NewScanModal
-        isOpen={true}
-        onClose={vi.fn()}
-        onScanLaunched={vi.fn()}
-      />
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('Azienda / Cartella Target da Scansionare')).toBeTruthy();
-      expect(screen.getByText('ACME Corporation')).toBeTruthy();
-      expect(screen.getByText('192.168.1.100')).toBeTruthy();
-      expect(screen.getByText('192.168.1.200')).toBeTruthy();
-      expect(screen.getByText('2 IP inclusi')).toBeTruthy();
-    });
+  it('blocks submission when initial loading fails', async () => {
+    vi.mocked(apiClient.get).mockRejectedValue(new Error('Offline'));
+    await open(); expect(screen.getByRole('alert').textContent).toBe('Offline'); expect(launch().disabled).toBe(true);
   });
 
-  it('supports --script=vuln in multi-objective and professional modes', async () => {
-    render(
-      <NewScanModal
-        isOpen={true}
-        onClose={vi.fn()}
-        onScanLaunched={vi.fn()}
-      />
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('All-in-One 360° Comprehensive Audit')).toBeTruthy();
-    });
-
-    // Switch to Multi-Objective mode
-    fireEvent.click(screen.getByText(/Componi Multi-Obiettivo/i));
-
-    // Verify option exists
-    expect(screen.getByText('Script Vulnerabilità Nmap (--script=vuln)')).toBeTruthy();
-    const scriptMatches = screen.getAllByText(/--script=vuln/);
-    expect(scriptMatches.length).toBeGreaterThanOrEqual(2);
-
-    // Switch to Professional mode
-    fireEvent.click(screen.getByText(/Professionale \(Pro\)/i));
-    const profScriptMatches = screen.getAllByText('Script Vulnerabilità Nmap (--script=vuln)');
-    expect(profScriptMatches.length).toBeGreaterThanOrEqual(1);
+  it('shows server rejection without launching or closing', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { success: false, error: { message: 'Opzione rifiutata dal server' } } });
+    const props = await open(); fireEvent.click(launch());
+    await screen.findByText('Opzione rifiutata dal server'); expect(props.onClose).not.toHaveBeenCalled();
+    expect(apiClient.post).toHaveBeenCalledTimes(1);
   });
 
-  it('displays invasiveness badge and gates launch for intrusive profiles (SEC-P1-03)', async () => {
-    // Mock profile with INTRUSIVE
-    const intrusiveProfile = {
-      id: 'prof-intrusive',
-      name: 'Full Deep Exploit Scan',
-      nmap_args: '-p- -sV --script=vuln -T4',
-      timeout_seconds: 7200,
-      category: 'ALL_IN_ONE' as const,
-      invasiveness: 'INTRUSIVE' as const,
-      is_custom: false,
-    };
-
-    (apiClient.get as any).mockImplementation((url: string) => {
-      if (url.includes('/target-groups')) {
-        return Promise.resolve({ data: { success: true, data: mockGroups } });
-      }
-      if (url.includes('/targets')) {
-        return Promise.resolve({ data: { success: true, data: { items: mockTargets } } });
-      }
-      if (url.includes('/scan-profiles')) {
-        return Promise.resolve({ data: { success: true, data: { items: [intrusiveProfile] } } });
-      }
-      return Promise.resolve({ data: { success: true, data: [] } });
-    });
-
-    render(
-      <NewScanModal
-        isOpen={true}
-        onClose={vi.fn()}
-        onScanLaunched={vi.fn()}
-        defaultGroupId="group-01"
-      />
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('Full Deep Exploit Scan')).toBeTruthy();
-    });
-
-    // Seleziona il profilo
-    fireEvent.click(screen.getByText('Full Deep Exploit Scan'));
-
-    // Verifica badge INTRUSIVE
-    expect(screen.getByText('INTRUSIVE')).toBeTruthy();
-
-    // Verifica presenza del gate di autorizzazione
-    expect(screen.getByText(/Profilo Invasivo \/ Offensive/i)).toBeTruthy();
-
-    const submitBtn = screen.getByRole('button', { name: /Avvia Scansione Ora/i });
-    expect((submitBtn as HTMLButtonElement).disabled).toBe(true);
-
-    // Clicca sulla checkbox di conferma
-    const confirmCheckbox = screen.getByLabelText(/Confermo di possedere esplicita autorizzazione scritta/i);
-    fireEvent.click(confirmCheckbox);
-
-    // Ora il pulsante deve essere abilitato
-    expect((submitBtn as HTMLButtonElement).disabled).toBe(false);
+  it('schedules eligible descendants only and retries only failures in the same configuration', async () => {
+    let secondFailed = false;
+    vi.mocked(apiClient.post).mockImplementation(((url: string, body: { target_id?: string }) => {
+      if (url === '/schedules' && body.target_id === 'two' && !secondFailed) { secondFailed = true; return Promise.resolve({ data: { success: false } }); }
+      return Promise.resolve(success(url === '/scan-profiles' ? { ...body, id: 'created' } : {}));
+    }) as never);
+    const props = await open(); fireEvent.click(screen.getByLabelText('Pianifica scansione ricorrente'));
+    fireEvent.click(screen.getByRole('button', { name: 'Crea pianificazione' }));
+    await screen.findByText(/1 pianificazioni create; 1 non riuscite/);
+    fireEvent.click(screen.getByRole('button', { name: 'Crea pianificazione' }));
+    await waitFor(() => expect(props.onClose).toHaveBeenCalledOnce());
+    const calls = vi.mocked(apiClient.post).mock.calls.filter(([url]) => url === '/schedules');
+    expect(calls.map(([, body]) => (body as { target_id: string }).target_id)).toEqual(['one', 'two', 'two']);
+    expect(calls[0][1]).toEqual({ target_id: 'one', profile_id: 'created', cron_expression: '0 2 * * *', is_active: true });
   });
 
-  it('renders 4 master presets and switches to fine-tuning studio with preloaded flags (Epic 27.1)', async () => {
-    render(
-      <NewScanModal
-        isOpen={true}
-        onClose={vi.fn()}
-        onScanLaunched={vi.fn()}
-      />
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('Master Presets Intelligenti (1-Click Launch)')).toBeTruthy();
-    });
-
-    // Verifica presenza di tutti e 4 i Master Presets
-    expect(screen.getByText('Audit 360° Sicurezza Generale')).toBeTruthy();
-    expect(screen.getByText('Ricognizione Rapida (Fast Sweep)')).toBeTruthy();
-    expect(screen.getByText('Audit Vulnerabilità & CVE Exploit')).toBeTruthy();
-    expect(screen.getByText('Perimetro Web App & API Surface')).toBeTruthy();
-
-    // Seleziona Ricognizione Rapida (Fast Sweep)
-    fireEvent.click(screen.getByText('Ricognizione Rapida (Fast Sweep)'));
-
-    // Verifica presenza pulsante per passaggio allo Studio con parametri precaricati
-    const customizeBtn = screen.getByText('Personalizza parametri');
-    expect(customizeBtn).toBeTruthy();
-
-    // Clicca per aprire nello studio di fine-tuning
-    fireEvent.click(customizeBtn);
-
-    // Verifica switch automatico a modalità Professionale / Studio
-    expect(screen.getByText('Scope Porte Bersaglio')).toBeTruthy();
-    expect(screen.getByText('Timing & Aggressiveness Template')).toBeTruthy();
-    // Scope porte impostato su FAST
-    expect(screen.getByText('Top 100 Porte (-F)')).toBeTruthy();
-  });
-
-  it('dynamically calculates invasiveness and triggers gate when activating vuln scripts in fine-tuning studio (Epic 27.1)', async () => {
-    render(
-      <NewScanModal
-        isOpen={true}
-        onClose={vi.fn()}
-        onScanLaunched={vi.fn()}
-      />
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('Professionale (Pro)')).toBeTruthy();
-    });
-
-    // Switch a modalità Studio Professionale
-    fireEvent.click(screen.getByText('Professionale (Pro)'));
-
-    // Inizialmente i flag di default sono SAFE
-    expect(screen.getByText(/Invasività:\s*SAFE/i)).toBeTruthy();
-    expect(screen.queryByText(/Profilo Invasivo \/ Offensive/i)).toBeNull();
-
-    // Attiva lo script di vulnerabilità
-    const vulnCheckbox = screen.getByRole('checkbox', {
-      name: /Script Vulnerabilità Nmap \(--script=vuln\)/i,
-    });
-    fireEvent.click(vulnCheckbox);
-
-    // L'invasività viene ricalcolata dinamicamente su INTRUSIVE
-    await waitFor(() => {
-      expect(screen.getByText(/Invasività:\s*INTRUSIVE/i)).toBeTruthy();
-      expect(screen.getByText(/Profilo Invasivo \/ Offensive/i)).toBeTruthy();
-    });
-
-    // Il pulsante deve essere bloccato finché non viene data conferma
-    const submitBtn = screen.getByRole('button', { name: /Avvia Scansione Ora/i });
-    expect((submitBtn as HTMLButtonElement).disabled).toBe(true);
-
-    // Conferma autorizzazione
-    const confirmCheckbox = screen.getByLabelText(/Confermo di possedere esplicita autorizzazione scritta/i);
-    fireEvent.click(confirmCheckbox);
-
-    // Il pulsante deve ora essere sbloccato
-    expect((submitBtn as HTMLButtonElement).disabled).toBe(false);
+  it('supports a named saved profile and rejects invalid timeout', async () => {
+    await open(); edit(); fireEvent.click(screen.getByText('Profili salvati e timeout'));
+    fireEvent.change(screen.getByLabelText('Timeout per target (minuti)'), { target: { value: '0' } }); expect(launch().disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('Timeout per target (minuti)'), { target: { value: '30' } });
+    fireEvent.change(screen.getByLabelText('Nome profilo (facoltativo)'), { target: { value: 'Internal TCP inventory' } });
+    fireEvent.click(launch()); await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/scan-profiles', expect.objectContaining({ name: 'Internal TCP inventory', timeout_seconds: 1800 })));
   });
 });

@@ -19,9 +19,27 @@ Salvare le evidenze visuali temporanee in `.agent/artifacts/<task-id>/` (ignorat
 
 ## Test case per feature
 
+Accettazione scanner 2026-10-16: il PO conferma di avere testato le scansioni e ne attesta il corretto funzionamento, autorizzando il push. SCAN-UX-01/SCAN-TIME-01 sono accettati; i NON ESEGUITI sotto riguardano le prove autonome dell'agente e non vengono trasformati in PASS inventati. Verifica pre-push ripetuta: frontend 145 test, backend suite/build/vet e build frontend PASS, exit 0. Nessun benchmark di precisione ETA dichiarato.
+
+### SCAN-TIME-01 · 2026-10-16
+
+Preset: copertura di otto intervalli positivi, ordinati e distinti dal timeout, ipotesi visibili. Runner: XML frammentato, attributi mancanti/invalidi, buffer limitato, flag interno prima del target, RawXML preservato. Orchestratore: percentuali pesate non regressive, niente ETA prematura, snapshot tenant e cleanup/fase senza ETA. Handler: ID validi/duplicati/invalidi/vuoti/eccessivi e 404 tenant estraneo.
+
+Frontend: progresso solo membri del lotto, coda, errori/annullamenti distinti, telemetria stale/esaurita, gruppi oltre 50 job, retry non sovrapposto, stop dei terminali/teardown, ripristino sessione senza storico estraneo. Dettaglio: barra accessibile, coda senza ETA, terminali. Test automatici con fixture e processo helper, nessuna scansione reale. Browser inventory del 2026-10-16 vuoto, gate visuale non eseguibile. Risultati finali in [SCAN_PROGRESS_PLAN](../04-development/SCAN_PROGRESS_PLAN.md).
+
 ID, FR/UC, precondizioni/dati, passi, risultato atteso, livello, comando, esito (PASS/FAIL/NON ESEGUITO) ed evidenza. L'assenza di un ambiente obbligatorio impedisce il gate verified.
 
 ## Bug report
+
+### SCAN-UX-01 · 2026-10-15 · working tree
+
+- FR-16/FR-17: selezione preset, argomenti identici a preview/payload, passaggio all'editor, opzioni ostili/porte/intervalli/tecniche incompatibili, consenso invalidato all'edit, focus/Escape, scope aziendale assente, blacklist, paginazione, errori remoti e retry scheduler parziale.
+- Backend: parser inizialmente rosso per 15 combinazioni incoerenti, poi verde; Discovery inizialmente rosso con include_common_ports=false (2 port scan invece di 0), poi verde in entrambe le modalità. Classificazione custom testata sulla persistenza nel repository fake.
+- Frontend finale: `npm.cmd test` PASS, 19 file / 136 test, exit 0; `npm.cmd run build` PASS, exit 0, TypeScript + Vite (7,30 s).
+- Backend finale: `go test ./...`, `go build ./...`, `go vet ./...` PASS, exit 0. Eseguiti da backend, con permessi estesi per cache Go; frontend da frontend, permessi estesi necessari a esbuild. Nessun test indebolito o skip aggiunto.
+- UI reale e Nmap/container end-to-end: NON ESEGUITI. Browser inventory vuoto e iab indisponibile; nessun laboratorio target autorizzato identificato. Test automatici usano mock/fixture, non provano accuratezza CVE su rete reale.
+- Self-review (stesso agente): input/output gestiti dal server, niente shell/target inline, equivalenza profili, scope, metadati invasività, consenso e retry. Rischio residuo FR-01.3 registrato in TECH-DEBT-05; nessuna review indipendente dichiarata.
+- Esiti documentali e riepilogo in [analisi scanner](../04-development/NMAP_SCAN_REVIEW.md). Gate visuale ancora bloccato; SCAN-UX-01 resta [!].
 
 ID/task, severità, ambiente/versione, atteso, osservato, passi minimi, evidenza sanificata, test di riproduzione, causa radice, fix e regressione.
 

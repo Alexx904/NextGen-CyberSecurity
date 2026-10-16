@@ -192,7 +192,7 @@ func (s *discoveryService) DiscoverSubnet(ctx context.Context, tenantID uuid.UUI
 
 	// 8. Stage 2: Arricchimento mirato porte e servizi per gli host attivi trovati
 	enrichedHostsMap := make(map[string]scanner.ParsedHost)
-	if len(upHosts) > 0 && len(upHosts) <= 64 {
+	if req.IncludeCommonPorts && len(upHosts) > 0 && len(upHosts) <= 64 {
 		targetedProfile := scanner.ProfileConfig{
 			Name:        "LAN Host Enrichment",
 			Args:        []string{"-T4", "-F", "-n"},

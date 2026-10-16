@@ -114,6 +114,7 @@ describe('Scans Page - Workstation Multi-Company Grouped View', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionStorage.clear();
 
     vi.mocked(apiClient.get).mockImplementation((url: string) => {
       if (url.startsWith('/scans')) {
@@ -163,6 +164,17 @@ describe('Scans Page - Workstation Multi-Company Grouped View', () => {
       }
       return Promise.reject(new Error(`Unhandled URL: ${url}`));
     });
+  });
+
+  it('restores the last tenant batch without including unrelated scan history', async () => {
+    const id = '8ee6067d-4fd6-4fe4-96f0-0a72f341bc09';
+    sessionStorage.setItem('nmap-batch:tenant-1', JSON.stringify({ ids: [id], companyId: null }));
+    const previous = vi.mocked(apiClient.get).getMockImplementation()!;
+    vi.mocked(apiClient.get).mockImplementation((url: string) => url.startsWith('/scans') ? Promise.resolve({ data: { success: true, data: { items: [{ ...mockScans[0], id }, mockScans[1]], total: 2 } } }) : previous(url));
+    render(<MemoryRouter><Scans /></MemoryRouter>);
+    await screen.findByText('Lotto terminato.');
+    expect(screen.getByText(/1\/1 job terminati/)).toBeTruthy();
+    expect(screen.getByRole('progressbar', { name: 'Avanzamento del gruppo' }).getAttribute('aria-valuenow')).toBe('100');
   });
 
   it('renders company groups and specific target IPs in grouped view by default', async () => {

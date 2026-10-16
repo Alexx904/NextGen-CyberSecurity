@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -114,13 +115,12 @@ func (r *NmapRunner) RunScan(ctx context.Context, target string, profile Profile
 		return nil, err
 	}
 
-	r.logger.Info("Esecuzione comando Nmap",
-		"binary", r.binaryPath,
-		"profile", profile.Name,
-		"target", target,
-		"args", strings.Join(args, " "),
-	)
-
+	if profile.OnProgress != nil {
+		// Internal telemetry options, inserted before the validated target delimiter.
+		idx := len(args) - 2
+		args = append(append(append([]string{}, args[:idx]...), "--stats-every", "5s"), args[idx:]...)
+	}
+	r.logger.Info("Esecuzione comando Nmap", "binary", r.binaryPath, "profile", profile.Name, "target", target, "args", strings.Join(args, " "))
 	// 3. Creazione del processo senza shell di sistema (exec.CommandContext diretto)
 	cmd := r.cmdFactory(ctx, r.binaryPath, args...)
 
@@ -140,6 +140,9 @@ func (r *NmapRunner) RunScan(ctx context.Context, target string, profile Profile
 	var stdoutBuf bytes.Buffer
 	var stderrBuf bytes.Buffer
 	cmd.Stdout = &stdoutBuf
+	if profile.OnProgress != nil {
+		cmd.Stdout = io.MultiWriter(&stdoutBuf, &progressWriter{onProgress: profile.OnProgress})
+	}
 	cmd.Stderr = &stderrBuf
 
 	// 5. Esecuzione del processo
@@ -201,4 +204,3 @@ func (r *NmapRunner) RunScan(ctx context.Context, target string, profile Profile
 
 	return result, nil
 }
-

@@ -104,18 +104,19 @@ type ScanProfile struct {
 
 // Scan rappresenta un'esecuzione (on-demand o schedulata) di vulnerability scanning
 type Scan struct {
-	ID           uuid.UUID        `json:"id" db:"id"`
-	TenantID     uuid.UUID        `json:"tenant_id" db:"tenant_id"`
-	TargetID     uuid.UUID        `json:"target_id" db:"target_id"`
-	ProfileID    uuid.UUID        `json:"profile_id" db:"profile_id"`
-	TriggerType  ScanTriggerType  `json:"trigger_type" db:"trigger_type"`
-	Status       ScanStatus       `json:"status" db:"status"`
-	StartedAt    *time.Time       `json:"started_at,omitempty" db:"started_at"`
-	CompletedAt  *time.Time       `json:"completed_at,omitempty" db:"completed_at"`
-	SummaryStats ScanSummaryStats `json:"summary_stats" db:"summary_stats"`
-	ErrorMessage *string          `json:"error_message,omitempty" db:"error_message"`
-	CreatedAt    time.Time        `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time        `json:"updated_at" db:"updated_at"`
+	Progress     *ScanProgressPayload `json:"progress,omitempty" db:"-"`
+	ID           uuid.UUID            `json:"id" db:"id"`
+	TenantID     uuid.UUID            `json:"tenant_id" db:"tenant_id"`
+	TargetID     uuid.UUID            `json:"target_id" db:"target_id"`
+	ProfileID    uuid.UUID            `json:"profile_id" db:"profile_id"`
+	TriggerType  ScanTriggerType      `json:"trigger_type" db:"trigger_type"`
+	Status       ScanStatus           `json:"status" db:"status"`
+	StartedAt    *time.Time           `json:"started_at,omitempty" db:"started_at"`
+	CompletedAt  *time.Time           `json:"completed_at,omitempty" db:"completed_at"`
+	SummaryStats ScanSummaryStats     `json:"summary_stats" db:"summary_stats"`
+	ErrorMessage *string              `json:"error_message,omitempty" db:"error_message"`
+	CreatedAt    time.Time            `json:"created_at" db:"created_at"`
+	UpdatedAt    time.Time            `json:"updated_at" db:"updated_at"`
 }
 
 // CanCancel determina se la scansione può essere annullata dall'utente
@@ -257,4 +258,3 @@ type ScheduleRepository interface {
 	Update(ctx context.Context, schedule *Schedule) error
 	Delete(ctx context.Context, tenantID, id uuid.UUID) error
 }
-

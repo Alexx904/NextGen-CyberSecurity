@@ -84,7 +84,17 @@ func (s *scanService) CancelScan(ctx context.Context, tenantID, scanID uuid.UUID
 
 // GetScan recupera una scansione per ID verificando l'isolamento per tenant
 func (s *scanService) GetScan(ctx context.Context, tenantID, scanID uuid.UUID) (*domain.Scan, error) {
-	return s.scanRepo.GetByID(ctx, tenantID, scanID)
+	scan, err := s.scanRepo.GetByID(ctx, tenantID, scanID)
+	if err != nil {
+		return nil, err
+	}
+	copy := *scan
+	if provider, ok := s.orchestrator.(interface {
+		GetProgress(uuid.UUID) *domain.ScanProgressPayload
+	}); ok && scan.Status == domain.ScanStatusRunning {
+		copy.Progress = provider.GetProgress(scan.ID)
+	}
+	return &copy, nil
 }
 
 // ListScans restituisce l'elenco paginato delle scansioni del tenant
@@ -224,6 +234,7 @@ func (s *scanService) CreateCustomProfile(
 		Description:    description,
 		TimeoutSeconds: timeoutSeconds,
 		Category:       category,
+		Invasiveness:   scanner.ClassifyInvasiveness(parsedArgs),
 		IsCustom:       true,
 		TenantID:       &tenantID,
 		CreatedAt:      time.Now(),
@@ -511,5 +522,3 @@ func (s *scanService) GetScanDiff(ctx context.Context, tenantID, scanID uuid.UUI
 
 	return res, nil
 }
-
-

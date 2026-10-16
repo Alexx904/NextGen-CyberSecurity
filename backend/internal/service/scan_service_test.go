@@ -391,6 +391,31 @@ func TestScanService_ListProfiles(t *testing.T) {
 	}
 }
 
+func TestScanService_CustomProfileInvasiveness(t *testing.T) {
+	for _, tc := range []struct {
+		args string
+		want domain.InvasivenessLevel
+	}{
+		{"-sS -sV -T3", domain.InvasivenessSafe},
+		{"-sV --script vuln -T3", domain.InvasivenessIntrusive},
+		{"-sA -Pn -T3", domain.InvasivenessIntrusive},
+		{"-sS -p- -T3", domain.InvasivenessIntrusive},
+		{"-sV -T5", domain.InvasivenessIntrusive},
+	} {
+		t.Run(tc.args, func(t *testing.T) {
+			repo := &mockProfileRepo{}
+			svc := NewScanService(newFullMockScanRepo(), repo, &mockTargetRepo{}, newMockFindingRepo(), newMockScanGroupRepo(), &mockOrchestratorClient{})
+			profile, err := svc.CreateCustomProfile(context.Background(), uuid.New(), "Custom Nmap", tc.args, nil, 1800, domain.ProfileCategoryCustom)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if profile.Invasiveness != tc.want || repo.profiles[profile.ID].Invasiveness != tc.want {
+				t.Fatalf("invasiveness not correctly persisted: %+v", profile)
+			}
+		})
+	}
+}
+
 func TestScanService_StartGroupScan_RecursiveTargets(t *testing.T) {
 	tenantID := uuid.New()
 	profileID := uuid.New()
@@ -613,40 +638,40 @@ func TestScanService_GetScanDiff_WithPreviousScan_NewPersistentResolved(t *testi
 	// 2. CVE-2022-0002 (che sarà PERSISTENTE)
 	f2ID := uuid.New()
 	findingRepo.findings[f2ID] = &domain.Finding{
-		ID:          f2ID,
-		ScanID:      prevScanID,
-		TenantID:    tenantID,
-		HostIP:      "192.168.1.10",
-		Port:        80,
-		Protocol:    "tcp",
-		CVEID:       &cvePersistent,
-		Severity:    domain.SeverityHigh,
+		ID:       f2ID,
+		ScanID:   prevScanID,
+		TenantID: tenantID,
+		HostIP:   "192.168.1.10",
+		Port:     80,
+		Protocol: "tcp",
+		CVEID:    &cvePersistent,
+		Severity: domain.SeverityHigh,
 	}
 
 	// Finding in currScan:
 	// 1. CVE-2022-0002 (PERSISTENTE)
 	f3ID := uuid.New()
 	findingRepo.findings[f3ID] = &domain.Finding{
-		ID:          f3ID,
-		ScanID:      currScanID,
-		TenantID:    tenantID,
-		HostIP:      "192.168.1.10",
-		Port:        80,
-		Protocol:    "tcp",
-		CVEID:       &cvePersistent,
-		Severity:    domain.SeverityHigh,
+		ID:       f3ID,
+		ScanID:   currScanID,
+		TenantID: tenantID,
+		HostIP:   "192.168.1.10",
+		Port:     80,
+		Protocol: "tcp",
+		CVEID:    &cvePersistent,
+		Severity: domain.SeverityHigh,
 	}
 	// 2. CVE-2023-0003 (NUOVA)
 	f4ID := uuid.New()
 	findingRepo.findings[f4ID] = &domain.Finding{
-		ID:          f4ID,
-		ScanID:      currScanID,
-		TenantID:    tenantID,
-		HostIP:      "192.168.1.10",
-		Port:        443,
-		Protocol:    "tcp",
-		CVEID:       &cveNew,
-		Severity:    domain.SeverityCritical,
+		ID:       f4ID,
+		ScanID:   currScanID,
+		TenantID: tenantID,
+		HostIP:   "192.168.1.10",
+		Port:     443,
+		Protocol: "tcp",
+		CVEID:    &cveNew,
+		Severity: domain.SeverityCritical,
 	}
 
 	targetRepo := &mockTargetRepo{
@@ -684,5 +709,3 @@ func TestScanService_GetScanDiff_WithPreviousScan_NewPersistentResolved(t *testi
 		t.Errorf("Conteggio item per stato errato: %+v", statusCount)
 	}
 }
-
-

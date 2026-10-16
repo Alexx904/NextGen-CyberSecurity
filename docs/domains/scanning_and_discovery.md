@@ -1,109 +1,95 @@
 # Dominio: Scanning & LAN Network Discovery
 
-> **Dominio:** Network Reconnaissance, Vulnerability Scanning & Live SSE Streaming  
-> **File di Riferimento:** `backend/internal/scanner/`, `backend/internal/service/scan_orchestrator.go`, `backend/internal/service/discovery_service.go`, `backend/internal/delivery/http/handler/discovery_handler.go`, `backend/internal/delivery/http/handler/scan_handler.go`, `frontend/src/pages/NetworkDiscovery.tsx`, `frontend/src/pages/ScanDetail.tsx`
+> Dominio: port/service discovery, vulnerability scanning e SSE. File: `backend/internal/scanner/`, `backend/internal/service/scan*`, `backend/internal/service/discovery_service.go`, handler scan/discovery, `frontend/src/components/NewScanModal.tsx`, `frontend/src/components/scans/`, pagine Scans/ScanDetail/NetworkDiscovery.
 
----
+## 1. Contratto di esecuzione
 
-## 1. Scanner Nmap Containerizzato & Parsing Streaming
+- `NmapRunner` usa `exec.CommandContext` senza shell. `BuildSafeArguments` convalida target e scope, forza `-oX -`, valida gli argomenti, aggiunge `-6` per IPv6 e antepone `--` al target.
+- Output XML parsato a streaming; timeout e cancellazione del processo gestiti dal runner. Capabilities container: solo `CAP_NET_RAW`, con `NMAP_PRIVILEGED=1` (SEC-P1-05).
+- Allowlist: tecniche TCP SYN/connect/ACK/NULL/FIN/Xmas, UDP, discovery, rilevamento servizi/OS, timing T0–T5, porte, probe SYN/UDP, rate/retry e due selettori NSE `vuln`/`vulners`. Non supporta l'intera CLI Nmap.
+- Vietati target inline, file di input/output, caricamento di script o database arbitrari, script-args, shell e modifica del binario. Non esporre la CLI come terminale di sistema.
+- Validazione semantica: una sola tecnica TCP, un solo selettore porte, porte numeriche 0–65535 e intervalli crescenti, top-ports 1–65535; blocco di `-sn` con port scanning/versioni/OS e di ACK con `--open`, `-sV`, `-O`. TCP+UDP resta supportato con una lista porte unica (`-p T:80,443,U:53,161`).
 
-### 1.1 Esecuzione Sicura (`NFR-SEC-01`)
-- Il wrapper Go (`backend/internal/scanner/nmap_runner.go`) invoca il binario Nmap containerizzato senza mai passare per la shell di sistema (`sh` / `bash`), utilizzando rigorosamente `exec.CommandContext(ctx, "nmap", args...)`.
-- Gli argomenti passati sono validati e sanitizzati contro flag injection da `backend/pkg/validator/target_validator.go`.
-- Il container Go/Nmap opera con Linux Capabilities strettamente confinate (`CAP_NET_RAW`, `CAP_NET_ADMIN`, `CAP_NET_BIND_SERVICE`).
+## 2. UX attiva: due modalità (SCAN-UX-01)
 
-### 1.2 Profili di Scansione Specializzati e Macro-Categorie (`FR-16`, `FR-17`, `SEC-P1-01`, `SEC-P1-02`, `SEC-P1-03`)
-Il sistema supporta 14 profili di scansione preconfigurati raggruppati in 6 macro-aree specialistiche (`domain.ScanProfileCategory`) classificati secondo tassonomia di invasività (`SAFE`, `INTRUSIVE`, `DANGEROUS`):
+La proposta Epic 27.1 è sostituita nella modale da **Profili** e **Comando Nmap**. Rimossi compositore multi-obiettivo, card promozionali, catalogo per categorie, stime di durata e badge che dichiaravano parametri già sicuri senza risposta server.
 
-1. **ALL_IN_ONE:**
-   - **All-in-One 360° Comprehensive Audit (`-sS -sV -O --script "vuln and safe" -T4 --open`):** Profilo generalista completo con script non distruttivi (`INTRUSIVE`).
-2. **PEN_TEST (Penetration Testing & Probing):**
-   - **Full Deep Scan (`-p- -sV -O -T4`):** Scansione esaustiva di tutte le 65535 porte TCP, OS detection e versioning completo (`INTRUSIVE`).
-   - **Stealth SYN Penetration Audit (`-sS -Pn -T2 --open`):** Ricognizione stealth a basso rumore senza handshake TCP completo (`SAFE`).
-   - **Firewall & Filter Bypass Check (`-sA -Pn -T3`):** Mappatura filtri firewall perimetrali e IDS con pacchetti TCP ACK (`SAFE`). Gestione accurata degli stati porta `unfiltered` e `filtered` per evitare falsi positivi di porta aperta.
-3. **SYSTEM_FLAWS (Falle di Sistema & Vulnerability Assessment):**
-   - **Standard Service Scan (`-sV -T4`):** Scansione standard delle top 1000 porte TCP con rilevamento versioni dei servizi (`SAFE`).
-   - **OS & System Daemon Flaws Audit (`-sV -O --version-intensity 7 --script "vuln and safe" -T4`):** Rilevamento dettagliato del sistema operativo e vulnerabilità sicure (`INTRUSIVE`).
-   - **Critical Services & RCE Surface (`-sV -p 21,22,23,25,53,80,110,135,139,143,443,445,1433,1521,3306,3389,5432,5900,6379,8080,8443 --script "vuln and safe" -T4`):** Audit mirato sui vettori critici più esposti (`INTRUSIVE`).
-4. **WEB_APP (Web Application & API Services):**
-   - **Web & API Surface Audit (`-sV -p 80,443,8000,8080,8443,8888,3000,5000,9000 -T4 --open`):** Rilevamento mirato di server HTTP/HTTPS e API REST (`SAFE`).
-   - **Full Web Stack Deep Versioning (`-sV --version-all -p 80,443,8008,8080,8443,9090,9443 -T4`):** Interrogazione intensiva dei banner HTTP e intestazioni TLS (`SAFE`).
-5. **DISCOVERY (Network & Asset Discovery):**
-   - **Fast Discovery (`-T4 -F`):** Discovery veloce degli host attivi e delle top 100 porte TCP (`SAFE`).
-   - **LAN Device Discovery (`-sn -PE -PS... -PU... -T4`):** Sweep veloce su subnet locali con abilitazione risoluzione reverse DNS (`SAFE`).
-   - **Fast Ping & Host Sweep (LAN) (`-sn -PE -PS22,80,443,445 -T4`):** Ricognizione LAN ultra-rapida senza port scan per mappare host vivi (`SAFE`).
-   - **UDP Specialized Services & Critical Infra (`-sU -p U:53,69,123,161,514,623,5353 -T4`):** Profilo specialistico UDP dedicato per DNS, TFTP, NTP, SNMP, Syslog, IPMI e mDNS senza intasare le code di scansione TCP (`SAFE`, SEC-P1-01).
-6. **COMPLIANCE (Compliance & Hardening Check):**
-   - **Legacy & Insecure Protocol Check (`-sV -p 21,23,79,110,143,512,513,514 -T3`):** Rilevamento servizi TCP in chiaro e protocolli legacy (porta 69 UDP rimossa per evitare timeout su socket TCP, SEC-P1-02) (`SAFE`).
+### Profili
 
-### 1.3 Architettura UX Unificata a 2 Livelli: Master Presets & Scanning Studio 360° (`NewScanModal.tsx`, `Epic 27.1`)
-Per superare il sovraccarico cognitivo dei 14 profili dispersi in sotto-menu, la modale di avvio scansione è riorganizzata su due livelli gerarchici chiari ed interoperabili:
+Aggiornamento testi SCAN-COPY-01 (2026-10-16): le otto descrizioni espongono soltanto scopo e attività del profilo, con termini tecnici aderenti ai flag. Rimossi confronti con Discovery, formulazioni negative e avvertenze dalle descrizioni; eliminato anche il suggerimento Discovery sotto il selettore. Durate, anteprima, limiti generali e consenso restano nei rispettivi elementi UI. Nessuna modifica a nomi, argomenti o classificazione. I profili già persistiti conservano la descrizione storica; il selettore usa i testi canonici aggiornati.
 
-1. **Livello 1: Master Presets Intelligenti (1-Click Launch)**:
-   4 macro-card ottimizzate per il 90% dei casi d'uso operativi aziendali:
-   - **Audit 360° Sicurezza Generale (`-sS -sV -O -T4 --open`):** Scansione bilanciata su top 1000 porte, banner versioning e OS fingerprinting (`SAFE`, durata 15-30 min).
-   - **Ricognizione Rapida (Fast Sweep) (`-F -sS -T4 --open`):** Sweep lampo per censire gli apparati accesi e verificare le top 100 porte TCP essenziali (`SAFE`, durata 1-3 min).
-   - **Audit Vulnerabilità & CVE Exploit (`-sV -O --version-intensity 7 --script=vuln -T4 --open`):** Audit profondo con script attivi NSE di vulnerabilità e rilevamento exploit RCE noti (`INTRUSIVE`, durata 30-60 min).
-   - **Perimetro Web App & API Surface (`-sV -p 80,443,8000,8080,8443,8888,3000,5000,9000 -T4 --open`):** Ispezione dedicata delle superfici HTTP/HTTPS, API REST, reverse proxy e certificati (`SAFE`, durata 5-15 min).
-   *Feature interoperabile:* ogni Master Preset include il pulsante diretto **"Personalizza parametri ⚙️"**, che apre istantaneamente lo Scanning Studio 360° con i flag del preset precaricati e modificabili.
+Fonte eseguibile: `SCAN_PRESETS` in `frontend/src/components/scans/scanConfiguration.ts`. Tutti usano T3; nessun profilo host-only duplicato con Discovery.
 
-2. **Livello 2: Scanning Studio 360° (Fine-Tuning Granulare)**:
-   Accessibile tramite toggle o personalizzazione, fornisce libertà assoluta di configurazione:
-   - **Scope Porte:** Top 100 (-F), Top 1000 Standard, Servizi Critici & RCE, Web & API, Tutte le 65535 porte (-p-) o range arbitrari personalizzati con validazione reattiva.
-   - **Sonde & Tecniche di Scansione:** SYN Stealth (-sS), ACK Probe (-sA), Service Versioning (-sV), Deep Intensity 7 (--version-intensity 7), OS Detection (-O), Script Vulnerabilità (--script=vuln), Sonde UDP Critiche (-sU), Bypass Ping (-Pn), Solo porte aperte (--open).
-   - **Timing & Aggressiveness Template:** Slider interattivo T1 (Sneaky) .. T5 (Insane).
-   - **Salvataggio Tenant:** Possibilità di memorizzare la configurazione come nuovo Profilo Custom con nome, timeout e categoria.
-   - **Live Nmap Command Preview:** Terminale integrato che riflette i parametri in tempo reale con badge di sicurezza.
+| Nome UI | Opzioni determinanti | Limite per target |
+|---|---|---|
+| Porte TCP e versioni (1000) | `-sS -sV --top-ports 1000 -T3` | 60 minuti |
+| Porte TCP frequenti (100) | `-sS -F -T3` | 15 minuti |
+| Tutte le porte TCP (1–65535) | `-sS -sV -p- -T3` | 240 minuti |
+| Servizi su porte web | `-sS -sV -p 80,443,3000,5000,8000,8080,8443,8888,9000 -T3` | 20 minuti |
+| Controlli vulnerabilità NSE | `-sS -sV --top-ports 1000 --script=vuln -T3` | 60 minuti |
+| Porte UDP selezionate | `-sU -p U:53,69,123,161,514,623,5353 -T3` | 20 minuti |
+| Servizi TCP su porte legacy | `-sS -sV -p 21,23,79,110,143,512,513,514 -T3` | 15 minuti |
+| Filtraggio TCP ACK | `-sA -Pn --top-ports 1000 -T3` | 30 minuti |
 
-### 1.4 Calcolo Dinamico dell'Invasività & Gate di Consenso Obbligatorio (`SEC-P1-03`, `FR-01.3`)
-- Il sistema ricalcola in tempo reale il livello di invasività: se sono attivati script attivi `--script=vuln` o intensità di exploit penetrativi, il badge passa istantaneamente da `SAFE` ad `INTRUSIVE`.
-- **Gate di Sicurezza:** Quando l'invasività è `INTRUSIVE`, il pulsante di avvio viene rigorosamente disabilitato finché l'operatore non spunta esplicitamente la conferma: *"Confermo di possedere esplicita autorizzazione scritta del proprietario ad eseguire scansioni intrusive su questo target"*.
+I timeout non sono stime. Porte web non equivale a test applicativo/API, porte legacy non dimostra traffico in chiaro, ACK non dimostra porte aperte o bypass, NSE non equivale a un penetration test. SYN è rilevabile. `open|filtered` UDP è ambiguo. La correlazione CPE/versione/CVE richiede conferma professionale, specialmente per backport e banner incompleti.
 
-### 1.7 Analisi Differenziale Scansioni (Scan Diff, `SEC-P2-03`)
-- Endpoint `GET /api/v1/scans/{id}/diff`: confronta i finding della scansione specificata con la scansione completata più recente sullo stesso target.
-- Classificazione automatica di ciascun finding:
-  - `NEW`: Vulnerabilità rilevata per la prima volta nella scansione corrente.
-  - `PERSISTENT`: Vulnerabilità già presente nella scansione precedente e non ancora rimediata.
-  - `RESOLVED`: Vulnerabilità presente nella scansione precedente che non è più stata rilevata (remediation confermata).
-- Identificazione della tupla finding: `(HostIP, Port, Protocol, FindingKey)` per evitare disallineamenti di ID.
+Da SCAN-TIME-01 la UI espone anche intervalli indicativi per singolo IP raggiungibile su LAN stabile a T3: TCP 1000/versioni 1–5 min, TCP 100 10–60 s, TCP completo 10–60 min, web 15–120 s, NSE 5–30 min, UDP 1–10 min, legacy 15–120 s, ACK 30–180 s. Sono ipotesi di pianificazione, non misurazioni né SLA, e possono essere superate. Nessuna moltiplicazione automatica per record CIDR/range o uguaglianza al timeout.
 
----
+### Avanzamento del gruppo e tempo residuo (SCAN-TIME-01)
 
-## 4. Specifiche Contratti API REST Profili e Scansioni
-- `GET /api/v1/scan-profiles`: Elenco di tutti i profili di sistema e custom del tenant.
-- `POST /api/v1/scan-profiles`: Creazione e salvataggio di un nuovo profilo custom per il tenant.
-- `DELETE /api/v1/scan-profiles/{id}`: Eliminazione di un profilo custom salvato.
-- `GET /api/v1/scans/{id}/diff`: Report differenziale con conteggio `total_new`, `total_resolved`, `total_persistent` e array di `items`.
+Scope confermato dal PO: intero gruppo lanciato insieme. La pagina Scansioni monitora esattamente gli ID restituiti da POST /scans, salva l'ultimo lotto in sessionStorage per tenant e ripristina il monitor al ricaricamento quando l'elenco corrente identifica il tenant. Le selezioni aziendali limitano la visibilità del monitor; un nuovo lancio sostituisce il monitor precedente senza interromperne i job.
 
----
+Runner con callback opzionale osserva XML taskprogress tramite writer incrementale limitato, senza alterare RawXML; flag interno `--stats-every 5s`, riflesso nell'anteprima. Gli aggiornamenti nativi descrivono una fase, non l'intero job. L'orchestratore usa finestre euristiche 0–5 discovery, 5–65 porte, 65–80 versioni/OS, 80–90 NSE, 90–92 parsing e 92+ correlazione, senza tornare indietro durante Nmap. Stato COMPLETED resta l'unica prova del completamento; snapshot di fase invalidano ETA precedenti. Nessun cronometro artificiale fino al timeout.
 
-## 5. File chiave
-- `backend/internal/scanner/nmap_runner.go`, `profiles.go`, `nmap_parser.go`, `oui_database.go`
-- `backend/pkg/validator/target_validator.go`, `backend/pkg/auth/stream_ticket.go`
-- `backend/internal/service/scan_orchestrator.go`, `scan_service.go`, `discovery_service.go`
-- `backend/internal/delivery/http/handler/scan_handler.go`, `discovery_handler.go`
-- `frontend/src/components/NewScanModal.tsx`, `frontend/src/pages/NetworkDiscovery.tsx`, `frontend/src/pages/ScanDetail.tsx`, `frontend/src/api/scan.ts`
+Progresso lotto: media dei progressi dei job (terminali = 100, coda = 0); job di dimensioni diverse hanno lo stesso peso, quindi è una stima, non percentuale di pacchetti o IP analizzati. Conteggi separati riusciti/falliti/annullati. ETA: residui dei job in esecuzione più lavoro atteso in coda, divisi per parallelismo osservato, con limite inferiore dato dal job residuo più lungo. La UI espone intervallo ±50%, non intervallo statistico di confidenza; per il dettaglio ±30%. Senza telemetria sufficiente, se più vecchia di 30s, esaurita o durante correlazione senza stima, mostra «in calcolo/in aggiornamento».
 
-## 6. Regole di business
-- Il target non può appartenere alla deny-list interna (loopback, container di rete, link-local, cloud metadata).
-- L'utente deve confermare formalmente la titolarità / autorizzazione al penetration test prima del lancio della scansione (art. 615-ter c.p.).
-- I profili invasivi richiedono checkbox esplicito di autorizzazione prima del lancio (`SEC-P1-03`).
-- Separatore `--` obbligatorio prima del target nell'invocazione di Nmap.
-- I token JWT a lungo termine non devono comparire negli URL di streaming (uso di stream-ticket monouso a 30s).
-- Hardening container: concesso solo `CAP_NET_RAW`, rimosso `CAP_NET_ADMIN`, abilitato `NMAP_PRIVILEGED=1` (`SEC-P1-05`).
+Lettura batch e proprietà additive in [API_SPEC](../03-architecture/LLD/API_SPEC.md). Polling sequenziale a blocchi di 50, ogni 5s dopo fine richiesta, cancellazione richieste al teardown, nessun ripoll dei terminali; errore visibile e retry. Non richiede una connessione SSE per ciascun target e non dipende dalle prime 50 scansioni dello storico. Snapshot volatili eliminati al termine; nessuna migrazione DB. Limiti: parallelismo condiviso, CIDR, reti filtrate, NSE e correlazione rendono i tempi approssimativi; nessun benchmark reale effettuato.
 
-## 7. Dipendenze da altri domini
-- **reporting_and_assets:** fornitura dei dati scansionati e host vivi per il calcolo del Posture Score e la generazione dei report consolidati.
-- **attack_path:** fornitura di porte aperte, vulnerabilità e subnet per la mappatura del grafo di attacco e lateral movement.
-- **vulnerability_intelligence:** correlazione delle CVE individuate tramite Nmap NSE con il database NVD e offline catalog.
+### Comando Nmap
 
-## 8. Test
-- Unit test Go: `backend/pkg/validator/target_validator_test.go`, `backend/internal/scanner/profiles_test.go`, `nmap_runner_test.go`
-- Service & Orchestrator test: `backend/internal/service/scan_orchestrator_test.go`, `scan_service_test.go`, `discovery_service_test.go`
-- Handler test: `backend/internal/delivery/http/handler/scan_handler_test.go`
-- Frontend test: `frontend/src/components/NewScanModal.test.tsx`, `frontend/src/pages/ScanDetail.test.tsx`, `frontend/src/hooks/useSSE.test.ts`
+- Editor libero di opzioni, con prefisso `nmap` facoltativo; esempio `nmap -sS -sV -p 22,80,443 -T3`. Target scelti con gruppo aziendale, separatamente dal comando.
+- Il profilo rapido selezionato viene precaricato al passaggio all'editor. Dettagli opzionali: carica profilo custom, nome e timeout 1–1440 minuti. Le nuove configurazioni sono persistite nel tenant; il vecchio controllo «salva» non descriveva correttamente il salvataggio già obbligatorio per eseguire.
+- Anteprima unica delle opzioni inviate, con output XML gestito e placeholder per target. Feedback client preliminare; validazione definitiva backend al salvataggio e nuovamente all'esecuzione.
+- Riutilizzo profilo soltanto per argomenti equivalenti (normalizzazione spazi, `-p` e `--script`) e identico timeout; se l'operatore specifica un nome, deve coincidere. Mai selezione per corrispondenza di nome/categoria.
+- Profili di sistema storici, ID e categorie API restano invariati per compatibilità di scansioni/pianificazioni esistenti. Non vengono mostrati come catalogo nella nuova modale; nessuna riscrittura dei dati custom del tenant.
 
-## 9. Ultimo allineamento
-- 2026-10-15 (Epic 27.1: Scanning Studio 360° e Master Presets intelligenti a 2 livelli con calcolo dinamico invasività implementati e convalidati con 14 test Vitest 100% verdi)
+### Scope, stati e accessibilità
 
+- Gruppi ricorsivi dell'azienda attiva; nessun fallback a tutte le aziende se il nodo attivo manca. Target caricati con paginazione completa, blacklist esclusa dal conteggio eseguibile; on-demand il server ricalcola i target del gruppo.
+- Loading/error/empty bloccano invio. Label associate, errori con `role=alert`, contenimento e ritorno del focus, Escape, dettagli chiusi per ridurre densità, contenuto scrollabile e larghezza adattiva.
+- Scheduler mantiene cron e target discendenti non bloccati; fallimenti parziali mostrati, ritentati solo i target mancanti nella stessa configurazione e nella stessa apertura. Non garantisce idempotenza in caso di timeout di rete con esito remoto ignoto.
 
+## 3. Impatto e autorizzazione
+
+`ClassifyInvasiveness` classifica server-side i nuovi profili: NSE vuln/vulners, tutte le porte (`-p-`, `-p1-65535`, `-p0-65535`), T4/T5, version-all, ACK o min-rate sono INTRUSIVE; altri SAFE per compatibilità del contratto. SAFE non è una garanzia di assenza di impatto; la classificazione è euristica e non una policy completa di rate limiting o valutazione del rischio della rete.
+
+La UI verifica opzioni effettive e metadati del profilo equivalente, richiede autorizzazione esplicita per impatto elevato e la invalida quando cambiano comando, gruppo, timeout o pianificazione. **Limite preesistente:** la checkbox non costituisce attestazione immutabile lato server e l'API di scansione non riceve tale prova; FR-01.3 non è pienamente implementato. Vedere TECH-DEBT-05.
+
+## 4. Network Discovery e sovrapposizione
+
+- Stage 1: `-sn -PE -PS21,22,80,443,445,8080,8443,3389,53,8000 -PU53,137,161,5353 -T4`, con discovery host, DNS e arricchimento MAC/OUI/cache. `-sn` non effettua port scanning.
+- Stage 2: `-T4 -F -n` sugli host attivi, soltanto se `include_common_ports=true` e da 1 a 64 host, concorrenza massima 8. Da SCAN-UX-01 l'opzione è realmente rispettata: in precedenza era ignorata.
+- Esiste sovrapposizione tecnica fra Stage 2 e il profilo TCP 100; i flussi restano distinti: Discovery inventaria/importa asset, scansioni produce esecuzioni persistite, finding, storico e pianificazioni sugli asset censiti. I profili host-only sono tolti dalla modale, non dal contratto storico.
+
+## 5. API e streaming
+
+- `GET /api/v1/scan-profiles`: profili sistema/custom tenant.
+- `POST /api/v1/scan-profiles`: nome, nmap_args, descrizione, timeout_seconds, categoria; invasività calcolata server-side.
+- `DELETE /api/v1/scan-profiles/{id}`: eliminazione custom tenant; contratto mantenuto, azione non esposta nella modale minimale.
+- `POST /api/v1/scans`: target_id o group_id e profile_id; scansione ricorsiva per gruppo. `POST /api/v1/schedules`: target_id, profile_id, cron_expression, is_active.
+- `GET /api/v1/scans/{id}/stream`: SSE con stream-ticket monouso, mai JWT permanente in URL.
+- `GET /api/v1/scans/{id}/diff`: NEW/RESOLVED/PERSISTENT, confronto con precedente scansione completata sullo stesso target, chiave `(HostIP, Port, Protocol, FindingKey)`. «RESOLVED» significa non rilevato nel confronto, non prova autonoma di remediation se copertura/condizioni differiscono.
+
+## 6. Confini e dipendenze
+
+Target soggetti a validazione, deny-list e isolamento tenant. Scanner non fornisce automaticamente exploitation, verifica manuale, assessment autenticato o conformità ISO/NIS2. Dipendenze: [asset/reporting](reporting_and_assets.md), [CVE](vulnerability_intelligence.md), [attack path](attack_path.md).
+
+## 7. Verifiche e fonti
+
+Test: `backend/internal/scanner/profile_semantics_test.go`, `profiles_test.go`, `nmap_runner_test.go`, test dei servizi scan/discovery, handler; frontend `NewScanModal.test.tsx` e `scans/scanConfiguration.test.ts`.
+
+Analisi, piano, fonti ufficiali Nmap/NIST e limiti di validazione in [NMAP_SCAN_REVIEW](../04-development/NMAP_SCAN_REVIEW.md). Nessuna migrazione DB né nuova dipendenza. Test di processo/parser usano fixture; nessuna scansione reale autorizzata o eseguita.
+
+## 8. Ultimo allineamento
+
+2026-10-16 · working tree · SCAN-UX-01 / SCAN-TIME-01. Verifica visuale non eseguita: inventario browser vuoto nel runtime; nessuna scansione di laboratorio eseguita.
