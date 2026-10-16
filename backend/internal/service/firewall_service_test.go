@@ -15,9 +15,9 @@ import (
 )
 
 type mockSSHExecutor struct {
-	mu           sync.Mutex
-	commandLogs  []string
-	executeFunc  func(ctx context.Context, tenantID, serverID uuid.UUID, cmd string) (string, string, int, error)
+	mu          sync.Mutex
+	commandLogs []string
+	executeFunc func(ctx context.Context, tenantID, serverID uuid.UUID, cmd string) (string, string, int, error)
 }
 
 func (m *mockSSHExecutor) ExecuteCommand(ctx context.Context, tenantID, serverID uuid.UUID, cmd string) (string, string, int, error) {
@@ -176,6 +176,107 @@ func TestParseIptablesOutput(t *testing.T) {
 	}
 	if len(forwardChain.Rules) != 0 {
 		t.Errorf("FORWARD doveva avere 0 regole, ottenute %d", len(forwardChain.Rules))
+	}
+}
+
+func TestFirewallRejectsInvalidWatchdogPIDBeforeMutation(t *testing.T) {
+	executor := &mockSSHExecutor{executeFunc: func(_ context.Context, _, _ uuid.UUID, cmd string) (string, string, int, error) {
+		if strings.Contains(cmd, "echo $!") {
+			return "not-a-pid", "", 0, nil
+		}
+		return "*filter\nCOMMIT", "", 0, nil
+	}}
+	svc := service.NewFirewallService(executor, newMockBackupRepo())
+	_, err := svc.AddRule(context.Background(), uuid.New(), uuid.New(), domain.FirewallRuleParams{Chain: domain.ChainInput, Action: domain.ActionDrop, Protocol: "tcp", Port: "443"}, true, 60)
+	if err == nil {
+		t.Fatal("invalid PID must prevent mutation")
+	}
+	for _, cmd := range executor.commandLogs {
+		if strings.Contains(cmd, "iptables -A") {
+			t.Fatalf("mutation after invalid PID: %s", cmd)
+		}
+	}
+}
+
+func TestFirewallFailedConfirmOrRollbackKeepsWatchdog(t *testing.T) {
+	for _, operation := range []string{"confirm", "rollback"} {
+		t.Run(operation, func(t *testing.T) {
+			fail := false
+			executor := &mockSSHExecutor{executeFunc: func(_ context.Context, _, _ uuid.UUID, cmd string) (string, string, int, error) {
+				if fail && (strings.HasPrefix(cmd, "sudo kill") || strings.HasPrefix(cmd, "sudo iptables-restore")) {
+					return "", "failed", 1, nil
+				}
+				if strings.Contains(cmd, "echo $!") {
+					return "12345", "", 0, nil
+				}
+				if cmd == "sudo iptables-save" {
+					return "*filter\nCOMMIT", "", 0, nil
+				}
+				return sampleIptablesOutput, "", 0, nil
+			}}
+			svc := service.NewFirewallService(executor, newMockBackupRepo())
+			tenant, id := uuid.New(), uuid.New()
+			if _, err := svc.ApplyWithSafetyTimer(context.Background(), tenant, id, 60); err != nil {
+				t.Fatal(err)
+			}
+			fail = true
+			var err error
+			if operation == "confirm" {
+				err = svc.Confirm(context.Background(), tenant, id)
+			} else {
+				err = svc.Rollback(context.Background(), tenant, id, nil)
+			}
+			if err == nil {
+				t.Fatal("expected remote error")
+			}
+			status, err := svc.GetStatus(context.Background(), tenant, id)
+			if err != nil || !status.ActiveSafetyTimer {
+				t.Fatalf("watchdog lost: %+v %v", status, err)
+			}
+			fail = false
+			if err := svc.Confirm(context.Background(), tenant, id); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestFirewallConcurrentTimerPreparation(t *testing.T) {
+	executor := &mockSSHExecutor{executeFunc: func(_ context.Context, _, _ uuid.UUID, cmd string) (string, string, int, error) {
+		if strings.Contains(cmd, "echo $!") {
+			return "12345", "", 0, nil
+		}
+		return sampleIptablesOutput, "", 0, nil
+	}}
+	svc := service.NewFirewallService(executor, newMockBackupRepo())
+	tenant, id := uuid.New(), uuid.New()
+	errs := make(chan error, 2)
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := svc.ApplyWithSafetyTimer(context.Background(), tenant, id, 60)
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	success, conflicts := 0, 0
+	for err := range errs {
+		if err == nil {
+			success++
+		} else if errors.Is(err, domain.ErrSafetyTimerActive) {
+			conflicts++
+		} else {
+			t.Fatal(err)
+		}
+	}
+	if success != 1 || conflicts != 1 {
+		t.Fatalf("success %d conflicts %d", success, conflicts)
+	}
+	if err := svc.Confirm(context.Background(), tenant, id); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -362,4 +463,3 @@ func TestFirewallService_Rollback(t *testing.T) {
 		t.Errorf("il comando iptables-restore doveva essere eseguito")
 	}
 }
-

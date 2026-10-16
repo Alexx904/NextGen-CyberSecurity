@@ -1,5 +1,15 @@
 # Deployment
 
+## E28-S1-T1 · Limiti operativi (2026-10-17, working tree)
+
+Remediation IPv4 su host Linux con iptables e privilegi sudo già richiesti dal
+gestore firewall. Nessuna migrazione o dipendenza nuova. Snapshot e watchdog remoto
+sono riusati; serializzazione e timer locali presuppongono una singola istanza backend.
+Conferma/rollback remoto e interruzione connessioni devono essere provati su laboratorio
+prima dell'uso operativo. Il client SSH attuale non verifica la host key; nessuna
+attestazione di canale autenticato al server finché TECH-DEBT-06 rimane aperto.
+Non è stato eseguito alcun deploy né comando SSH reale durante questo task.
+
 > Responsabile: DevOps Engineer. Procedura locale derivata da Compose; staging e produzione non risultano definiti nei file ispezionati.
 
 ## Ambiente locale verificabile

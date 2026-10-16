@@ -198,6 +198,7 @@ Un **Chokepoint** è un nodo intermedio $N$ la cui eliminazione interrompe il ma
 - Restituisce la slice ordinata dei nodi la cui remediation azzera il massimo volume di rischio mitigato per il tenant.
 
 ## 6. Ultimo allineamento
+- 2026-10-17 · working tree · Preview e applicazione definite nel [dominio Active Defense](active_defense_and_soar.md). Grafo rigenerato senza filtro CVSS, richiesta presenza come chokepoint SERVICE corrente. La mitigazione non modifica il grafo né marca i finding risolti.
 - 2026-10-10 (Epic 26 SEC-P2 Attack Path Refinement: coerenza CVSS, archi inferiti, rischio probabilistico $1 - \prod(1 - p_i)$ e bound a 50 percorsi)
 
 

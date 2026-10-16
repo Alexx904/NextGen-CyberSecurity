@@ -148,6 +148,10 @@ backend/
 
 ## Documenti tecnici
 
+E28-S1-T1 (2026-10-17, working tree): DefenseService collega il grafo corrente al
+gestore firewall esistente; handler SecOps/admin e DTO additivi, nessuna nuova
+dipendenza o tabella. Dettagli nel [dominio Active Defense](../domains/active_defense_and_soar.md).
+
 - [API e streaming](LLD/API_SPEC.md)
 - [Schema database](LLD/DATABASE_SCHEMA.md)
 - [Componenti e interazioni](LLD/COMPONENT_DESIGN.md)

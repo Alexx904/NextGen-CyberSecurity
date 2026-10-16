@@ -34,6 +34,13 @@ Tutte le API rispondono sotto `/api/v1` con payload standard `{ "success": true,
 
 ## Autorità del contratto
 
+### E28-S1-T1 · 2026-10-17 · working tree
+
+Preview ed esecuzione del blocco porta chokepoint: contratto canonico nel
+[dominio Active Defense](../../domains/active_defense_and_soar.md#contratto-backend).
+POST autenticati con RBAC SecOps/admin; conferma e rollback riusano le API firewall.
+API additive, nessuna migrazione DB. Nessuna UI di remediation inclusa.
+
 ### SCAN-TIME-01 · 2026-10-16 · working tree
 
 - `GET /api/v1/scans?ids=<uuid,...>`: variante additiva autenticata per il monitor del lotto. Da 1 a 100 ID, UUID non nulli, deduplicati; ogni scansione letta mediante GetScan con tenant corrente. Non applica limit/offset allo storico. Envelope invariato con items/total/limit/offset. 400 su input vuoto/invalido/eccessivo, 404 se una scansione è assente o non appartiene al tenant (nessuna risposta parziale), 500 su errore repository. Il vecchio elenco paginato resta invariato senza ids.

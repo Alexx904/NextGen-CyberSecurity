@@ -83,5 +83,6 @@
 - WS test: `backend/internal/delivery/ws/ssh_terminal_ws_test.go`
 
 ## 11. Ultimo allineamento
+- 2026-10-17 · working tree · E28-S1-T1: mutazioni serializzate per server con lock a dimensione fissa; PID watchdog >1 obbligatorio; conferma fallita conserva il timer; rollback verifica tenant/server del backup e ripristina prima di fermare il watchdog. La precedente descrizione di verifica fingerprint non rappresenta il codice attuale (`InsecureIgnoreHostKey`): vedere Tech Debt e piano E28-S1-T1.
 - 2026-10-10 (Epic 24 SEC-P0: Hardening watchdog firewall nohup e stream-ticket WebSocket integrati e verificati al 100%)
 

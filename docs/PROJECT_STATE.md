@@ -3,7 +3,7 @@
 > Memoria viva dell'agente. Letta a inizio sessione, aggiornata a fine di ogni turno.
 > Non cancellare sezioni: se vuote, scrivi "nessuno".
 
-**Ultimo aggiornamento:** 2026-10-16
+**Ultimo aggiornamento:** 2026-10-17
 **Modalità progetto:** esistente (onboarded formalmente sul branch chore/agent-onboarding)
 **Fase:** SCAN-UX-01, SCAN-TIME-01 e SCAN-COPY-01 accettati dal PO. Commit applicativo ce4a69f pubblicato su origin/feat/nmap-scan-workflow-review; nessun merge/deploy incluso.
 
@@ -43,9 +43,15 @@ Verifica pre-push del 2026-10-15: `go test ./...`, `go build ./...`, `go vet ./.
 
 ## In corso
 
+- **E28-S1-T1:** primo incremento backend implementato in working tree: preview e remediation SERVICE IPv4 TCP/UDP sul server del chokepoint, scelta confermata dal PO. Timer 60s obbligatorio, porta SSH protetta, server e grafo validati nel tenant, RBAC SecOps/admin. Correzioni watchdog su PID/concorrenza/conferma/rollback. Stato `[ ]`: gate operativo aperto per prova Linux e hardening preesistente SSH/watchdog (TECH-DEBT-06/07), nessuna consegna per accettazione ancora. Piano in `docs/04-development/plans/E28-S1-T1-chokepoint-remediation.md`.
+- Verifiche 2026-10-17 in `backend`: `go test ./...`, `go build ./...`, `go vet ./...` PASS exit 0; test mirati service/handler PASS exit 0. In `frontend`: `npm.cmd test` (145 test), `npm.cmd run build` PASS exit 0, eseguiti fuori sandbox dopo blocco esbuild. Cache Go locale ignorata dopo errore della cache predefinita. Race detector non eseguibile (CGO disabilitato, exit 1); nessuna prova remota/visuale.
+- Assunzioni tecniche esplicite: IPv4 letterale coincidente fra servizio e host SSH; niente DNS/IPv6/gateway o isolamento; riuso lifecycle firewall esistente, singola istanza backend. Nessuna nuova dipendenza o migrazione. Modifiche preesistenti a CHANGELOG, TASK_LIST e PROJECT_STATE preservate; nessun commit/push/deploy.
+
 - Nessuno. Commit applicativo `ce4a69f` pubblicato su `origin/feat/nmap-scan-workflow-review`, con tracking remoto configurato. Destinatario `https://github.com/Alexx904/NextGen-CyberSecurity.git` confermato esplicitamente dal PO dopo la richiesta della revisione automatica. Nessun merge su main né deploy.
 
 ## Accettati recentemente dal PO (`[x]`)
+
+- **AGENT-CLEAN-03 / AGENT-CODEX-01:** confermati e approvati dal PO il 2026-10-16. Accettate pulizia repository e migrazione governance Codex; assunzioni documentali confermate. Task dettagliati archiviati nel CHANGELOG insieme ai task accettati preesistenti, essendo stato superato il limite di 10. Nessuna approvazione retroattiva del vecchio design Epic 27.1: registrato come superato.
 
 - **SCAN-UX-01 / SCAN-TIME-01:** accettati il 2026-10-16. Il PO riferisce di avere testato le scansioni e ne conferma il corretto funzionamento, autorizzando il push di tutte le modifiche. Prova funzionale del PO distinta dai test automatici dell'agente; nessuno screenshot autonomo o benchmark di accuratezza ETA dichiarato. Assunzioni operative confermate dall'accettazione: T3, stime indicative, profili/ID storici preservati e monitor dell'intero gruppo. TECH-DEBT-05 sul consenso API resta aperto.
 
@@ -74,31 +80,17 @@ Verifica pre-push del 2026-10-15: `go test ./...`, `go build ./...`, `go vet ./.
 
 ## In attesa di accettazione utente
 
-- **AGENT-CLEAN-03 · Pulizia repository:** rimossi cinque stub documentali, lo script screenshot Antigravity, la guida funzionale destinata agli utenti e 20 screenshot (3.250.486 byte). Eliminate le relative directory vuote. In `docs/` restano indice, memoria, requisiti, design, architettura, domini, sviluppo, QA e DevOps necessari agli agenti.
-  - Indicazione PO: `docs/` riservata alla documentazione agentica. Evidenze visuali temporanee in `.agent/artifacts/<task-id>/`, ignorate da Git; workflow e verificatore aggiornati per rispettare il vincolo.
-  - Evidenze: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-agent-docs.ps1` PASS (exit 0: struttura agentica, 24 documenti obbligatori, 53 Markdown, 104 link/ancore, registry e fence); `git diff --check` PASS. Self-review dei riferimenti completata.
-  - Recuperabilità: i 27 file rimossi durante la pulizia sono tracciati da Git e recuperabili dalla cronologia; le directory vuote non contenevano dati.
-
-- **AGENT-CODEX-01 · Migrazione governance Antigravity → Codex:**
-  - `AGENTS.md` riscritto come entry point nativo Codex con bootstrap, gerarchia delle istruzioni, tutela della working tree, permessi, fallback capability-aware e quality gate evidence-first.
-  - Aggiunto `.agent/README.md` come registry; portati i workflow esistenti e creati i playbook mancanti per `init`, `fix`, `refactor`, `verify`, `sync-docs`, `audit`, `status` e `commit`.
-  - Formalizzato ADR-11 e allineati contesto, task list e memoria viva. Nessuna modifica al codice applicativo.
-
-- **Epic 27.1 · Semplificazione Centro Scansioni & Scanning Studio 360° (E27.1-S1-T1 .. E27.1-S1-T3)**:
-  - Riorganizzazione unificata di `NewScanModal.tsx` con architettura a 2 livelli:
-    1. **Livello 1 (1-Click Launch):** 4 Master Presets intelligenti (Audit 360° Sicurezza Generale, Ricognizione Rapida Fast Sweep, Audit Vulnerabilità & CVE Exploit, Perimetro Web App & API Surface) con indicazione visiva di durata, invasività e target focus, oltre a pulsante rapido per aprire e personalizzare i parametri nello Studio.
-    2. **Livello 2 (Scanning Studio 360° Fine-Tuning):** Controlli granulari ad alta precisione su scope porte (Top 100, Top 1000, Web, Critiche, Tutte 65535, Custom), slider timing T1-T5, toggle sonde attive (SYN Stealth, ACK Probe, Versioning, Deep Intensity 7, OS Fingerprinting, Vulnerability NSE Scripts, Specialized UDP probe, No Ping, Only Open) e salvataggio custom profiles.
-  - **Calcolo Dinamico dell'Invasività in Tempo Reale:** Invasività valutata reattivamente tra `SAFE` e `INTRUSIVE` con Live Invasiveness Meter.
-  - **Gate di Sicurezza & Consenso Obbligatorio (`SEC-P1-03`, `FR-01.3`):** Blocco tassativo dell'avvio scansione su parametri invasivi finché l'operatore non spunta la presa d'atto e autorizzazione scritta.
-  - **Verifica Zero-Assumption:** 14/14 test unitari Vitest su NewScanModal PASS, suite completa frontend 18/18 file e 107/107 test PASS, compilazione TypeScript/Vite pulita in 10.64s, suite completa backend Go 14/14 package PASS.
+- Nessuna. AGENT-CLEAN-03 e AGENT-CODEX-01 approvati esplicitamente dal PO il 2026-10-16. Proposta Epic 27.1 archiviata come superata da SCAN-UX-01/SCAN-TIME-01 già accettati.
 
 ## Bloccati / Domande aperte per l'utente
+
+- Il PO conferma il 2026-10-17 che non è ancora disponibile un host Linux di laboratorio e chiede di mantenere aperta la verifica remota E28-S1-T1. Prima dell'uso operativo risolvere anche TECH-DEBT-06/07: host-key non verificata, chiamate SSH senza deadline e coordinamento watchdog. Nessuna azione remota eseguita.
 
 - Nessun blocco sulla consegna scanner: il PO ha eseguito i test delle scansioni e confermato il corretto funzionamento il 2026-10-16. Verifica browser autonoma e benchmark ETA non effettuati dall'agente; debito TECH-DEBT-05 sul consenso API mantenuto.
 
 ## Assunzioni confermate
 
-- Struttura documentale SDLC v7.1 e orchestrazione per feature approvate dal Product Owner; la precedente migrazione base Codex AGENT-CODEX-01 resta formalmente in attesa.
+- Struttura documentale SDLC v7.1 e orchestrazione per feature approvate dal Product Owner; anche la migrazione base Codex AGENT-CODEX-01 e la pulizia AGENT-CLEAN-03 sono approvate.
 - `docs/` contiene solo documentazione necessaria agli agenti; manuali utente, screenshot, allegati binari e archivi sono esclusi, come richiesto dal PO.
 - Storico consolidato nel [CHANGELOG.md](../CHANGELOG.md); stub e cartella legacy rimossi dopo la migrazione alle fonti canoniche.
 - Pipeline CI/CD GitHub Actions e bundle splitting implementati.
@@ -131,18 +123,18 @@ Verifica pre-push del 2026-10-15: `go test ./...`, `go build ./...`, `go vet ./.
 
 ## Prossimi passi
 
-1. Avvio operativo della **Milestone 3 (Epic 28 · Active Defense & SOAR Light)**.
-2. Predisposizione dell'Implementation Plan per il task **E28-S1-T1** (Backend Chokepoint Auto-Remediation Service & SSH Firewall Rule Applicator) e creazione del file di dominio `docs/domains/active_defense_and_soar.md`.
-3. Sviluppo, test e verifica zero-assumption del primo incremento.
+1. Chiudere il gate operativo E28-S1-T1: hardening SSH/watchdog TECH-DEBT-06/07 e prova su host Linux di laboratorio identificato.
+2. Solo dopo verifica, consegnare il backend per accettazione e avviare E28-S1-T2 (UI preview, applicazione e safety timer).
+3. Proseguire Epic 28 secondo dipendenze del backlog.
 
 ## Log sessioni (ultime 5, la più recente in alto)
+
+- 2026-10-17 · Avviato E28-S1-T1 con feature.md/orchestration.md. PO sceglie blocco porta sul server chokepoint, isolamento separato. Backend/DTO/test e fix watchdog implementati; suite backend/build/vet e frontend 145 test/build PASS exit 0. Test PID rosso→verde; race non eseguibile senza CGO. Self-review e documenti allineati; task `[ ]` per gate Linux/hardening SSH residuo. Nessuna azione remota, commit o push; modifiche precedenti preservate.
+
+- 2026-10-16 · PO conferma AGENT-CLEAN-03 e AGENT-CODEX-01: marcati accettati e archiviati tutti i task conclusi dopo il superamento della soglia 10. Epic 27.1 conservata come proposta superata; rimossi i riferimenti pendenti. Nessuna modifica applicativa, commit o push in questo turno.
 
 - 2026-10-16 · Push scanner riuscito (exit 0): commit ce4a69f, 42 file, su origin/feat/nmap-scan-workflow-review. Dopo il blocco iniziale dell'auto-review il PO ha confermato esplicitamente repository e branch; nessun aggiramento del controllo. Branch remoto creato e tracking impostato; nessun merge/deploy.
 
 - 2026-10-16 · SCAN-UX-01 e SCAN-TIME-01 accettati dopo test dichiarati dal PO, push di tutte le modifiche autorizzato. Rieseguite suite frontend (145 test), backend, build/vet PASS exit 0. Audit circoscritto del diff da 88f0ef2: nessuna nuova dipendenza/migrazione/skip, perimetro tenant, allowlist, lifecycle snapshot e polling verificati; TECH-DEBT-05 resta aperto. Destinazione branch feature, nessun merge/deploy implicito.
 
 - 2026-10-16 · SCAN-COPY-01 accettato dal PO: task promosso a `[x]`, rimosso dalle attese e registrato nel changelog. Applicato feedback.md ramo accettazione, nessuna modifica applicativa né commit/push/deploy; stati degli altri task invariati.
-
-- 2026-10-16 · SCAN-COPY-01: otto descrizioni riscritte sul solo scopo; eliminati confronti, formulazioni negative e suggerimento Discovery sotto i profili. Frontend 145 test e build PASS exit 0, Doc Sync e self-review completati; working tree precedente preservata, nessun commit/push/deploy.
-
-- 2026-10-16 · SCAN-TIME-01: PO richiede stime e conferma scope intero gruppo. Implementati intervalli per otto preset, telemetria XML Nmap, API snapshot tenant/batch e monitor lotto con coda/ETA. Frontend 145 test, backend completo, build/vet PASS exit 0; Doc Sync e self-review. Gate visuale/lab pendente per ambiente; nessun commit/push/deploy, modifiche precedenti preservate.

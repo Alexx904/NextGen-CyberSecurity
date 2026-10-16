@@ -1,5 +1,18 @@
 # Test Plan
 
+## E28-S1-T1 · 2026-10-17 · working tree
+
+Test aggiunti in `defense_service_test.go`, `defense_handler_test.go` e
+`firewall_service_test.go`: regola deterministica, TCP/UDP, input non supportati,
+protezione porta SSH, mismatch IP e tenant, chokepoint obsoleto, preview senza
+mutazione, inoltro timer obbligatorio, JSON/RBAC/errori HTTP, PID watchdog invalido,
+concorrenza preparazione timer, conservazione watchdog su conferma/ripristino fallito.
+Riproduzione rossa PID exit 1, verde exit 0. Test di servizio/handler exit 0.
+Suite backend, build e vet exit 0; frontend 145 test e build exit 0.
+Race detector non eseguito: toolchain senza CGO (comando exit 1).
+Prova SSH/iptables reale non eseguita: nessun host Linux di laboratorio identificato.
+Limiti e piano nel [piano E28-S1-T1](../04-development/plans/E28-S1-T1-chokepoint-remediation.md).
+
 > Responsabile: QA Engineer. Strategia preventiva; risultati eseguiti e baseline sono in [PROJECT_STATE](../PROJECT_STATE.md).
 
 ## Strategia

@@ -12,11 +12,16 @@ Per garantire modularità ed efficienza di contesto, i dettagli tecnici e i cont
 4. **[Debug & Testing Live Console Drawer](../domains/debug_console.md)**: In-Memory Ring Buffer (500 log), intercettori Axios/SSE/WS/JS, sanificazione credenziali `[REDACTED]` ed esportatore Markdown preformattato per AI.
 5. **[Attack Path Mapping & Threat Chaining](../domains/attack_path.md)**: Analisi topologica a grafo, calcolo del Cumulative Path Risk Score, rilevamento catene di compromissione, individuazione algoritmica dei chokepoint e Visual Graph Explorer SVG interattivo con controlli zoom/pan e filtri CVSS.
 6. **[Vulnerability Intelligence & CVE Correlation](../domains/vulnerability_intelligence.md)**: Catalogo locale offline-ready, client REST NIST NVD API 2.0 (timeout 4s), auto-caching PostgreSQL su `cve_entries`, correlazione script NSE (`--script=vuln`, `--script=vulners`) ed endpoint `/api/v1/cve/stats` e `/api/v1/cve/sync`.
-7. **Active Defense & SOAR Light (M3, pianificato):** Remediation 1-click su chokepoints, generatore virtual patching, webhook alerting hub. Il documento `domains/active_defense_and_soar.md` sarà creato con l'avvio di E28-S1-T1.
+7. **[Active Defense & SOAR Light](../domains/active_defense_and_soar.md) (M3):** preview e blocco porta chokepoint SERVICE. Isolamento host, UI, virtual patching e alerting restano pianificati.
 8. **Compliance & Governance (M4, pianificato):** Mappatura NIS2/DORA/ISO 27001, scorecard per reparto, dossier PDF audit-ready. Documento di dominio da creare all'avvio della milestone.
 9. **AI Security Copilot & Assistant (M5, pianificato):** Generazione dinamica playbook di mitigazione, sintesi narrative executive per report, query semantiche "Ask Infrastructure". Documento di dominio da creare all'avvio della milestone.
 
 ### Mappa documenti Full-Stack (Glob -> Dominio -> Documento)
+
+Estensione E28-S1-T1 (2026-10-17, working tree): `backend/internal/domain/defense*`,
+`backend/internal/delivery/http/handler/defense*` e `frontend/src/types/defense.ts`
+appartengono al dominio [Active Defense](../domains/active_defense_and_soar.md).
+Il wiring in `backend/cmd/server/main.go` collega i domini coinvolti.
 Tabella vincolante per il gate **Doc Sync**. Deve coprire il 100% del codice applicativo (Backend Go, Frontend React, Migrazioni SQL):
 
 | Percorso (glob Backend / Frontend / DB) | Dominio | Documento di Riferimento |

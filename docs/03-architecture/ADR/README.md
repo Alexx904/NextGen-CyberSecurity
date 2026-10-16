@@ -4,6 +4,12 @@
 
 ## 7. Architecture Decision Records (ADR)
 
+### ADR-16 · Remediation sul server del chokepoint (2026-10-17)
+
+- Contesto: E28-S1-T1 collega analisi euristica e mutazioni remote. Il PO sceglie blocco porta sul server del chokepoint; isolamento host separato.
+- Decisione: preview ed esecuzione rivalidano il chokepoint SERVICE nel grafo del tenant; server SSH esplicito e IP coincidente, IPv4 TCP/UDP, protezione porta SSH. Riuso snapshot/watchdog e API firewall, DTO additivi, nessuna migrazione. Serializzazione del lifecycle locale e conservazione watchdog su errori.
+- Conseguenze: DNS/IPv6, isolamento e gateway non supportati. Limiti di host-key, tempi remoti e deployment multiistanza registrati nel Tech Debt. Nessuna prova remota dichiarata. Contratto nel [dominio](../../domains/active_defense_and_soar.md).
+
 ### ADR-15 · Telemetria Nmap e monitor del lotto (2026-10-16)
 
 - Contesto: il PO richiede durate per preset, progresso totale ed ETA dell'intero gruppo, non del solo target. Le precedenti percentuali di fase erano fisse.

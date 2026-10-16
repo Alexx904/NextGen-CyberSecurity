@@ -22,126 +22,7 @@
 
 ## 🚀 Coda di Sviluppo Attiva (Priorità validate dal PO)
 
-### Revisione scanner Nmap (SCAN-UX-01)
-
-- [x] SCAN-COPY-01 · Descrizioni dei profili focalizzate sullo scopo
-  - File: `frontend/src/components/scans/scanConfiguration.ts`, `frontend/src/components/NewScanModal.tsx`, test modale
-  - Dipende da: SCAN-UX-01 (implementazione presente)
-  - Accettazione PO: 2026-10-16, OK riferito alla revisione dei testi.
-  - Test: regressione frontend e build; verifica documentale e whitespace
-  - Docs: dominio scanner, specifiche UI, PROJECT_STATE
-  - DoD: descrizioni tecniche dirette, nessuna variazione ai comandi; controlli PASS e self-review; limite visuale dichiarato.
-  - Evidenze: `npm.cmd test` PASS (21 file, 145 test); `npm.cmd run build` PASS (17,06 s); verificatore documentale PASS, exit 0. Copy verificato nel DOM e self-review; nessuna nuova verifica visuale di layout per questa modifica testuale. Restano separati i gate visuali SCAN-UX-01/SCAN-TIME-01.
-
-- [x] SCAN-TIME-01 · Stime per profilo, barra totale ed ETA
-  - File: runner/progress scanner e orchestratore Go, payload SSE Go/TypeScript; preset, modale, dettaglio/elenco scansioni e test
-  - Dipende da: SCAN-UX-01 (implementazione presente)
-  - Test: telemetria XML/SSE, stime/monotonicità/stale, gruppi e stati terminali; suite complete, build/vet
-  - Docs: `docs/domains/scanning_and_discovery.md`, `docs/04-development/SCAN_PROGRESS_PLAN.md`
-  - DoD: test mirati PASS; integrazione/UI PASS o limite dichiarato; build/typecheck/vet PASS; Doc Sync e self-review.
-  - Evidenze: frontend 21 file / 145 test e build PASS; backend suite/build/vet PASS, exit 0; doc verifier PASS. Il PO conferma test delle scansioni riusciti e accetta la funzionalità il 2026-10-16. Prova funzionale eseguita dal PO; nessuna prova visuale autonoma o benchmark rete dichiarato dall'agente.
-
-- [x] SCAN-UX-01 · Semplificazione scanner, profili veritieri ed editor Nmap
-  - File: `frontend/src/components/NewScanModal.tsx`, `frontend/src/components/scans/scanConfiguration.ts`, relativi test; `backend/internal/scanner/profiles.go`, `backend/internal/service/scan_service.go`, relativi test
-  - Dipende da: nessuno; sostituisce la UX proposta in E27.1 su richiesta del PO
-  - Test: parser happy/error/edge, payload coerente con preview, scope/blacklist, gate, scheduler; suite Go/frontend, build, vet, verifica documentale e UI locale
-  - Docs: `docs/domains/scanning_and_discovery.md`, `docs/04-development/NMAP_SCAN_REVIEW.md`
-  - DoD: (1) test mirati PASS; (2) integrazione/UI PASS o limite dichiarato; (3) suite/build/vet PASS; (4) Doc Sync e self-review completati.
-  - Accettazione PO: 2026-10-16, test delle scansioni dichiarati correttamente funzionanti. Il PO fornisce la verifica funzionale mancante; nessuno screenshot o controllo visuale autonomo inventato. Il debito TECH-DEBT-05 resta aperto.
-
-### Pulizia repository · Artefatti obsoleti (AGENT-CLEAN-03)
-
-- [~] AGENT-CLEAN-03 · Pulizia artefatti obsoleti e documentazione riservata agli agenti
-  - File: stub rimossi, vecchio script Antigravity, directory vuote, manuale utente e screenshot rimossi da `docs/`; regole agentiche e verificatore aggiornati
-  - Dipende da: AGENT-SDLC-02
-  - Test: PASS struttura `docs/` agentica, 24 documenti obbligatori, 53 Markdown, 104 link/ancore e registry; `git diff --check` exit 0.
-  - Docs: `docs/README.md`, `docs/PROJECT_STATE.md`
-  - DoD: fonti canoniche intatte; rimozione manuale e screenshot come richiesto dal PO; riferimenti operativi aggiornati; verifica documentale PASS; Doc Sync e self-review completati.
-
-### Migrazione SDLC · Orchestrazione per feature (AGENT-SDLC-02)
-
-- [x] AGENT-SDLC-02 · Organizzazione documentale per fasi e responsabilità specializzate
-  - File: `AGENTS.md`, `.agent/roles/`, `.agent/workflows/`, `docs/01-product/`–`docs/06-devops/`, `README.md`, `CHANGELOG.md`, `scripts/verify-agent-docs.ps1`
-  - Dipende da: AGENT-CODEX-01 (integrazione della governance, accettazione ancora pendente)
-  - Test: PASS 24 documenti obbligatori, 59 Markdown e 153 link/ancore; 7 ruoli e 15 playbook indicizzati; preservate 40 sezioni FR/UC, ERD/API/ADR, task e changelog; diff check exit 0.
-  - Docs: `docs/README.md`, `docs/PROJECT_STATE.md`, `docs/03-architecture/ADR/README.md`
-  - DoD: (1) contenuti migrati preservati; (2) gate e handoff coerenti; (3) controlli Markdown PASS, suite applicativa N/A; (4) Doc Sync e self-review completati.
-
-### Chore Agentico · Migrazione Antigravity → Codex (AGENT-CODEX-01)
-
-- [~] AGENT-CODEX-01 · Adattamento completo della governance agentica al runtime Codex
-  - File: `AGENTS.md`, `.agent/README.md`, `.agent/workflows/*.md`, `docs/PROJECT_STATE.md`, `docs/03-architecture/HLD.md`
-  - Dipende da: ADR-10
-  - Test: inventario playbook, ricerca riferimenti Antigravity/tool obsoleti, validazione link locali, `git diff --check`
-  - Docs: `docs/01-product/PRD.md`, `docs/03-architecture/HLD.md`, `docs/04-development/TASK_LIST.md`, `docs/PROJECT_STATE.md`
-  - DoD: entry point Codex nativo; tutti gli alias documentati hanno un playbook; permessi e fallback espliciti; verifiche Markdown PASS; Doc Sync e hostile review completati.
-
-### Sprint Attivo · Epic 27: Gestione Aziende, Reparti & Filtro Globale (FEAT-COMPANY-SCOPE) [ACCETTATO DAL PO]
-
-- [x] E27-S1-T1 · Creazione CompanyContext globale con gestione stato aziendale, derivazione gerarchica reparti e filtri automatici
-  - File: frontend/src/context/CompanyContext.tsx, frontend/src/context/CompanyContext.test.tsx
-  - Dipende da: nessuno
-  - Test: test unitari Vitest su CompanyContext (selezione azienda, reparti discendenti, filtro target/scans/findings, localStorage)
-  - Docs: docs/domains/reporting_and_assets.md
-  - DoD: Context operativo con memorizzazione persistente dello scope aziendale e helper di filtraggio per tutte le entità.
-
-- [x] E27-S1-T2 · Integrazione Selettore Aziendale Globale nel Menu Laterale (Sidebar / AppLayout)
-  - File: frontend/src/components/layout/AppLayout.tsx, frontend/src/App.tsx
-  - Dipende da: E27-S1-T1
-  - Test: test rendering AppLayout e interazione selettore azienda
-  - Docs: docs/domains/reporting_and_assets.md
-  - DoD: Dropdown azienda visibile in alto nella sidebar, link a gestione aziende, voce di menu "Gestione Aziende" (/companies).
-
-- [x] E27-S1-T3 · Dashboard Dedicata per la Gestione delle Aziende (/companies)
-  - File: frontend/src/pages/Companies.tsx, frontend/src/pages/Companies.test.tsx, frontend/src/components/CompanyModal.tsx
-  - Dipende da: E27-S1-T1
-  - Test: test Vitest per Companies.tsx (creazione azienda, elenco card con metriche reparti/IP/rischio, modifica, cancellazione, selezione scope)
-  - Docs: docs/domains/reporting_and_assets.md
-  - DoD: Vista completa di gestione aziende con KPI aggregati, creazione con color tag, attivazione rapida scope.
-
-- [x] E27-S1-T4 · Contestualizzazione Pagina Target & Reparti (/targets e TreeExplorer)
-  - File: frontend/src/pages/Targets.tsx, frontend/src/components/TreeExplorer.tsx
-  - Dipende da: E27-S1-T1, E27-S1-T3
-  - Test: test rendering Targets con azienda attiva e creazione reparti
-  - Docs: docs/domains/scanning_and_discovery.md
-  - DoD: /targets mostra i reparti dell'azienda selezionata, creazione di nuovi reparti associati all'azienda e gestione IP per reparto.
-
-- [x] E27-S1-T5 · Propagazione Filtro Globale ed Eliminazione Ridondanze su tutte le Feature
-  - File: frontend/src/pages/Dashboard.tsx, frontend/src/pages/Scans.tsx, frontend/src/pages/Findings.tsx, frontend/src/pages/Reports.tsx, frontend/src/pages/AttackPath.tsx, frontend/src/components/NewScanModal.tsx
-  - Dipende da: E27-S1-T1, E27-S1-T4
-  - Test: test regressione su tutte le viste con scope aziendale attivo
-  - Docs: docs/domains/scanning_and_discovery.md, docs/domains/vulnerability_intelligence.md
-  - DoD: Tutte le viste riflettono automaticamente lo scope dell'azienda selezionata senza dropdown duplicati; NewScanModal propone solo target dell'azienda.
-
-- [x] E27-S1-T6 · Verifica Zero-Assumption e Suite Completa di Test
-  - File: frontend/src/tests/**, backend/internal/**
-  - Dipende da: E27-S1-T1..E27-S1-T5
-  - Test: npm test (Vitest: 18/18 PASS, 105/105 PASS), npm run build (0 errori), go test ./... (tutti i package PASS)
-  - Docs: docs/PROJECT_STATE.md, docs/03-architecture/HLD.md
-  - DoD: Build pulita (0 errori), tutti i test frontend e backend 100% VERDI.
-
-### Sprint Attivo · Epic 27.1: Semplificazione Centro Scansioni & Scanning Studio 360° (FEAT-SCAN-STUDIO)
-
-- [~] E27.1-S1-T1 · Riprogettazione UI di NewScanModal: 3-4 Master Presets Intelligenti e Pannello "Fine-Tuning a 360°"
-  - File: `frontend/src/components/NewScanModal.tsx`, `frontend/src/components/NewScanModal.test.tsx`
-  - Dipende da: E27-S1-T5
-  - Test: test unitari Vitest su NewScanModal (selezione preset standard, switch a personalizzazione avanzata porte/sonde/timing, live preview reattiva, calcolo dinamico invasività e trigger gate) (14/14 PASS)
-  - Docs: `docs/domains/scanning_and_discovery.md`, `docs/02-design/UI_SPECIFICATIONS.md`
-  - DoD: Interfaccia unificata senza 14 opzioni disperse: card a 1-clic per i casi d'uso standard + controlli granulari (porte, OS, versioni, vuln script, UDP, rate/timing) per libertà completa a 360°.
-
-- [~] E27.1-S1-T2 · Allineamento Contratti e Documentazione Funzionale
-  - File: `docs/02-design/UI_SPECIFICATIONS.md`, `docs/domains/scanning_and_discovery.md`, `docs/03-architecture/HLD.md`
-  - Dipende da: E27.1-S1-T1
-  - Test: verifica consistenza documentale e mappa dei profili
-  - Docs: `docs/PROJECT_STATE.md`, `docs/02-design/UI_SPECIFICATIONS.md`
-  - DoD: Documentazione agentica allineata con spiegazione della nuova UX unificata; eventuali screenshot di verifica fuori da `docs/`, secondo la richiesta PO di pulizia.
-
-- [~] E27.1-S1-T3 · Verifica Zero-Assumption e Suite Completa di Regressione
-  - File: `frontend/src/**`, `backend/**`
-  - Dipende da: E27.1-S1-T1, E27.1-S1-T2
-  - Test: `npm test` (18 file, 107 test PASS), `npm run build` (tsc + vite PASS in 10.64s), `go test ./...` (14 pkg PASS)
-  - Docs: `docs/PROJECT_STATE.md`
-  - DoD: 100% test verdi, build TypeScript pulita con 0 errori.
+Le attività concluse e la proposta Epic 27.1 superata sono archiviate nel [CHANGELOG](../../CHANGELOG.md), con ID, evidenze e stato di accettazione preservati. Nessuna attività in attesa di approvazione.
 
 ### Sprint Archiviati (Accettati dal PO `[x]`)
 > *Nota di archiviazione:* Tutti i task completati e convalidati (TASK-01..60, `FEAT-IP-ORG-01..04`, `FEAT-SCAN-PROF-01..04`, `FEAT-WORKFLOW-CLEANUP-01..07`, `FEAT-CVE-ONLINE-01`, `FEAT-REPORT-PDF-UX-01`, `FEAT-M2-01..03`, `ONBOARD-01..05`, `SEC-P0-01..06`, `SEC-P1-01..06`, `SEC-P2-01..03`) sono stati formalmente archiviati nel [CHANGELOG.md](../../CHANGELOG.md) in conformità alle regole di token & backlog management di `AGENTS.md`.
@@ -153,6 +34,8 @@
 ### Milestone 3 · Active Defense & SOAR Light (Epic 28 - In Partenza)
 
 - [ ] E28-S1-T1 · Backend Chokepoint Auto-Remediation Service & SSH Firewall Rule Applicator
+  - Avanzamento 2026-10-17: implementati preview e blocco porta sul server del chokepoint, scelta confermata dal PO; isolamento host escluso. Suite backend/build/vet e test frontend PASS. Gate operativo aperto: prova Linux reale e limiti watchdog/SSH (TECH-DEBT-06/07). Non promosso a `[~]`.
+  - Piano: [E28-S1-T1](plans/E28-S1-T1-chokepoint-remediation.md).
   - File: `backend/internal/domain/defense.go`, `backend/internal/service/defense_service.go`, `backend/internal/delivery/defense_handler.go`
   - Dipende da: Epic 26 (Attack Path), Epic 22 (SSH Manager)
   - Test: test unitari Go su generazione regole firewall da chokepoint e invocazione sicura SSH con rollback
@@ -212,6 +95,8 @@ Registro formale del debito tecnico e delle ottimizzazioni architetturali (regol
 
 | ID | Priorità | Componente / Percorso | Descrizione & Impatto | Piano di Rientro |
 |---|---|---|---|---|
+| `TECH-DEBT-06` | Alta | `backend/internal/service/ssh_service.go` | Host-key SSH non verificata (`InsecureIgnoreHostKey`); il fingerprint esistente riguarda la chiave client. Possibile impersonificazione del server, anche sul nuovo percorso remediation. | Progettare registrazione e pinning host-key con contratto dedicato, migrazione up/down e test mismatch/rotazione prima dell'uso operativo. |
+| `TECH-DEBT-07` | Alta | `backend/internal/service/firewall_service.go`, `ssh_service.go` | Watchdog preesistente: chiamate remote senza deadline di esecuzione, possibile mutazione tardiva dopo scadenza e timer solo locali fra istanze; nessuna prova Linux reale in questa sessione. | Rendere la transazione snapshot/watchdog/applicazione protetta sull'host, verificare kill e ripristino sotto disconnessione/timeout; laboratorio Linux e test concorrenti multiistanza prima di chiudere E28-S1-T1. |
 | `TECH-DEBT-05` | Alta | `backend/internal/delivery/http/handler/scan_handler.go`, scheduler, audit | FR-01.3 incompleto: consenso solo UI, non attestato immutabilmente né imposto dall'API; classificazione impatto euristica. | Definire contratto di attestazione per scope/configurazione, validazione server e registrazione audit; coprire API diretta e pianificazioni con test. Nessuna attestazione di conformità finché il gap resta. |
 | `TECH-DEBT-01` | Media | `frontend/src/` | Ottimizzazione manual chunks in `vite.config.ts` per separare librerie pesanti (`@xterm`, `recharts`, `lucide-react`) e ridurre il bundle iniziale sotto 500kB. | Refactoring bundle-splitting in Milestone 3 |
 | `TECH-DEBT-02` | Media | `backend/internal/repository/migrations` | Verifica sistematica e test automatico di rollback (`down.sql`) per tutte le migrazioni storiche da `000001` a `000007`. | Script CI dedicato `migrate -path ... down` in Docker test |

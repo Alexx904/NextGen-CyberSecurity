@@ -162,6 +162,11 @@
 - **FR-18.8 (Dati Temporali Sempre Valorizzati):** "Data Avvio" e "Durata Totale" devono essere sempre calcolati e visualizzati, aggregando le durate effettive degli audit ed eliminando diciture "N/A".
 
 ### FR-19: Active Defense, Chokepoint Auto-Remediation & SOAR Light (Milestone 3)
+
+Perimetro E28-S1-T1 concordato col PO il 2026-10-17: blocco porta sul server del
+chokepoint; isolamento host da definire separatamente. Primo incremento IPv4,
+servizi TCP/UDP e host SSH registrato con IP coincidente; porta SSH esclusa.
+Contratto e limiti nel [dominio Active Defense](../domains/active_defense_and_soar.md).
 - **FR-19.1 (Neutralizzazione Chokepoint con 1-Click):** Dalla vista del grafo topologico (`/attack-path`), selezionando un nodo o un cammino identificato come *Chokepoint ad alto ROI*, l'operatore può cliccare su "Applica Regola di Mitigazione / Isola Host". Il sistema genera automaticamente la regola di blocco `iptables`/`nftables` ottimale mirata sulla porta o sull'indirizzo sorgente/destinazione.
 - **FR-19.2 (Deployment Sicuro via SSH con Rollback):** La regola viene recapitata sul server remoto associato (se censito in *Server SSH*) tramite la sessione SSH cifrata AES-256-GCM, attivando il *Safety Rollback Timer* a 60 secondi: se l'operatore non conferma il corretto funzionamento, le regole precedenti vengono ripristinate automaticamente.
 - **FR-19.3 (Virtual Patching & WAF Rule Generator):** Per ogni vulnerabilità CVE rilevata sui servizi esposti (HTTP, Reverse Proxy, SSH), il sistema offre un pannello di generazione regole di patching virtuale con snippet copia-e-incolla o salvataggio file per:
