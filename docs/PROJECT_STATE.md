@@ -5,7 +5,7 @@
 
 **Ultimo aggiornamento:** 2026-10-16
 **Modalità progetto:** esistente (onboarded formalmente sul branch chore/agent-onboarding)
-**Fase:** SCAN-UX-01, SCAN-TIME-01 e SCAN-COPY-01 accettati dal PO dopo test delle scansioni. Consegna autorizzata sul branch feat/nmap-scan-workflow-review; nessun merge/deploy incluso.
+**Fase:** SCAN-UX-01, SCAN-TIME-01 e SCAN-COPY-01 accettati dal PO. Commit applicativo ce4a69f pubblicato su origin/feat/nmap-scan-workflow-review; nessun merge/deploy incluso.
 
 ## Project Profile
 
@@ -43,7 +43,7 @@ Verifica pre-push del 2026-10-15: `go test ./...`, `go build ./...`, `go vet ./.
 
 ## In corso
 
-- Nessuno sviluppo applicativo in corso. Commit/push della consegna scanner esplicitamente autorizzati dal PO; esito della pubblicazione verificabile dai riferimenti Git. Nessun merge su main né deploy richiesto.
+- Nessuno. Commit applicativo `ce4a69f` pubblicato su `origin/feat/nmap-scan-workflow-review`, con tracking remoto configurato. Destinatario `https://github.com/Alexx904/NextGen-CyberSecurity.git` confermato esplicitamente dal PO dopo la richiesta della revisione automatica. Nessun merge su main né deploy.
 
 ## Accettati recentemente dal PO (`[x]`)
 
@@ -137,6 +137,8 @@ Verifica pre-push del 2026-10-15: `go test ./...`, `go build ./...`, `go vet ./.
 
 ## Log sessioni (ultime 5, la più recente in alto)
 
+- 2026-10-16 · Push scanner riuscito (exit 0): commit ce4a69f, 42 file, su origin/feat/nmap-scan-workflow-review. Dopo il blocco iniziale dell'auto-review il PO ha confermato esplicitamente repository e branch; nessun aggiramento del controllo. Branch remoto creato e tracking impostato; nessun merge/deploy.
+
 - 2026-10-16 · SCAN-UX-01 e SCAN-TIME-01 accettati dopo test dichiarati dal PO, push di tutte le modifiche autorizzato. Rieseguite suite frontend (145 test), backend, build/vet PASS exit 0. Audit circoscritto del diff da 88f0ef2: nessuna nuova dipendenza/migrazione/skip, perimetro tenant, allowlist, lifecycle snapshot e polling verificati; TECH-DEBT-05 resta aperto. Destinazione branch feature, nessun merge/deploy implicito.
 
 - 2026-10-16 · SCAN-COPY-01 accettato dal PO: task promosso a `[x]`, rimosso dalle attese e registrato nel changelog. Applicato feedback.md ramo accettazione, nessuna modifica applicativa né commit/push/deploy; stati degli altri task invariati.
@@ -144,5 +146,3 @@ Verifica pre-push del 2026-10-15: `go test ./...`, `go build ./...`, `go vet ./.
 - 2026-10-16 · SCAN-COPY-01: otto descrizioni riscritte sul solo scopo; eliminati confronti, formulazioni negative e suggerimento Discovery sotto i profili. Frontend 145 test e build PASS exit 0, Doc Sync e self-review completati; working tree precedente preservata, nessun commit/push/deploy.
 
 - 2026-10-16 · SCAN-TIME-01: PO richiede stime e conferma scope intero gruppo. Implementati intervalli per otto preset, telemetria XML Nmap, API snapshot tenant/batch e monitor lotto con coda/ETA. Frontend 145 test, backend completo, build/vet PASS exit 0; Doc Sync e self-review. Gate visuale/lab pendente per ambiente; nessun commit/push/deploy, modifiche precedenti preservate.
-
-- 2026-10-15 · SCAN-UX-01: sostituita UX a tre modalità con Profili/Comando Nmap; corrette incoerenze preset e parser e port scan non richiesto in Discovery. Suite frontend 136 test, backend completo, build/vet PASS (exit 0). Self-review eseguita. Gate visuale bloccato dal runtime; rilevato gap di attestazione server consenso (TECH-DEBT-05). Nessun commit/push/deploy.
