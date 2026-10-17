@@ -141,7 +141,7 @@ func (r *FindingRepo) List(ctx context.Context, tenantID uuid.UUID, filter domai
 			WHEN 'HIGH' THEN 2
 			WHEN 'MEDIUM' THEN 3
 			WHEN 'LOW' THEN 4
-			ELSE 5 END ASC, port ASC
+			ELSE 5 END ASC, port ASC, id ASC
 		LIMIT $%d OFFSET $%d
 	`, whereSQL, argIdx, argIdx+1)
 

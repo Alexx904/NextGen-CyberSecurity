@@ -1,8 +1,9 @@
+//go:build integration
+
 package postgres_test
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
@@ -10,24 +11,15 @@ import (
 	"nextgen-cybersec/internal/repository/postgres"
 )
 
-func getTestConfig() *config.Config {
-	cfg := config.Load()
-	// Fallback host se eseguito in container su bridge docker o host
-	if host := os.Getenv("TEST_DB_HOST"); host != "" {
-		cfg.DB.Host = host
-	}
-	return cfg
-}
-
 func TestPostgresConnectionAndPing(t *testing.T) {
-	cfg := getTestConfig()
+	cfg := getTestConfig(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	db, err := postgres.New(ctx, cfg)
 	if err != nil {
-		t.Skipf("Database non raggiungibile per i test di integrazione (%v): salto il test", err)
+		t.Fatal("Integration test database is unavailable")
 		return
 	}
 	defer db.Close()
@@ -46,7 +38,7 @@ func TestPostgresConnectionAndPing(t *testing.T) {
 }
 
 func TestRunMigrationsIdempotence(t *testing.T) {
-	cfg := getTestConfig()
+	cfg := getTestConfig(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -54,7 +46,7 @@ func TestRunMigrationsIdempotence(t *testing.T) {
 	// Verifica se DB è attivo
 	db, err := postgres.New(ctx, cfg)
 	if err != nil {
-		t.Skipf("Database non raggiungibile per test migrazioni: %v", err)
+		t.Fatal("Integration test database is unavailable")
 		return
 	}
 	db.Close()
@@ -73,7 +65,7 @@ func TestRunMigrationsIdempotence(t *testing.T) {
 }
 
 func TestInvalidConnectionRetryFailure(t *testing.T) {
-	cfg := config.Load()
+	cfg := &config.Config{DB: config.DBConfig{User: "test", Name: "nextgen_test", SSLMode: "disable", MaxConns: 1}}
 	cfg.DB.Host = "192.0.2.1" // Indirizzo TEST-NET non instradabile (RFC 5737)
 	cfg.DB.Port = "5432"
 
@@ -85,4 +77,3 @@ func TestInvalidConnectionRetryFailure(t *testing.T) {
 		t.Fatal("Atteso errore di connessione su host non raggiungibile, ma New ha restituito nil")
 	}
 }
-

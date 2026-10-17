@@ -4,503 +4,293 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"net"
+	"net/netip"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
-
 	"nextgen-cybersec/internal/domain"
 )
 
-// AttackPathService definisce le operazioni per la generazione e consultazione del grafo delle minacce.
 type AttackPathService interface {
-	GenerateAttackGraph(ctx context.Context, tenantID uuid.UUID, minCVSS float64) (*domain.AttackGraph, error)
-	GetChokepoints(ctx context.Context, tenantID uuid.UUID) ([]domain.Chokepoint, error)
+	GenerateAttackGraph(context.Context, uuid.UUID, float64) (*domain.AttackGraph, error)
+	GetChokepoints(context.Context, uuid.UUID) ([]domain.Chokepoint, error)
 }
 
 type attackPathService struct {
-	targetRepo    domain.TargetRepository
-	findingRepo   domain.FindingRepository
-	sshServerRepo domain.SSHServerRepository
+	targetRepo  domain.TargetRepository
+	findingRepo domain.FindingRepository
 }
 
-// NewAttackPathService istanzia un nuovo servizio per l'analisi dei percorsi di attacco.
-func NewAttackPathService(
-	targetRepo domain.TargetRepository,
-	findingRepo domain.FindingRepository,
-	sshServerRepo domain.SSHServerRepository,
-) AttackPathService {
-	return &attackPathService{
-		targetRepo:    targetRepo,
-		findingRepo:   findingRepo,
-		sshServerRepo: sshServerRepo,
-	}
+// SSH inventory is deliberately not evidence of trust between two remote hosts.
+func NewAttackPathService(targets domain.TargetRepository, findings domain.FindingRepository, _ domain.SSHServerRepository) AttackPathService {
+	return &attackPathService{targetRepo: targets, findingRepo: findings}
 }
 
-// GenerateAttackGraph genera il grafo orientato delle minacce e correla i percorsi di penetrazione multi-hop.
-func (s *attackPathService) GenerateAttackGraph(ctx context.Context, tenantID uuid.UUID, minCVSS float64) (*domain.AttackGraph, error) {
-	if tenantID == uuid.Nil {
+func (s *attackPathService) GenerateAttackGraph(ctx context.Context, tenant uuid.UUID, minCVSS float64) (*domain.AttackGraph, error) {
+	if tenant == uuid.Nil || math.IsNaN(minCVSS) || math.IsInf(minCVSS, 0) || minCVSS < 0 || minCVSS > 10 {
 		return nil, domain.ErrValidation
 	}
-
-	// 1. Recupero dei target registrati per il tenant
-	targets, _, err := s.targetRepo.List(ctx, tenantID, domain.TargetFilter{Limit: 200})
-	if err != nil {
-		return nil, fmt.Errorf("recupero target per attack graph fallito: %w", err)
-	}
-
-	// 2. Recupero dei finding per il tenant (senza filtro scan, limit elevato)
-	findings, _, err := s.findingRepo.List(ctx, tenantID, domain.FindingFilter{Limit: 500})
-	if err != nil {
-		return nil, fmt.Errorf("recupero finding per attack graph fallito: %w", err)
-	}
-
-	// 3. Recupero dei server SSH remoti per rilevare trust relationships
-	sshServers, err := s.sshServerRepo.List(ctx, tenantID)
-	if err != nil {
-		// Log e fallback con slice vuota
-		sshServers = []*domain.SSHServer{}
-	}
-
-	graph := &domain.AttackGraph{
-		TenantID:    tenantID,
-		GeneratedAt: time.Now().UTC(),
-		Nodes:       make([]domain.AttackNode, 0),
-		Edges:       make([]domain.AttackEdge, 0),
-		Paths:       make([]domain.AttackPath, 0),
-		Chokepoints: make([]domain.Chokepoint, 0),
-	}
-
-	// Nodo radice fisso: Internet Perimeter
-	entrypointNode := domain.AttackNode{
-		ID:       "entry-internet",
-		Type:     domain.NodeTypeEntrypoint,
-		Label:    "Perimetro Internet / Attaccante Esterno",
-		Severity: string(domain.SeverityLow),
-	}
-	graph.Nodes = append(graph.Nodes, entrypointNode)
-
-	// Se non ci sono target né finding, restituiamo il grafo minimale
-	if len(targets) == 0 && len(findings) == 0 {
-		graph.Summary = domain.AttackGraphSummary{
-			TotalNodes: 1,
-		}
-		return graph, nil
-	}
-
-	// Mappa host IP -> lista findings
-	hostFindingsMap := make(map[string][]*domain.Finding)
-	for _, f := range findings {
-		hostFindingsMap[f.HostIP] = append(hostFindingsMap[f.HostIP], f)
-	}
-
-	// Mappa host IP -> target information
-	targetMap := make(map[string]*domain.Target)
-	for _, t := range targets {
-		targetMap[t.Value] = t
-	}
-
-	// Insieme di tutti gli host distinti presenti nei target o nei finding
-	allHosts := make(map[string]bool)
-	for _, t := range targets {
-		if t.Type == domain.TargetTypeIP || t.Type == domain.TargetTypeFQDN {
-			allHosts[t.Value] = true
-		}
-	}
-	for ip := range hostFindingsMap {
-		allHosts[ip] = true
-	}
-
-	// Identificazione degli host esterni vs interni
-	externalHosts := make([]string, 0)
-	internalHosts := make([]string, 0)
-
-	for host := range allHosts {
-		if isPrivateIP(host) {
-			internalHosts = append(internalHosts, host)
-		} else {
-			externalHosts = append(externalHosts, host)
-		}
-	}
-
-	// Se non ci sono host pubblici identificati, consideriamo i primi host o target come punto di contatto iniziale
-	if len(externalHosts) == 0 && len(allHosts) > 0 {
-		// Ordina per determinismo
-		sortedHosts := make([]string, 0, len(allHosts))
-		for h := range allHosts {
-			sortedHosts = append(sortedHosts, h)
-		}
-		sort.Strings(sortedHosts)
-		externalHosts = append(externalHosts, sortedHosts[0])
-		if len(sortedHosts) > 1 {
-			internalHosts = sortedHosts[1:]
-		}
-	}
-
-	edgeCounter := 1
-	nextEdgeID := func() string {
-		id := fmt.Sprintf("edge-%d", edgeCounter)
-		edgeCounter++
-		return id
-	}
-
-	addedNodes := make(map[string]bool)
-	addedNodes[entrypointNode.ID] = true
-
-	// Host classificati come pivot da cui è possibile estendere l'attacco
-	pivotCapableHosts := make(map[string]bool)
-
-	// Creazione nodi Host, Servizi e Vulnerabilità
-	for host := range allHosts {
-		hostNodeID := fmt.Sprintf("host-%s", sanitizeID(host))
-		hostLabel := host
-		if t, ok := targetMap[host]; ok && t.Description != nil && *t.Description != "" {
-			hostLabel = fmt.Sprintf("%s (%s)", *t.Description, host)
-		}
-
-		hostSeverity := string(domain.SeverityLow)
-		hostFindings := hostFindingsMap[host]
-
-		// Calcolo massima severità host allineata allo standard CVSS (SEC-P2-01)
-		maxCVSS := 0.0
-		for _, f := range hostFindings {
-			if f.CVSSScore != nil && *f.CVSSScore > maxCVSS {
-				maxCVSS = *f.CVSSScore
-			}
-		}
-		hostSeverity = domain.AttackSeverityFromCVSS(maxCVSS)
-
-		if !addedNodes[hostNodeID] {
-			graph.Nodes = append(graph.Nodes, domain.AttackNode{
-				ID:       hostNodeID,
-				Type:     domain.NodeTypeHost,
-				Label:    hostLabel,
-				IP:       host,
-				Severity: hostSeverity,
-				CVSS:     maxCVSS,
-			})
-			addedNodes[hostNodeID] = true
-		}
-
-		// Se l'host è nel perimetro esterno, colleghiamolo dall'entrypoint
-		if sliceContains(externalHosts, host) {
-			graph.Edges = append(graph.Edges, domain.AttackEdge{
-				ID:         nextEdgeID(),
-				Source:     entrypointNode.ID,
-				Target:     hostNodeID,
-				Type:       domain.EdgeTypeNetworkAccess,
-				Label:      "Esposizione Rete Esterna",
-				Weight:     1.0,
-				Inferred:   false,
-				Confidence: 1.0,
-			})
-		}
-
-		// Aggiunta servizi e vulnerabilità per l'host
-		serviceMap := make(map[int]bool)
-		for _, f := range hostFindings {
-			serviceNodeID := fmt.Sprintf("srv-%s-%d", sanitizeID(host), f.Port)
-			serviceLabel := fmt.Sprintf("Port %d/%s", f.Port, f.Protocol)
-			if f.ServiceName != nil && *f.ServiceName != "" {
-				serviceLabel = fmt.Sprintf("%s (%d)", *f.ServiceName, f.Port)
-			}
-
-			if !serviceMap[f.Port] {
-				serviceMap[f.Port] = true
-				if !addedNodes[serviceNodeID] {
-					graph.Nodes = append(graph.Nodes, domain.AttackNode{
-						ID:       serviceNodeID,
-						Type:     domain.NodeTypeService,
-						Label:    serviceLabel,
-						IP:       host,
-						Port:     f.Port,
-						Protocol: f.Protocol,
-						Severity: string(f.Severity),
-					})
-					addedNodes[serviceNodeID] = true
-
-					// Arco Host -> Service
-					graph.Edges = append(graph.Edges, domain.AttackEdge{
-						ID:         nextEdgeID(),
-						Source:     hostNodeID,
-						Target:     serviceNodeID,
-						Type:       domain.EdgeTypeNetworkAccess,
-						Label:      "Porta Aperta",
-						Weight:     1.0,
-						Inferred:   false,
-						Confidence: 1.0,
-					})
-				}
-			}
-
-			// Se il finding ha una CVE con CVSS >= minCVSS, creiamo il nodo vulnerabilità
-			cvss := 0.0
-			if f.CVSSScore != nil {
-				cvss = *f.CVSSScore
-			}
-
-			if f.CVEID != nil && *f.CVEID != "" && cvss >= minCVSS {
-				vulnNodeID := fmt.Sprintf("vuln-%s-%d-%s", sanitizeID(host), f.Port, sanitizeID(*f.CVEID))
-				vulnLabel := *f.CVEID
-				if f.ServiceName != nil && *f.ServiceName != "" {
-					vulnLabel = fmt.Sprintf("%s: %s", *f.ServiceName, *f.CVEID)
-				}
-
-				if !addedNodes[vulnNodeID] {
-					graph.Nodes = append(graph.Nodes, domain.AttackNode{
-						ID:       vulnNodeID,
-						Type:     domain.NodeTypeVulnerability,
-						Label:    vulnLabel,
-						Severity: domain.AttackSeverityFromCVSS(cvss),
-						CVSS:     cvss,
-						Metadata: map[string]interface{}{
-							"cve_id":   *f.CVEID,
-							"host_ip":  host,
-							"port":     f.Port,
-							"protocol": f.Protocol,
-						},
-					})
-					addedNodes[vulnNodeID] = true
-
-					// Arco Service -> Vulnerability
-					graph.Edges = append(graph.Edges, domain.AttackEdge{
-						ID:         nextEdgeID(),
-						Source:     serviceNodeID,
-						Target:     vulnNodeID,
-						Type:       domain.EdgeTypeExploits,
-						Label:      fmt.Sprintf("Exploit CVSS %.1f", cvss),
-						Weight:     math.Max(0.1, 10.0-cvss),
-						Inferred:   false,
-						Confidence: 1.0,
-					})
-				}
-
-				// Se la vulnerabilità è grave (CVSS >= 7.0), l'host diventa vettore di pivot
-				if cvss >= 7.0 {
-					pivotCapableHosts[host] = true
-				}
-			}
-		}
-	}
-
-	// Aggiunta relazioni di fiducia basate sui Server SSH configurati
-	for _, srv := range sshServers {
-		srvHost := srv.Host
-		if allHosts[srvHost] {
-			pivotCapableHosts[srvHost] = true
-		}
-	}
-
-	// Connessioni di Pivot tra host esterni compromessi e host interni sensibili
-	for pivotHost := range pivotCapableHosts {
-		pivotNodeID := fmt.Sprintf("host-%s", sanitizeID(pivotHost))
-		for _, intHost := range internalHosts {
-			if intHost == pivotHost {
-				continue
-			}
-			intNodeID := fmt.Sprintf("host-%s", sanitizeID(intHost))
-
-			// Arco di Pivot (inferito da topologia di rete o accessi SSH)
-			graph.Edges = append(graph.Edges, domain.AttackEdge{
-				ID:             nextEdgeID(),
-				Source:         pivotNodeID,
-				Target:         intNodeID,
-				Type:           domain.EdgeTypePivotsTo,
-				Label:          "Lateral Movement / Pivot Rete",
-				Weight:         1.5,
-				Inferred:       true,
-				InferenceBasis: "Subnet adjacency / Compromised host lateral pivot",
-				Confidence:     0.85,
-			})
-		}
-	}
-
-	// 4. Costruzione dei Percorsi di Attacco (Attack Paths con bound computazionale - SEC-P2-02)
 	const maxPaths = 50
-	nodeIndex := make(map[string]domain.AttackNode, len(graph.Nodes))
-	for _, n := range graph.Nodes {
-		nodeIndex[n.ID] = n
-	}
-
-	pathCounter := 1
-	// Percorsi diretti verso host esterni e relative vulnerabilità
-	for _, extHost := range externalHosts {
-		if len(graph.Paths) >= maxPaths {
+	g := &domain.AttackGraph{TenantID: tenant, GeneratedAt: time.Now().UTC(), Nodes: []domain.AttackNode{}, Edges: []domain.AttackEdge{}, Paths: []domain.AttackPath{}, Chokepoints: []domain.Chokepoint{}, Analysis: domain.AttackGraphAnalysis{
+		Model: "heuristic-review-v2", MaxPaths: maxPaths, Warnings: []string{
+			"Accesso iniziale ipotetico: esposizione Internet, firewall e raggiungibilità fra host non verificati.",
+			"Una CVE correlata e un CVSS alto non provano exploit, RCE o compromissione. Le ipotesi laterali richiedono verifica di rete e prerequisiti.",
+			"Indice 0–100 euristico, non probabilità. I chokepoint riguardano solo i percorsi modellati, non garantiscono neutralizzazione.",
+			"Finding storici: ultima osservazione per endpoint, senza garanzia che il servizio sia ancora presente. FQDN e IPv6 non producono ipotesi di vicinanza IPv4.",
+		},
+	}}
+	targets := []*domain.Target{}
+	for offset := 0; offset < 2000; {
+		page, total, err := s.targetRepo.List(ctx, tenant, domain.TargetFilter{Limit: 200, Offset: offset})
+		if err != nil {
+			return nil, fmt.Errorf("lettura target: %w", err)
+		}
+		targets = append(targets, page...)
+		offset += len(page)
+		if offset >= total {
 			break
 		}
-		extHostNodeID := fmt.Sprintf("host-%s", sanitizeID(extHost))
-		extFindings := hostFindingsMap[extHost]
-
-		for _, f := range extFindings {
-			if len(graph.Paths) >= maxPaths {
-				break
+		if len(page) == 0 || offset >= 2000 {
+			g.Analysis.InventoryTruncated = true
+			break
+		}
+	}
+	findings := []*domain.Finding{}
+	for offset := 0; offset < 10000; {
+		page, total, err := s.findingRepo.List(ctx, tenant, domain.FindingFilter{Limit: 500, Offset: offset})
+		if err != nil {
+			return nil, fmt.Errorf("lettura finding: %w", err)
+		}
+		findings = append(findings, page...)
+		offset += len(page)
+		if offset >= total {
+			break
+		}
+		if len(page) == 0 || offset >= 10000 {
+			g.Analysis.InventoryTruncated = true
+			break
+		}
+	}
+	g.Analysis.TargetCount = len(targets)
+	g.Analysis.FindingCount = len(findings)
+	if g.Analysis.InventoryTruncated {
+		g.Analysis.Warnings = append(g.Analysis.Warnings, "Inventario parziale: raggiunto il limite di lettura. Assenza di percorsi non significa assenza di rischio.")
+	}
+	root := "entry-internet" // Keep the identifier compatible; the label no longer asserts Internet exposure.
+	g.Nodes = append(g.Nodes, domain.AttackNode{ID: root, Type: domain.NodeTypeEntrypoint, Label: "Origine di analisi (accesso ipotetico)", Severity: "INFO"})
+	hosts := map[string]string{}
+	for _, t := range targets {
+		if t == nil || t.TenantID != uuid.Nil && t.TenantID != tenant {
+			continue
+		}
+		if t.Type == domain.TargetTypeIP || t.Type == domain.TargetTypeFQDN {
+			hosts[t.Value] = t.Value
+			if t.Description != nil && *t.Description != "" {
+				hosts[t.Value] = *t.Description + " (" + t.Value + ")"
 			}
-			if f.CVEID == nil || (f.CVSSScore != nil && *f.CVSSScore < minCVSS) {
+		}
+	}
+	// Select the newest scan observed for each endpoint. Deduplicate repeated CVEs inside it.
+	endpoint := func(f *domain.Finding) string {
+		return fmt.Sprintf("%s|%s|%d", f.HostIP, strings.ToLower(f.Protocol), f.Port)
+	}
+	latest := map[string]*domain.Finding{}
+	for _, f := range findings {
+		if f == nil || f.TenantID != uuid.Nil && f.TenantID != tenant || f.HostIP == "" {
+			continue
+		}
+		key := endpoint(f)
+		old := latest[key]
+		if old == nil || f.CreatedAt.After(old.CreatedAt) || f.CreatedAt.Equal(old.CreatedAt) && f.ScanID.String() > old.ScanID.String() {
+			latest[key] = f
+		}
+	}
+	unique := map[string]*domain.Finding{}
+	for _, f := range findings {
+		if f == nil || f.TenantID != uuid.Nil && f.TenantID != tenant {
+			continue
+		}
+		last := latest[endpoint(f)]
+		if last == nil || f.ScanID != last.ScanID {
+			continue
+		}
+		if f.Port < 1 || f.Port > 65535 {
+			continue
+		}
+		proto := strings.ToLower(f.Protocol)
+		if proto != "tcp" && proto != "udp" {
+			continue
+		}
+		if f.PortState != "" && f.PortState != "open" {
+			continue
+		}
+		if _, ok := hosts[f.HostIP]; !ok {
+			hosts[f.HostIP] = f.HostIP
+		}
+		cve := ""
+		if f.CVEID != nil {
+			cve = *f.CVEID
+		}
+		key := endpoint(f) + "|" + cve
+		old := unique[key]
+		if old == nil || f.CreatedAt.After(old.CreatedAt) || f.CreatedAt.Equal(old.CreatedAt) && f.ID.String() > old.ID.String() {
+			unique[key] = f
+		}
+	}
+	sortedHosts := make([]string, 0, len(hosts))
+	for h := range hosts {
+		sortedHosts = append(sortedHosts, h)
+	}
+	sort.Strings(sortedHosts)
+	fs := make([]*domain.Finding, 0, len(unique))
+	for _, f := range unique {
+		fs = append(fs, f)
+	}
+	score := func(f *domain.Finding) float64 {
+		if f.CVSSScore != nil && !math.IsNaN(*f.CVSSScore) && !math.IsInf(*f.CVSSScore, 0) {
+			return math.Max(0, math.Min(10, *f.CVSSScore))
+		}
+		return 0
+	}
+	sort.Slice(fs, func(i, j int) bool {
+		if score(fs[i]) != score(fs[j]) {
+			return score(fs[i]) > score(fs[j])
+		}
+		return endpoint(fs[i])+stringValue(fs[i].CVEID) < endpoint(fs[j])+stringValue(fs[j].CVEID)
+	})
+	nodeIndex := map[string]int{}
+	addNode := func(n domain.AttackNode) {
+		if i, ok := nodeIndex[n.ID]; ok {
+			if n.CVSS > g.Nodes[i].CVSS {
+				g.Nodes[i].CVSS = n.CVSS
+				g.Nodes[i].Severity = n.Severity
+			}
+			return
+		}
+		nodeIndex[n.ID] = len(g.Nodes)
+		g.Nodes = append(g.Nodes, n)
+	}
+	nodeIndex[root] = 0
+	edges := map[string]string{}
+	addEdge := func(src, dst string, kind domain.AttackEdgeType, label, basis string, inferred bool) string {
+		key := src + "\x00" + dst
+		if id, ok := edges[key]; ok {
+			return id
+		}
+		id := fmt.Sprintf("edge-%d", len(g.Edges)+1)
+		edges[key] = id
+		g.Edges = append(g.Edges, domain.AttackEdge{ID: id, Source: src, Target: dst, Type: kind, Label: label, Weight: 1, Inferred: inferred, InferenceBasis: basis})
+		return id
+	}
+	hostID := func(h string) string { return "host-" + url.PathEscape(h) }
+	for _, h := range sortedHosts {
+		addNode(domain.AttackNode{ID: hostID(h), Type: domain.NodeTypeHost, IP: h, Label: hosts[h], Severity: "INFO"})
+		addEdge(root, hostID(h), domain.EdgeTypeNetworkAccess, "Accesso da verificare", "Origine di scansione e policy di ingresso non disponibili; nessuna esposizione Internet dimostrata", true)
+	}
+	addPath := func(ids []string, name, target, description string) {
+		if len(g.Paths) >= maxPaths {
+			g.Analysis.PathsTruncated = true
+			return
+		}
+		nodes := make([]domain.AttackNode, 0, len(ids))
+		edgeIDs := make([]string, 0, len(ids)-1)
+		for i, id := range ids {
+			nodes = append(nodes, g.Nodes[nodeIndex[id]])
+			if i > 0 {
+				edgeIDs = append(edgeIDs, edges[ids[i-1]+"\x00"+id])
+			}
+		}
+		risk := domain.CalculateCumulativeRisk(nodes, len(ids)-1)
+		g.Paths = append(g.Paths, domain.AttackPath{ID: fmt.Sprintf("path-%d", len(g.Paths)+1), Name: name, NodeIDs: ids, EdgeIDs: edgeIDs, CumulativeRisk: risk, Severity: domain.DeterminePathSeverity(risk), HopCount: len(ids) - 1, TargetAsset: target, Description: description})
+	}
+	// First build all observed associations. Inferred access is kept visually separate.
+	for _, f := range fs {
+		proto := strings.ToLower(f.Protocol)
+		srv := fmt.Sprintf("srv-%s-%d-%s", url.PathEscape(f.HostIP), f.Port, proto)
+		addNode(domain.AttackNode{ID: srv, Type: domain.NodeTypeService, IP: f.HostIP, Port: f.Port, Protocol: proto, Label: fmt.Sprintf("%s %d/%s", stringValue(f.ServiceName), f.Port, proto), CVSS: score(f), Severity: domain.AttackSeverityFromCVSS(score(f)), Metadata: map[string]interface{}{"observed_at": f.CreatedAt, "scan_id": f.ScanID, "port_state": f.PortState}})
+		addNode(domain.AttackNode{ID: hostID(f.HostIP), Type: domain.NodeTypeHost, CVSS: score(f), Severity: domain.AttackSeverityFromCVSS(score(f))})
+		addEdge(hostID(f.HostIP), srv, domain.EdgeTypeNetworkAccess, "Servizio rilevato", "", false)
+		if stringValue(f.CVEID) == "" || score(f) < minCVSS {
+			continue
+		}
+		vuln := srv + "-" + url.PathEscape(*f.CVEID)
+		addNode(domain.AttackNode{ID: vuln, Type: domain.NodeTypeVulnerability, IP: f.HostIP, Port: f.Port, Protocol: proto, Label: *f.CVEID, CVSS: score(f), Severity: domain.AttackSeverityFromCVSS(score(f)), Metadata: map[string]interface{}{"cve_id": *f.CVEID, "host_ip": f.HostIP, "confidence": f.Confidence, "detection_method": f.DetectionMethod, "scan_id": f.ScanID, "observed_at": f.CreatedAt}})
+		addEdge(srv, vuln, domain.EdgeTypeExploits, "CVE correlata (non exploit)", "Associazione del finding al servizio; sfruttabilità e prerequisiti non verificati", true)
+	}
+	// Direct CVE review paths get priority over speculative lateral hypotheses under the cap.
+	for _, f := range fs {
+		if stringValue(f.CVEID) == "" || score(f) < minCVSS {
+			continue
+		}
+		srv := fmt.Sprintf("srv-%s-%d-%s", url.PathEscape(f.HostIP), f.Port, strings.ToLower(f.Protocol))
+		vuln := srv + "-" + url.PathEscape(*f.CVEID)
+		addPath([]string{root, hostID(f.HostIP), srv, vuln}, "Analisi "+f.HostIP+": "+*f.CVEID, f.HostIP, "Verificare versione, configurazione e prerequisiti della CVE. Accesso iniziale ipotetico; nessun exploit eseguito.")
+	}
+	for _, f := range fs {
+		if stringValue(f.CVEID) == "" || score(f) < math.Max(7, minCVSS) {
+			continue
+		}
+		srv := fmt.Sprintf("srv-%s-%d-%s", url.PathEscape(f.HostIP), f.Port, strings.ToLower(f.Protocol))
+		vuln := srv + "-" + url.PathEscape(*f.CVEID)
+		for _, h := range sortedHosts {
+			if !sameCandidateSegment(f.HostIP, h) {
 				continue
 			}
-			srvNodeID := fmt.Sprintf("srv-%s-%d", sanitizeID(extHost), f.Port)
-			vulnNodeID := fmt.Sprintf("vuln-%s-%d-%s", sanitizeID(extHost), f.Port, sanitizeID(*f.CVEID))
-
-			pathNodeIDs := []string{entrypointNode.ID, extHostNodeID, srvNodeID, vulnNodeID}
-			pathNodes := make([]domain.AttackNode, 0, len(pathNodeIDs))
-			for _, nid := range pathNodeIDs {
-				if n, ok := nodeIndex[nid]; ok {
-					pathNodes = append(pathNodes, n)
-				}
+			if len(g.Paths) >= maxPaths {
+				g.Analysis.PathsTruncated = true
+				break
 			}
-
-			risk := domain.CalculateCumulativeRisk(pathNodes, len(pathNodeIDs)-1)
-			pathName := fmt.Sprintf("Perimetro Esterno -> %s (Porta %d: %s)", extHost, f.Port, *f.CVEID)
-
-			graph.Paths = append(graph.Paths, domain.AttackPath{
-				ID:             fmt.Sprintf("path-%d", pathCounter),
-				Name:           pathName,
-				NodeIDs:        pathNodeIDs,
-				CumulativeRisk: risk,
-				Severity:       domain.DeterminePathSeverity(risk),
-				HopCount:       len(pathNodeIDs) - 1,
-				TargetAsset:    fmt.Sprintf("%s:%d", extHost, f.Port),
-				Description:    fmt.Sprintf("Compromissione diretta del servizio su %s tramite exploit della vulnerabilità %s.", extHost, *f.CVEID),
-			})
-			pathCounter++
-
-			// Se la vulnerabilità è critica (>= 7.0) e ci sono host interni, generiamo percorsi multi-hop
-			if f.CVSSScore != nil && *f.CVSSScore >= 7.0 {
-				for _, intHost := range internalHosts {
-					if len(graph.Paths) >= maxPaths {
-						break
-					}
-					if intHost == extHost {
-						continue
-					}
-					intHostNodeID := fmt.Sprintf("host-%s", sanitizeID(intHost))
-
-					multiHopNodeIDs := []string{entrypointNode.ID, extHostNodeID, vulnNodeID, intHostNodeID}
-					multiHopNodes := make([]domain.AttackNode, 0, len(multiHopNodeIDs))
-					for _, nid := range multiHopNodeIDs {
-						if n, ok := nodeIndex[nid]; ok {
-							multiHopNodes = append(multiHopNodes, n)
-						}
-					}
-
-					hopRisk := domain.CalculateCumulativeRisk(multiHopNodes, len(multiHopNodeIDs)-1)
-					multiHopName := fmt.Sprintf("Catena Multi-Hop: %s (%s) -> Pivot su %s", extHost, *f.CVEID, intHost)
-
-					graph.Paths = append(graph.Paths, domain.AttackPath{
-						ID:             fmt.Sprintf("path-%d", pathCounter),
-						Name:           multiHopName,
-						NodeIDs:        multiHopNodeIDs,
-						CumulativeRisk: hopRisk,
-						Severity:       domain.DeterminePathSeverity(hopRisk),
-						HopCount:       len(multiHopNodeIDs) - 1,
-						TargetAsset:    intHost,
-						Description:    fmt.Sprintf("Penetrazione dalla DMZ (%s) tramite %s e successivo lateral movement verso l'asset interno %s.", extHost, *f.CVEID, intHost),
-					})
-					pathCounter++
-				}
-			}
+			addEdge(vuln, hostID(h), domain.EdgeTypePivotsTo, "Ipotesi laterale /24", "Indirizzi nella stessa /24 IPv4 convenzionale; maschera, routing, ACL, credenziali e capacità di esecuzione non verificati", true)
+			addPath([]string{root, hostID(f.HostIP), srv, vuln, hostID(h)}, "Ipotesi laterale: "+f.HostIP+" → "+h, h, "Solo vicinanza di indirizzi /24, non prova di rete condivisa o lateral movement. Verificare controllo dell'host sorgente, policy e accesso al target.")
 		}
 	}
-
-	// Se non sono stati individuati percorsi con vulnerabilità, generiamo cammini topologici base
-	if len(graph.Paths) == 0 && len(externalHosts) > 0 {
-		for _, extHost := range externalHosts {
-			extHostNodeID := fmt.Sprintf("host-%s", sanitizeID(extHost))
-			pathNodeIDs := []string{entrypointNode.ID, extHostNodeID}
-			pathNodes := []domain.AttackNode{entrypointNode, nodeIndex[extHostNodeID]}
-			risk := domain.CalculateCumulativeRisk(pathNodes, 1)
-
-			graph.Paths = append(graph.Paths, domain.AttackPath{
-				ID:             fmt.Sprintf("path-%d", pathCounter),
-				Name:           fmt.Sprintf("Accesso di Rete Esterna verso %s", extHost),
-				NodeIDs:        pathNodeIDs,
-				CumulativeRisk: risk,
-				Severity:       domain.DeterminePathSeverity(risk),
-				HopCount:       1,
-				TargetAsset:    extHost,
-				Description:    fmt.Sprintf("Esposizione dell'host %s al perimetro di rete.", extHost),
-			})
-			pathCounter++
+	if len(g.Paths) == 0 && minCVSS == 0 {
+		for _, h := range sortedHosts {
+			addPath([]string{root, hostID(h)}, "Inventario: "+h, h, "Asset censito; accessibilità e compromissione non dimostrate.")
 		}
 	}
-
-	// Ordina percorsi per CumulativeRisk decrescente
-	sort.Slice(graph.Paths, func(i, j int) bool {
-		return graph.Paths[i].CumulativeRisk > graph.Paths[j].CumulativeRisk
-	})
-
-	// 5. Calcolo dei Chokepoints
-	graph.Chokepoints = domain.CalculateChokepoints(graph.Paths, graph.Nodes)
-
-	// 6. Calcolo del Summary
-	criticalCount := 0
-	highestRisk := 0.0
-	for _, p := range graph.Paths {
-		if p.CumulativeRisk > highestRisk {
-			highestRisk = p.CumulativeRisk
-		}
+	sort.SliceStable(g.Paths, func(i, j int) bool { return g.Paths[i].CumulativeRisk > g.Paths[j].CumulativeRisk })
+	g.Chokepoints = domain.CalculateChokepoints(g.Paths, g.Nodes)
+	if g.Chokepoints == nil {
+		g.Chokepoints = []domain.Chokepoint{}
+	}
+	g.Summary = domain.AttackGraphSummary{TotalNodes: len(g.Nodes), TotalEdges: len(g.Edges), TotalPaths: len(g.Paths)}
+	for _, p := range g.Paths {
 		if p.Severity == domain.PathSeverityCritical {
-			criticalCount++
+			g.Summary.CriticalPaths++
 		}
+		g.Summary.HighestRiskScore = math.Max(g.Summary.HighestRiskScore, p.CumulativeRisk)
 	}
-
-	topChokepoint := ""
-	if len(graph.Chokepoints) > 0 {
-		topChokepoint = graph.Chokepoints[0].Label
+	if len(g.Chokepoints) > 0 {
+		g.Summary.TopChokepoint = g.Chokepoints[0].Label
 	}
-
-	graph.Summary = domain.AttackGraphSummary{
-		TotalNodes:       len(graph.Nodes),
-		TotalEdges:       len(graph.Edges),
-		TotalPaths:       len(graph.Paths),
-		CriticalPaths:    criticalCount,
-		HighestRiskScore: highestRisk,
-		TopChokepoint:    topChokepoint,
+	if err := g.Validate(); err != nil {
+		return nil, fmt.Errorf("validazione grafo: %w", err)
 	}
-
-	// 7. Validazione finale
-	if err := graph.Validate(); err != nil {
-		return nil, fmt.Errorf("validazione grafo generato fallita: %w", err)
-	}
-
-	return graph, nil
+	return g, nil
 }
 
-// GetChokepoints estrae l'elenco prioritario dei punti di mitigazione (Chokepoints).
-func (s *attackPathService) GetChokepoints(ctx context.Context, tenantID uuid.UUID) ([]domain.Chokepoint, error) {
-	graph, err := s.GenerateAttackGraph(ctx, tenantID, 0.0)
-	if err != nil {
-		return nil, err
+func stringValue(s *string) string {
+	if s == nil {
+		return ""
 	}
-	return graph.Chokepoints, nil
+	return *s
 }
-
-// Helper per identificare se un indirizzo IP è privato (RFC 1918)
-func isPrivateIP(ipStr string) bool {
-	ip := net.ParseIP(ipStr)
-	if ip == nil {
-		// Se è un dominio (FQDN) o stringa non IP, assumiamo esterno
+func sameCandidateSegment(a, b string) bool {
+	x, ex := netip.ParseAddr(a)
+	y, ey := netip.ParseAddr(b)
+	if ex != nil || ey != nil || !x.Is4() || !y.Is4() || x == y || !x.IsGlobalUnicast() || !y.IsGlobalUnicast() {
 		return false
 	}
-	return ip.IsPrivate() || ip.IsLoopback()
+	return netip.PrefixFrom(x, 24).Masked().Contains(y)
 }
-
-func sanitizeID(s string) string {
-	s = strings.ReplaceAll(s, ".", "-")
-	s = strings.ReplaceAll(s, ":", "-")
-	s = strings.ReplaceAll(s, "/", "-")
-	s = strings.ReplaceAll(s, " ", "-")
-	return s
-}
-
-func sliceContains(slice []string, val string) bool {
-	for _, item := range slice {
-		if item == val {
-			return true
-		}
+func (s *attackPathService) GetChokepoints(ctx context.Context, tenant uuid.UUID) ([]domain.Chokepoint, error) {
+	g, e := s.GenerateAttackGraph(ctx, tenant, 0)
+	if e != nil {
+		return nil, e
 	}
-	return false
+	return g.Chokepoints, nil
 }
-

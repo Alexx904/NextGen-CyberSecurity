@@ -9,6 +9,7 @@ build/
 *.dylib
 
 # Go artifacts
+.gocache/
 *.test
 *.out
 vendor/

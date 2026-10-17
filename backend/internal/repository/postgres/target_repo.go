@@ -116,7 +116,7 @@ func (r *TargetRepo) List(ctx context.Context, tenantID uuid.UUID, filter domain
 		SELECT id, tenant_id, group_id, target_type, value, description, is_blacklisted, created_at, updated_at
 		FROM targets
 		WHERE %s
-		ORDER BY created_at DESC
+		ORDER BY created_at DESC, id ASC
 		LIMIT $%d OFFSET $%d
 	`, whereSQL, argIdx, argIdx+1)
 

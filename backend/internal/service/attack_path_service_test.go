@@ -22,11 +22,24 @@ func (m *mockAttackPathTargetRepo) GetByValue(ctx context.Context, tenantID uuid
 	return nil, domain.ErrNotFound
 }
 func (m *mockAttackPathTargetRepo) List(ctx context.Context, tenantID uuid.UUID, filter domain.TargetFilter) ([]*domain.Target, int, error) {
-	return m.targets, len(m.targets), nil
+	end := filter.Offset + filter.Limit
+	if end > len(m.targets) {
+		end = len(m.targets)
+	}
+	if filter.Offset >= len(m.targets) {
+		return nil, len(m.targets), nil
+	}
+	return m.targets[filter.Offset:end], len(m.targets), nil
 }
-func (m *mockAttackPathTargetRepo) Create(ctx context.Context, target *domain.Target) error { return nil }
-func (m *mockAttackPathTargetRepo) Update(ctx context.Context, target *domain.Target) error { return nil }
-func (m *mockAttackPathTargetRepo) Delete(ctx context.Context, tenantID, id uuid.UUID) error { return nil }
+func (m *mockAttackPathTargetRepo) Create(ctx context.Context, target *domain.Target) error {
+	return nil
+}
+func (m *mockAttackPathTargetRepo) Update(ctx context.Context, target *domain.Target) error {
+	return nil
+}
+func (m *mockAttackPathTargetRepo) Delete(ctx context.Context, tenantID, id uuid.UUID) error {
+	return nil
+}
 func (m *mockAttackPathTargetRepo) IsBlacklisted(ctx context.Context, tenantID uuid.UUID, value string) (bool, error) {
 	return false, nil
 }
@@ -46,7 +59,15 @@ func (m *mockAttackPathFindingRepo) List(ctx context.Context, tenantID uuid.UUID
 		}
 		res = append(res, f)
 	}
-	return res, len(res), nil
+	total := len(res)
+	end := filter.Offset + filter.Limit
+	if end > total {
+		end = total
+	}
+	if filter.Offset >= total {
+		return nil, total, nil
+	}
+	return res[filter.Offset:end], total, nil
 }
 func (m *mockAttackPathFindingRepo) CreateBatch(ctx context.Context, findings []*domain.Finding) error {
 	return nil
@@ -59,14 +80,18 @@ type mockAttackPathSSHRepo struct {
 	servers []*domain.SSHServer
 }
 
-func (m *mockAttackPathSSHRepo) Create(ctx context.Context, server *domain.SSHServer) error { return nil }
+func (m *mockAttackPathSSHRepo) Create(ctx context.Context, server *domain.SSHServer) error {
+	return nil
+}
 func (m *mockAttackPathSSHRepo) GetByID(ctx context.Context, tenantID, id uuid.UUID) (*domain.SSHServer, error) {
 	return nil, domain.ErrNotFound
 }
 func (m *mockAttackPathSSHRepo) List(ctx context.Context, tenantID uuid.UUID) ([]*domain.SSHServer, error) {
 	return m.servers, nil
 }
-func (m *mockAttackPathSSHRepo) Update(ctx context.Context, server *domain.SSHServer) error { return nil }
+func (m *mockAttackPathSSHRepo) Update(ctx context.Context, server *domain.SSHServer) error {
+	return nil
+}
 func (m *mockAttackPathSSHRepo) UpdateStatus(ctx context.Context, tenantID, id uuid.UUID, status domain.SSHServerStatus, lastConnectedAt *time.Time) error {
 	return nil
 }
@@ -194,8 +219,8 @@ func TestGenerateAttackGraph_ExternalToInternalPivot(t *testing.T) {
 			break
 		}
 	}
-	if !hasPivotEdge {
-		t.Error("expected at least one PIVOTS_TO edge from DMZ to internal host")
+	if hasPivotEdge {
+		t.Error("unrelated public/private addresses must not establish a lateral relationship")
 	}
 
 	// 4. Verifica percorsi (Paths)

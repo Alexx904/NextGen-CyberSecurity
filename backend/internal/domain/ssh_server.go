@@ -50,6 +50,7 @@ type SSHServer struct {
 	ID                   uuid.UUID       `json:"id" db:"id"`
 	TenantID             uuid.UUID       `json:"tenant_id" db:"tenant_id"`
 	Name                 string          `json:"name" db:"name"`
+	ClientName           string          `json:"client_name" db:"client_name"`
 	Host                 string          `json:"host" db:"host"`
 	Port                 int             `json:"port" db:"port"`
 	Username             string          `json:"username" db:"username"`
@@ -64,6 +65,9 @@ type SSHServer struct {
 
 // Validate esegue la validazione dei campi obbligatori e dei vincoli logici dell'entità
 func (s *SSHServer) Validate() error {
+	if len([]rune(s.ClientName)) > 160 {
+		return ErrValidation
+	}
 	if s.TenantID == uuid.Nil {
 		return ErrValidation
 	}

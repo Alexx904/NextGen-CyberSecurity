@@ -4,6 +4,8 @@
 
 ## 1. Contratto di esecuzione
 
+COMPANY-UX-02 · 2026-10-17 · working tree: azienda obbligatoria per navigare nelle scansioni; scelta azienda/reparto e gruppi esistenti preservati. Reparti solo figli diretti dell'azienda. CompanyContext paginato e aggiornato dopo CRUD target/reparti per mantenere coerenti le scelte. Motore, profili e consenso invariati.
+
 - `NmapRunner` usa `exec.CommandContext` senza shell. `BuildSafeArguments` convalida target e scope, forza `-oX -`, valida gli argomenti, aggiunge `-6` per IPv6 e antepone `--` al target.
 - Output XML parsato a streaming; timeout e cancellazione del processo gestiti dal runner. Capabilities container: solo `CAP_NET_RAW`, con `NMAP_PRIVILEGED=1` (SEC-P1-05).
 - Allowlist: tecniche TCP SYN/connect/ACK/NULL/FIN/Xmas, UDP, discovery, rilevamento servizi/OS, timing T0–T5, porte, probe SYN/UDP, rate/retry e due selettori NSE `vuln`/`vulners`. Non supporta l'intera CLI Nmap.

@@ -20,13 +20,22 @@ import (
 
 // PDFReportData racchiude l'intero contesto aggregato per la generazione del report PDF
 type PDFReportData struct {
-	Tenant      *domain.Tenant
-	Scan        *domain.Scan
-	Target      *domain.Target
-	Profile     *domain.ScanProfile
-	Findings    []*domain.Finding
-	Template    domain.ReportTemplate
-	GeneratedAt time.Time
+	GroupFindingsByDepartment bool
+	Departments               []DepartmentReportSection
+	Tenant                    *domain.Tenant
+	Scan                      *domain.Scan
+	Target                    *domain.Target
+	Profile                   *domain.ScanProfile
+	Findings                  []*domain.Finding
+	Template                  domain.ReportTemplate
+	GeneratedAt               time.Time
+}
+
+// DepartmentReportSection lists configured targets and observed IPs without mixing customers.
+type DepartmentReportSection struct {
+	Name     string
+	Targets  []string
+	Findings []*domain.Finding
 }
 
 // PDFGenerator definisce il contratto per la generazione di file PDF di sicurezza
@@ -89,6 +98,17 @@ func (g *DefaultPDFGenerator) Generate(data PDFReportData) ([]byte, error) {
 		}
 	}
 	data.Findings = validFindings
+	// Keep the same input hygiene in grouped cards as in the consolidated summary.
+	data.Departments = append([]DepartmentReportSection(nil), data.Departments...)
+	for i := range data.Departments {
+		var valid []*domain.Finding
+		for _, f := range data.Departments[i].Findings {
+			if f != nil && strings.TrimSpace(f.HostIP) != "" && f.HostIP != "0.0.0.0" {
+				valid = append(valid, f)
+			}
+		}
+		data.Departments[i].Findings = valid
+	}
 
 	if data.Template == domain.ReportTemplateExecutive {
 		return g.generateExecutive(data)
@@ -446,7 +466,13 @@ func (g *DefaultPDFGenerator) generateExecutive(data PDFReportData) ([]byte, err
 		maxTop = len(sortedFindings)
 	}
 
-	if maxTop == 0 {
+	if data.GroupFindingsByDepartment {
+		drawDepartmentFindings(pdf, tr, data.Departments, true, func() {
+			pdf.AddPage()
+			drawHeader(pdf, tr, tenantName, "Executive Security Summary", prR, prG, prB, accR, accG, accB)
+			pdf.SetY(24)
+		}, prR, prG, prB)
+	} else if maxTop == 0 {
 		pdf.SetFillColor(240, 253, 244)
 		pdf.SetDrawColor(187, 247, 208)
 		pdf.RoundedRect(15, pdf.GetY(), 180, 16, 2, "1234", "FD")
@@ -510,6 +536,8 @@ func (g *DefaultPDFGenerator) generateExecutive(data PDFReportData) ([]byte, err
 		pdf.MultiCell(165, 4.2, tr(rec), "", "L", false)
 		pdf.Ln(0.5)
 	}
+
+	appendDepartmentInventory(pdf, tr, data.Departments)
 
 	var buf bytes.Buffer
 	if err := pdf.Output(&buf); err != nil {
@@ -925,7 +953,13 @@ func (g *DefaultPDFGenerator) generateTechnical(data PDFReportData) ([]byte, err
 	pdf.SetTextColor(prR, prG, prB)
 	pdf.CellFormat(0, 6, tr("3. Schede Tecniche dei Findings"), "", 1, "L", false, 0, "")
 
-	if len(data.Findings) == 0 {
+	if data.GroupFindingsByDepartment {
+		drawDepartmentFindings(pdf, tr, data.Departments, false, func() {
+			pdf.AddPage()
+			drawHeader(pdf, tr, tenantName, "Technical Assessment Report", prR, prG, prB, accR, accG, accB)
+			pdf.SetY(24)
+		}, prR, prG, prB)
+	} else if len(data.Findings) == 0 {
 		pdf.SetFont("Helvetica", "I", 9.5)
 		pdf.SetTextColor(100, 116, 139)
 		pdf.CellFormat(0, 8, tr("Nessuna vulnerabilità o servizio anomalo identificato durante la sessione di scansione."), "", 1, "L", false, 0, "")
@@ -941,6 +975,8 @@ func (g *DefaultPDFGenerator) generateTechnical(data PDFReportData) ([]byte, err
 			drawFindingCard(pdf, tr, i+1, f, prR, prG, prB)
 		}
 	}
+
+	appendDepartmentInventory(pdf, tr, data.Departments)
 
 	var buf bytes.Buffer
 	if err := pdf.Output(&buf); err != nil {
@@ -1347,4 +1383,103 @@ func EstimateFindingCardHeight(f *domain.Finding) float64 {
 		h += float64(remLines)*4.0 + 1.0
 	}
 	return h
+}
+
+// Departments are separated by page breaks; continuations retain their identity.
+func drawDepartmentFindings(pdf *fpdf.Fpdf, tr func(string) string, sections []DepartmentReportSection, executive bool, newPage func(), prR, prG, prB int) {
+	for sectionIndex, section := range sections {
+		if sectionIndex > 0 || pdf.GetY() > 230 {
+			newPage()
+		}
+		heading := func(continued bool) {
+			pdf.SetX(15)
+			pdf.SetFont("Helvetica", "B", 12)
+			pdf.SetTextColor(prR, prG, prB)
+			name := "Reparto: " + section.Name
+			if continued {
+				name += " (continua)"
+			}
+			pdf.MultiCell(180, 6, tr(name), "", "L", false)
+			pdf.Ln(2)
+		}
+		heading(false)
+		findings := append([]*domain.Finding(nil), section.Findings...)
+		// The order is local to the department; never take a global top five first.
+		sort.SliceStable(findings, func(i, j int) bool {
+			rank := map[domain.SeverityLevel]int{domain.SeverityCritical: 4, domain.SeverityHigh: 3, domain.SeverityMedium: 2, domain.SeverityLow: 1}
+			if rank[findings[i].Severity] != rank[findings[j].Severity] {
+				return rank[findings[i].Severity] > rank[findings[j].Severity]
+			}
+			score := func(f *domain.Finding) float64 {
+				if f.CVSSScore != nil {
+					return *f.CVSSScore
+				}
+				return 0
+			}
+			return score(findings[i]) > score(findings[j])
+		})
+		pdf.SetFont("Helvetica", "", 9)
+		pdf.SetTextColor(71, 85, 105)
+		if len(findings) == 0 {
+			pdf.MultiCell(180, 5, tr("Nessun finding disponibile per questo reparto nelle scansioni incluse. Non costituisce una verifica di assenza di vulnerabilita."), "", "L", false)
+			continue
+		}
+		count := len(findings)
+		if executive && count > 5 {
+			count = 5
+		}
+		caption := fmt.Sprintf("Finding del reparto: %d", len(findings))
+		if executive {
+			caption += fmt.Sprintf(" - Priorita mostrate: %d. Dettaglio completo nel report tecnico.", count)
+		}
+		pdf.MultiCell(180, 5, tr(caption), "", "L", false)
+		pdf.Ln(3)
+		for i, f := range findings[:count] {
+			height := EstimateFindingCardHeight(f)
+			if executive {
+				height = estimateExecutiveCardHeight(f)
+			}
+			if pdf.GetY()+height > 268 {
+				newPage()
+				heading(true)
+			}
+			if executive {
+				drawExecutivePriorityCard(pdf, tr, i+1, f, prR, prG, prB)
+			} else {
+				drawFindingCard(pdf, tr, i+1, f, prR, prG, prB)
+			}
+		}
+	}
+}
+
+func appendDepartmentInventory(pdf *fpdf.Fpdf, tr func(string) string, sections []DepartmentReportSection) {
+	if len(sections) == 0 {
+		return
+	}
+	pdf.SetAutoPageBreak(true, 20)
+	pdf.AddPage()
+	pdf.SetFont("Helvetica", "B", 15)
+	pdf.SetTextColor(15, 23, 42)
+	pdf.MultiCell(180, 8, tr("Inventario IP e target per reparto"), "", "L", false)
+	pdf.Ln(3)
+	for _, section := range sections {
+		if pdf.GetY() > 240 {
+			pdf.AddPage()
+		}
+		pdf.SetFillColor(235, 243, 250)
+		pdf.SetTextColor(15, 23, 42)
+		pdf.SetFont("Helvetica", "B", 11)
+		pdf.MultiCell(180, 7, tr("Reparto: "+section.Name), "", "L", true)
+		pdf.SetFont("Helvetica", "", 9)
+		for _, target := range section.Targets {
+			if pdf.GetY() > 260 {
+				pdf.AddPage()
+				pdf.SetFont("Helvetica", "B", 10)
+				pdf.MultiCell(180, 7, tr("Reparto: "+section.Name+" (continua)"), "", "L", true)
+				pdf.SetFont("Helvetica", "", 9)
+			}
+			pdf.MultiCell(180, 5, tr(target), "B", "L", false)
+		}
+		pdf.Ln(5)
+	}
 }

@@ -128,6 +128,9 @@ func (r *TargetGroupRepo) Create(ctx context.Context, group *domain.TargetGroup)
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.ConstraintName == "company_department_depth" {
+			return domain.ErrValidation
+		}
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
 			return domain.ErrConflict
 		}
@@ -162,6 +165,9 @@ func (r *TargetGroupRepo) Update(ctx context.Context, group *domain.TargetGroup)
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.ConstraintName == "company_department_depth" {
+			return domain.ErrValidation
+		}
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
 			return domain.ErrConflict
 		}
@@ -265,4 +271,3 @@ func (r *TargetGroupRepo) GetSeverityCountsByGroup(ctx context.Context, tenantID
 
 	return result, nil
 }
-

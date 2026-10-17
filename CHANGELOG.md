@@ -7,6 +7,10 @@
 
 ---
 
+## Accettazione e pubblicazione su main · 2026-10-17
+
+Il PO approva esplicitamente tutte le modifiche presenti e richiede commit/push su `origin/main`, senza nuovi branch. Accettati TEST-OPT-01, COMPANY-UX-02, COMPANY-PDF-03 e AP-REVIEW-01, incluse le assunzioni documentate. Test automatici, build/vet e integrazioni PostgreSQL di test PASS come dettagliato nei rispettivi report QA. Verifiche visuali browser/PDF non eseguite dall'agente: limite dichiarato e accettato dal PO, senza convertirlo in un PASS tecnico. E28-S1-T1 rimane incompleto per prova Linux e hardening TECH-DEBT-06/07; approvazione della pubblicazione non equivale al completamento del lavoro pianificato. Nessun deploy autorizzato o eseguito.
+
 ## Archivio task accettati e proposta superata · 2026-10-16
 
 AGENT-CLEAN-03 e AGENT-CODEX-01 confermati e approvati esplicitamente dal PO il 2026-10-16. Conservati integralmente ID, dipendenze, DoD ed evidenze dei 12 task accettati. I tre task Epic 27.1 sono archiviati come proposta superata dalla versione scanner già accettata, senza mantenere false richieste di approvazione.

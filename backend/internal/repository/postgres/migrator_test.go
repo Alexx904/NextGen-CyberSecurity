@@ -12,9 +12,9 @@ func TestGetMaxSourceVersion(t *testing.T) {
 		t.Fatalf("GetMaxSourceVersion ha restituito un errore imprevisto: %v", err)
 	}
 
-	// Al momento ci sono 7 migrazioni (000001 .. 000007)
-	if maxVer != 7 {
-		t.Errorf("Attesa versione massima 7, ottenuta %d", maxVer)
+	// Latest source includes SSH client labels and Company -> Department guard.
+	if maxVer != 9 {
+		t.Errorf("Attesa versione massima 9, ottenuta %d", maxVer)
 	}
 }
 

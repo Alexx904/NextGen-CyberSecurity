@@ -99,7 +99,15 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setAllGroupNodes(groupsRes.data.data);
       }
       if (targetsRes.data?.data?.items) {
-        setAllTargets(targetsRes.data.data.items);
+        const items = [...targetsRes.data.data.items];
+        const total = targetsRes.data.data.total || items.length;
+        while (items.length < total) {
+          const page = await apiClient.get<ApiResponse<TargetListResponseData>>(`/targets?limit=500&offset=${items.length}`);
+          const more = page.data?.data?.items || [];
+          if (more.length === 0) throw new Error('Inventario target incompleto: riprova il caricamento');
+          items.push(...more);
+        }
+        setAllTargets(items);
       }
     } catch (err: any) {
       setError(err.response?.data?.error?.message || err.message || 'Errore nel caricamento delle aziende');
@@ -119,13 +127,13 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Verifica se l'ID selezionato esiste ancora tra le aziende
   useEffect(() => {
-    if (selectedCompanyId && companies.length > 0) {
+    if (!loading && !error && selectedCompanyId) {
       const found = companies.some((c) => c.id === selectedCompanyId);
       if (!found) {
         setSelectedCompanyId(null);
       }
     }
-  }, [companies, selectedCompanyId, setSelectedCompanyId]);
+  }, [companies, selectedCompanyId, setSelectedCompanyId, loading, error]);
 
   // L'oggetto azienda selezionato
   const selectedCompany = useMemo(() => {

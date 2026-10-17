@@ -12,6 +12,34 @@ import (
 )
 
 // mockTargetGroupRepo implementa in-memory domain.TargetGroupRepository per i test di TargetGroupService
+func TestCompanyHierarchyRejectsNestedDepartments(t *testing.T) {
+	repo := newMockTargetGroupRepo()
+	svc := service.NewTargetGroupService(repo)
+	tenant := uuid.New()
+	ctx := context.Background()
+	company, err := svc.CreateGroup(ctx, service.CreateGroupInput{TenantID: tenant, Name: "Company"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	department, err := svc.CreateGroup(ctx, service.CreateGroupInput{TenantID: tenant, ParentID: &company.ID, Name: "IT"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = svc.CreateGroup(ctx, service.CreateGroupInput{TenantID: tenant, ParentID: &department.ID, Name: "Nested"}); !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("nested department accepted: %v", err)
+	}
+	other, err := svc.CreateGroup(ctx, service.CreateGroupInput{TenantID: tenant, Name: "Other"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = svc.UpdateGroup(ctx, service.UpdateGroupInput{TenantID: tenant, ID: other.ID, ParentID: &department.ID, Name: "Nested"}); !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("nested update accepted: %v", err)
+	}
+	if _, err = svc.UpdateGroup(ctx, service.UpdateGroupInput{TenantID: tenant, ID: company.ID, ParentID: &other.ID, Name: "Company"}); !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("company with children reparented: %v", err)
+	}
+}
+
 type mockTargetGroupRepo struct {
 	groups         map[string]*domain.TargetGroup
 	targetCounts   map[string]map[uuid.UUID]int
@@ -182,11 +210,11 @@ func TestTargetGroupService_UpdateGroup_CycleDetection(t *testing.T) {
 		ParentID: &nodeA.ID,
 		Name:     "Node B",
 	})
-	nodeC, _ := svc.CreateGroup(ctx, service.CreateGroupInput{
-		TenantID: tenantID,
-		ParentID: &nodeB.ID,
-		Name:     "Node C",
-	})
+	// Seed legacy depth directly: new API writes must reject this shape.
+	nodeC := &domain.TargetGroup{ID: uuid.New(), TenantID: tenantID, ParentID: &nodeB.ID, Name: "Node C"}
+	if err := repo.Create(ctx, nodeC); err != nil {
+		t.Fatal(err)
+	}
 
 	// 1. Errore: un nodo non può essere padre di sé stesso
 	_, err := svc.UpdateGroup(ctx, service.UpdateGroupInput{
@@ -240,7 +268,10 @@ func TestTargetGroupService_GetTree_HierarchyAndCounts(t *testing.T) {
 	// Root 2 (senza figli)
 	root1, _ := svc.CreateGroup(ctx, service.CreateGroupInput{TenantID: tenantID, Name: "Root 1"})
 	child11, _ := svc.CreateGroup(ctx, service.CreateGroupInput{TenantID: tenantID, ParentID: &root1.ID, Name: "Child 1.1"})
-	leaf111, _ := svc.CreateGroup(ctx, service.CreateGroupInput{TenantID: tenantID, ParentID: &child11.ID, Name: "Leaf 1.1.1"})
+	leaf111 := &domain.TargetGroup{ID: uuid.New(), TenantID: tenantID, ParentID: &child11.ID, Name: "Leaf 1.1.1"}
+	if err := repo.Create(ctx, leaf111); err != nil {
+		t.Fatal(err)
+	}
 	child12, _ := svc.CreateGroup(ctx, service.CreateGroupInput{TenantID: tenantID, ParentID: &root1.ID, Name: "Child 1.2"})
 	root2, _ := svc.CreateGroup(ctx, service.CreateGroupInput{TenantID: tenantID, Name: "Root 2"})
 
@@ -324,7 +355,10 @@ func TestTargetGroupService_GetTree_AggregateRisk(t *testing.T) {
 	// Radice -> Figlio -> Foglia
 	root, _ := svc.CreateGroup(ctx, service.CreateGroupInput{TenantID: tenantID, Name: "DC Milan"})
 	child, _ := svc.CreateGroup(ctx, service.CreateGroupInput{TenantID: tenantID, ParentID: &root.ID, Name: "DMZ"})
-	leaf, _ := svc.CreateGroup(ctx, service.CreateGroupInput{TenantID: tenantID, ParentID: &child.ID, Name: "Web Farm"})
+	leaf := &domain.TargetGroup{ID: uuid.New(), TenantID: tenantID, ParentID: &child.ID, Name: "Web Farm"}
+	if err := repo.Create(ctx, leaf); err != nil {
+		t.Fatal(err)
+	}
 
 	// Imposta severità:
 	// leaf ha una vulnerabilità CRITICAL

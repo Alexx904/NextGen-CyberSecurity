@@ -1,3 +1,5 @@
+//go:build integration
+
 package postgres_test
 
 import (
@@ -13,14 +15,14 @@ import (
 )
 
 func TestSSHServerRepo_Integration(t *testing.T) {
-	cfg := getTestConfig()
+	cfg := getTestConfig(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	db, err := postgres.New(ctx, cfg)
 	if err != nil {
-		t.Skipf("Database non raggiungibile per i test di integrazione (%v): salto il test", err)
+		t.Fatal("Integration test database is unavailable")
 		return
 	}
 	defer db.Close()
@@ -43,6 +45,7 @@ func TestSSHServerRepo_Integration(t *testing.T) {
 		ID:              serverID,
 		TenantID:        tenantID,
 		Name:            "Gateway DMZ 01",
+		ClientName:      "Cliente autonomo",
 		Host:            "10.0.0.1",
 		Port:            22,
 		Username:        "secops",
@@ -65,6 +68,9 @@ func TestSSHServerRepo_Integration(t *testing.T) {
 
 		if fetched.Name != server.Name {
 			t.Errorf("atteso nome %q, ottenuto %q", server.Name, fetched.Name)
+		}
+		if fetched.ClientName != "Cliente autonomo" {
+			t.Fatal("client label not persisted")
 		}
 		if fetched.EncryptedSecret != server.EncryptedSecret {
 			t.Errorf("secret cifrato non corrisponde")
@@ -116,6 +122,7 @@ func TestSSHServerRepo_Integration(t *testing.T) {
 	t.Run("Update and UpdateStatus", func(t *testing.T) {
 		server.Host = "10.0.0.99"
 		server.Port = 2200
+		server.ClientName = "Cliente aggiornato"
 		err := repo.Update(ctx, server)
 		if err != nil {
 			t.Fatalf("Update fallito: %v", err)
@@ -133,6 +140,9 @@ func TestSSHServerRepo_Integration(t *testing.T) {
 		}
 		if updated.Host != "10.0.0.99" || updated.Port != 2200 {
 			t.Errorf("campi non aggiornati correttamente: %+v", updated)
+		}
+		if updated.ClientName != "Cliente aggiornato" {
+			t.Fatal("client label not updated")
 		}
 		if updated.Status != domain.SSHServerStatusOnline {
 			t.Errorf("status non aggiornato a ONLINE: %s", updated.Status)

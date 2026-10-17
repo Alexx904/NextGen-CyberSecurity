@@ -1,5 +1,11 @@
 # Deployment
 
+## COMPANY-UX-02 · Upgrade/rollback · 2026-10-17
+
+Backend e frontend aggiornati insieme. Migrazioni 000008 (etichette clienti SSH) e 000009 (guard gerarchia) applicate prima dell'uso della nuova API; avvio server esegue il migrator esistente. Nessun deploy applicativo eseguito in questa sessione. `docker compose up --build` è un'istruzione per la prova del PO, non un'azione già effettuata.
+
+Down 000009 elimina trigger/funzione senza riscrivere gruppi; down 000008 rimuove client_name e perde le sole etichette: esportarle prima del rollback operativo. Up/down e idempotenza provati nel solo DB dedicato `nextgen_company_ux02_test_20261017`, mantenuto per ripetibilità. Nessuna modifica a schema/dati del DB applicativo; lettura sola per verificare assenza sotto-reparti esistenti.
+
 ## E28-S1-T1 · Limiti operativi (2026-10-17, working tree)
 
 Remediation IPv4 su host Linux con iptables e privilegi sudo già richiesti dal

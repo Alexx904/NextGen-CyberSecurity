@@ -63,8 +63,12 @@ func (s *targetGroupService) CreateGroup(ctx context.Context, input CreateGroupI
 			return nil, domain.ErrValidation
 		}
 		// Verifica appartenenza del gruppo padre al medesimo tenant (NFR-SEC-03)
-		if _, err := s.groupRepo.GetByID(ctx, input.TenantID, *input.ParentID); err != nil {
+		parent, err := s.groupRepo.GetByID(ctx, input.TenantID, *input.ParentID)
+		if err != nil {
 			return nil, err
+		}
+		if parent.ParentID != nil {
+			return nil, domain.ErrValidation
 		}
 	}
 
@@ -122,14 +126,23 @@ func (s *targetGroupService) UpdateGroup(ctx context.Context, input UpdateGroupI
 		}
 
 		// 2. Il gruppo padre deve esistere e appartenere allo stesso tenant
-		if _, err := s.groupRepo.GetByID(ctx, input.TenantID, *input.ParentID); err != nil {
+		parent, err := s.groupRepo.GetByID(ctx, input.TenantID, *input.ParentID)
+		if err != nil {
 			return nil, err
+		}
+		if parent.ParentID != nil {
+			return nil, domain.ErrValidation
 		}
 
 		// 3. Prevenzione cicli nell'albero (non si può impostare come genitore un proprio discendente)
 		allGroups, err := s.groupRepo.List(ctx, input.TenantID)
 		if err != nil {
 			return nil, err
+		}
+		for _, child := range allGroups {
+			if child.ParentID != nil && *child.ParentID == input.ID {
+				return nil, domain.ErrValidation
+			}
 		}
 
 		parentMap := make(map[uuid.UUID]*uuid.UUID, len(allGroups))
@@ -286,4 +299,3 @@ func (s *targetGroupService) GetTree(ctx context.Context, tenantID uuid.UUID) ([
 
 	return roots, nil
 }
-

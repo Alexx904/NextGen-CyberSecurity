@@ -34,6 +34,17 @@ Tutte le API rispondono sotto `/api/v1` con payload standard `{ "success": true,
 
 ## Autorità del contratto
 
+### COMPANY-UX-02 · 2026-10-17 · working tree
+
+- `POST/PUT /target-groups`: padre deve essere un'azienda radice; nodo con figli non può diventare reparto; violazioni restituiscono errore validazione anche se intercettate dal trigger DB. Contratto tenant invariato.
+- SSH create/read/list/update: `client_name` stringa additiva, max 160 caratteri; create opzionale/default vuoto; update omesso conserva, vuoto azzera. Non correlato alle aziende. Ruoli e segreti invariati.
+- `GET /reports/company/{groupId}/download`: stesso endpoint per azienda o reparto. Aggrega discendenti e pagine, PDF con inventario per reparto, CSV con colonna finale `reparto`. CSV singola scansione invariato.
+- Attack Path UI non invia `min_cvss`, parametro API compatibile. Il guard aziendale è client-side e non modifica i permessi API.
+
+### AP-REVIEW-01 · 2026-10-17 · working tree
+
+`GET /attack-paths/graph`: `min_cvss` deve essere finito in [0,10], altrimenti 400 `VALIDATION_ERROR`. Risposta additiva `analysis` con modello, avvisi, conteggi letti, cap 50 e flag inventario/percorsi troncati. `paths[].edge_ids` completo e orientato, coerente con nodi e passaggi. Gli ID generati appartengono allo snapshot e distinguono TCP/UDP; nessuna persistenza garantita fra modelli. `cumulative_risk` rimane un indice euristico, non probabilità. `GET /chokepoints` usa lo stesso modello con soglia 0. JWT e perimetro tenant invariati; scope aziendale è una proiezione frontend, senza nuova autorizzazione per azienda. Contratto completo e limiti nel [dominio Attack Path](../../domains/attack_path.md).
+
 ### E28-S1-T1 · 2026-10-17 · working tree
 
 Preview ed esecuzione del blocco porta chokepoint: contratto canonico nel

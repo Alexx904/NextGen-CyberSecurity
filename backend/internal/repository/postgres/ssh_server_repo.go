@@ -46,9 +46,9 @@ func (r *SSHServerRepo) Create(ctx context.Context, server *domain.SSHServer) er
 		INSERT INTO ssh_servers (
 			id, tenant_id, name, host, port, username, auth_type,
 			encrypted_secret, public_key_fingerprint, status, last_connected_at,
-			created_at, updated_at
+			created_at, updated_at, client_name
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
 		)
 	`
 
@@ -68,6 +68,7 @@ func (r *SSHServerRepo) Create(ctx context.Context, server *domain.SSHServer) er
 		server.LastConnectedAt,
 		server.CreatedAt,
 		server.UpdatedAt,
+		server.ClientName,
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -86,7 +87,7 @@ func (r *SSHServerRepo) GetByID(ctx context.Context, tenantID, id uuid.UUID) (*d
 		SELECT
 			id, tenant_id, name, host, port, username, auth_type,
 			encrypted_secret, public_key_fingerprint, status, last_connected_at,
-			created_at, updated_at
+			created_at, updated_at, client_name
 		FROM ssh_servers
 		WHERE tenant_id = $1 AND id = $2
 	`
@@ -109,6 +110,7 @@ func (r *SSHServerRepo) GetByID(ctx context.Context, tenantID, id uuid.UUID) (*d
 		&s.LastConnectedAt,
 		&s.CreatedAt,
 		&s.UpdatedAt,
+		&s.ClientName,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -129,7 +131,7 @@ func (r *SSHServerRepo) List(ctx context.Context, tenantID uuid.UUID) ([]*domain
 		SELECT
 			id, tenant_id, name, host, port, username, auth_type,
 			encrypted_secret, public_key_fingerprint, status, last_connected_at,
-			created_at, updated_at
+			created_at, updated_at, client_name
 		FROM ssh_servers
 		WHERE tenant_id = $1
 		ORDER BY name ASC
@@ -161,6 +163,7 @@ func (r *SSHServerRepo) List(ctx context.Context, tenantID uuid.UUID) ([]*domain
 			&s.LastConnectedAt,
 			&s.CreatedAt,
 			&s.UpdatedAt,
+			&s.ClientName,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan record server SSH fallito: %w", err)
@@ -197,7 +200,8 @@ func (r *SSHServerRepo) Update(ctx context.Context, server *domain.SSHServer) er
 			encrypted_secret = $8,
 			public_key_fingerprint = $9,
 			status = $10,
-			updated_at = $11
+			updated_at = $11,
+			client_name = $12
 		WHERE tenant_id = $1 AND id = $2
 	`
 
@@ -215,6 +219,7 @@ func (r *SSHServerRepo) Update(ctx context.Context, server *domain.SSHServer) er
 		server.PublicKeyFingerprint,
 		string(server.Status),
 		server.UpdatedAt,
+		server.ClientName,
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError

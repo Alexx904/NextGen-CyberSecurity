@@ -4,6 +4,10 @@
 
 ## 1. Diagramma Architetturale di Sistema
 
+COMPANY-UX-02 · 2026-10-17: dashboard aziendale unica e route guard per navigazione operativa; SSH/Firewall rimane modulo tenant indipendente con clienti interni. Gerarchia due livelli nelle nuove scritture e report consolidati per discendenti, senza nuova dipendenza o servizio. [ADR-18](ADR/README.md), [dominio asset/report](../domains/reporting_and_assets.md).
+
+AP-REVIEW-01 · 2026-10-17 · working tree: motore Attack Path come analisi euristica esplicita, non validazione exploit/lateral movement. Letture paginated e limitate, percorsi validati sugli archi, separazione dei protocolli e avvisi di copertura. UI 2D sequenziale e proiezione aziendale completa. Nessun servizio esterno, dipendenza o modifica schema introdotti; [dominio](../domains/attack_path.md), [QA](../05-qa/ATTACK_PATH_REVIEW.md).
+
 La piattaforma adotta un'architettura containerizzata multi-servizio Clean Architecture con disaccoppiamento tra il layer API REST/SSE/WebSocket, il motore di ricognizione/scansione Nmap, il gestore di connessioni SSH sicure e firewall, il database relazionale PostgreSQL e la Single Page Application (SPA).
 
 Allineamento scanner 2026-10-15 (working tree, SCAN-UX-01): profili espliciti ed editor Nmap nella modale, senza matching per nome o compositore duplicato. Parser semantico e classificazione custom nel backend, API/DB compatibili; [contratto di dominio](../domains/scanning_and_discovery.md). Discovery distingue host discovery e arricchimento porte richiesto. Decisione in [ADR-14](ADR/README.md#adr-14).

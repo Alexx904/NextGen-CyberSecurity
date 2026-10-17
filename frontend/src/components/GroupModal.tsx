@@ -11,6 +11,7 @@ interface GroupModalProps {
   groupToEdit?: TargetGroup | null;
   defaultParentId?: string | null;
   existingGroups: (TargetGroup | TargetGroupNode)[];
+  companyId?: string | null;
 }
 
 const COLOR_PRESETS = [
@@ -31,6 +32,7 @@ export const GroupModal: React.FC<GroupModalProps> = ({
   groupToEdit,
   defaultParentId,
   existingGroups,
+  companyId,
 }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -60,7 +62,7 @@ export const GroupModal: React.FC<GroupModalProps> = ({
 
   // Filtra i gruppi selezionabili come genitore (esclude sé stesso in modifica)
   const selectableParents = existingGroups.filter(
-    (g) => !groupToEdit || g.id !== groupToEdit.id
+    (g) => !g.parent_id && (!companyId || g.id === companyId) && (!groupToEdit || g.id !== groupToEdit.id)
   );
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -77,7 +79,7 @@ export const GroupModal: React.FC<GroupModalProps> = ({
       const payload = {
         name: name.trim(),
         description: description.trim() || undefined,
-        parent_id: parentId ? parentId : null,
+        parent_id: companyId || parentId || null,
         color_tag: colorTag,
       };
 
@@ -188,11 +190,13 @@ export const GroupModal: React.FC<GroupModalProps> = ({
               Posizione nell'Albero (Cartella Padre)
             </label>
             <select
-              value={parentId}
+              aria-label="Azienda del reparto"
+              value={companyId || parentId}
+              disabled={!!companyId}
               onChange={(e) => setParentId(e.target.value)}
               className="w-full px-3.5 py-2.5 bg-slate-900 border border-cyber-border rounded-lg text-sm text-slate-100 focus:outline-none focus:border-cyan-500"
             >
-              <option value="">📁 Cartella Principale (Radice / Root)</option>
+              {!companyId && <option value="">Azienda (radice)</option>}
               {selectableParents.map((g) => (
                 <option key={g.id} value={g.id}>
                   📂 {g.name}

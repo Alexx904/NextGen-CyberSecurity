@@ -30,6 +30,7 @@ export const SSHServers: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [clientFilter, setClientFilter] = useState('');
 
   // Test connessione live
   const [testingId, setTestingId] = useState<string | null>(null);
@@ -118,12 +119,13 @@ export const SSHServers: React.FC = () => {
     }
   };
 
-  const filteredServers = servers.filter(
+  const filteredServers = servers.filter(s => !clientFilter || (s.client_name?.trim() || 'Senza cliente') === clientFilter).filter(
     (s) =>
       s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.host.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.username.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+      s.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (s.client_name || '').toLowerCase().includes(searchQuery.toLowerCase())
+  ).sort((a, b) => (a.client_name?.trim() || 'Senza cliente').localeCompare(b.client_name?.trim() || 'Senza cliente') || a.name.localeCompare(b.name));
 
   const totalServers = servers.length;
   const onlineServers = servers.filter((s) => s.status === 'ONLINE').length;
@@ -226,6 +228,13 @@ export const SSHServers: React.FC = () => {
         </div>
       )}
 
+      <label className="flex items-center gap-3 text-sm text-slate-300">Cliente SSH
+        <select aria-label="Filtro cliente SSH" value={clientFilter} onChange={e => setClientFilter(e.target.value)} className="rounded-lg bg-slate-900 border border-slate-700 p-2">
+          <option value="">Tutti i clienti SSH</option>
+          {[...new Set(servers.map(s => s.client_name?.trim() || 'Senza cliente'))].sort().map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <span className="text-xs text-slate-500">Inventario autonomo, indipendente dall’azienda selezionata</span>
+      </label>
       {/* Tabella Server */}
       <div className="bg-slate-900/60 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
         {loading && servers.length === 0 ? (
@@ -256,11 +265,13 @@ export const SSHServers: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {filteredServers.map((server) => {
+                {filteredServers.map((server, index) => {
                   const test = testResults[server.id];
                   const isTesting = testingId === server.id;
 
                   return (
+                    <React.Fragment key={server.id}>
+                    {(index === 0 || filteredServers[index - 1].client_name !== server.client_name) && <tr className="bg-cyan-950/20"><th colSpan={5} scope="rowgroup" className="px-5 py-3 text-cyan-300 text-sm">{server.client_name?.trim() || 'Senza cliente'}</th></tr>}
                     <tr
                       key={server.id}
                       className="hover:bg-slate-800/30 transition-colors"
@@ -413,6 +424,7 @@ export const SSHServers: React.FC = () => {
                         </div>
                       </td>
                     </tr>
+                    </React.Fragment>
                   );
                 })}
               </tbody>

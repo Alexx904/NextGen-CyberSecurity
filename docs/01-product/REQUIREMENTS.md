@@ -42,7 +42,7 @@
 - **FR-08.5:** Personalizzazione avanzata in Settings: ragione sociale, disclaimer legale, firma responsabile e palette colori.
 
 ### FR-09: Struttura ad Albero (Cartelle Gerarchiche) per Target e Scansioni
-- **FR-09.1:** Modello ad albero ricorsivo per i gruppi target (`parent_id UUID`), supportando cartelle e sotto-cartelle illimitate (es. *Azienda > Sede Milano > DMZ Produzione*).
+- **FR-09.1:** Nuove gerarchie limitate ad Azienda → Reparto (`parent_id UUID`): vietati reparti dentro reparti in UI, service e DB. Nessuna riscrittura automatica di strutture storiche.
 - **FR-09.2:** Componente UI *Tree Explorer* interattivo con navigazione cartelle, creazione, ridenominazione, eliminazione e conteggio asset ricorsivo.
 - **FR-09.3:** Visualizzazione del livello di rischio aggregato sulla cartella (badge cromatico in base alla severità massima dei target contenuti).
 - **FR-09.4:** Possibilità di avviare una scansione aggregata sull'intera cartella (scansiona tutti i target nel sotto-albero).
@@ -109,13 +109,15 @@
   - Pulsante *"Pulisci Log"*: svuota la cronologia in memoria della sessione.
 
 ### FR-14: Motore di Attack Path Mapping & Chaining Analysis (Milestone 2)
-- **FR-14.1 (Modello a Grafo Topologico):** Modellazione del perimetro e dei target scansionati come grafo orientato con nodi (Entrypoint Esterno/Internet, Subnet, Host, Servizi di rete, Vulnerabilità/CVE) ed archi tipizzati (Raggiungibilità di rete, Exploitability remota, Pivot/Lateral movement, Credenziali note).
-- **FR-14.2 (Correlazione Catene di Compromissione):** Rilevamento automatico di cammini multi-hop che consentono a un attaccante esterno di penetrare nella rete interna sfruttando vulnerabilità critiche (es. RCE su DMZ, banner SSH, weak services).
-- **FR-14.3 (Cumulative Path Risk Score):** Algoritmo di scoring per quantificare la probabilità e l'impatto di ciascun percorso di attacco su scala 0-100 basato su metriche CVSS v3.1, vettori di attacco (Network/Local) e profondità di hop.
-- **FR-14.4 (Identificazione Chokepoints di Remediation):** Analisi algoritmica di centralità per individuare il singolo nodo o la singola porta la cui chiusura/remediation interrompe il massimo numero di percorsi di attacco, ottimizzando il ROI di sicurezza.
-- **FR-14.5 (Interfaccia Grafica Interattiva):** Visualizzatore a grafo interattivo (zoom, pan, selezione nodi, filtri di rischio, evidenziazione del Critical Path) nella schermata dedicata `/attack-path`.
+- **FR-14.1 (Modello a Grafo Topologico):** Modellazione dei target, servizi e CVE come grafo orientato. Distinguere associazioni osservate da accesso e sfruttabilità ipotetici; non assumere esposizione Internet, RCE o trust dall'inventario SSH.
+- **FR-14.2 (Ipotesi di Percorso):** Percorsi strutturalmente validi, con archi orientati per ogni passaggio. Le ipotesi laterali /24 devono dichiarare che routing, maschera reale, ACL, controllo della sorgente e credenziali non sono verificati; nessuna prova di lateral movement dichiarata.
+- **FR-14.3 (Indice di Priorità):** Indice euristico 0–100 derivato da CVSS e passaggi logici, senza presentarlo come probabilità o rischio economico. Esporre limiti di inventario, cap dei percorsi e provenienza/storicità dei finding.
+- **FR-14.4 (Chokepoint nel Modello):** Classificare i nodi intermedi per numero e indice aggregato dei soli percorsi rappresentati. Raccomandazioni da verificare con impatto operativo, senza garanzie di neutralizzazione o ROI misurato.
+- **FR-14.5 (Interfaccia Grafica Interattiva):** `/attack-path` con vista percorso 2D leggibile, mappa completa terminante su cicli, zoom/pan, selezione tastiera, filtri CVSS e guida integrata. Scope aziendale applicato anche a grafo, KPI e chokepoint, senza fallback globale su scope vuoto. 3D facoltativo subordinato alla comprensione.
 
 ### FR-15: Workflow-Categorized Navigation & Hierarchical Multi-Company IP Views (Workstation Multi-Company Workflow)
+
+- **COMPANY-UX-02:** Dashboard e CRUD aziende in `/`, con redirect da `/companies`. Scope globale permette solo panoramica per le feature aziendali, con selezione obbligatoria prima delle route operative. Eccezione: SSH/Firewall sempre accessibile, clienti autonomi per server. Reparti per target, scansioni separate, report e Attack Path; niente seconda dashboard reparto. Nessun filtro CVSS nella UI Attack Path.
 - **FR-15.1 (Riorganizzazione Dashboard Laterale per Flussi di Lavoro):** La barra laterale di navigazione (Desktop e Mobile Drawer) deve essere categorizzata logicamente per macro-aree d'azione ("cosa si deve fare"):
   - **Overview / Dashboard** (sintesi generale)
   - **Scansione di Rete & Asset:** *Target & Scope Management* (albero cartelle e bersagli censiti), *Network Discovery* (Advanced IP Scanner live LAN).
@@ -152,6 +154,9 @@
 - **FR-17.4 (Parsing XML & Correlazione Risultati Script NSE):** Il parser Nmap e l'orchestratore devono decodificare i tag `<script>` associati a porte e host, estraendo automaticamente CVE ID menzionati nell'output, severità, banner e raccomandazioni di remediation da salvare come finding formali.
 
 ### FR-18: Qualità Grafica, Layout A4 & Coerenza Dati nei Report PDF (Executive & Technical)
+
+- **COMPANY-UX-02:** Dossier aziendale include scansioni e target dei reparti, con inventario IP/target separato per reparto, anche senza finding. PDF consolidato multipagina ammesso, download reparto conservato. CSV consolidato aggiunge reparto; CSV scansione invariato.
+- **COMPANY-PDF-03:** Nei PDF dell'intera azienda, se esistono reparti, anche le schede CVE/finding sono separate per reparto. Tecnico completo; Executive con cinque priorità per reparto e conteggio totale. Riepilogo aziendale consolidato, sezione “Senza reparto” per target diretti e indicazione esplicita dei reparti senza finding disponibili. Aziende senza reparti mantengono il formato non raggruppato.
 - **FR-18.1 (Executive Summary Compatto A4):** Il report direzionale deve essere strutturato come un Executive Brief elegante di esattamente 2 pagine (pagina 1: Copertina, Sintesi Esecutiva, Statistiche KPI, Distribuzione Severità; pagina 2: Top Priority Findings con remediation dettagliata e Governance/Prossimi Passi), eliminando salti pagina artificiali che lasciano pagine semivuote.
 - **FR-18.2 (Zero Testo Tagliato & Formattazione Multiriga Card):** Le card "Top Priorities" e le schede dei finding tecnici devono calcolare dinamicamente l'altezza in base al testo di remediation tramite wrapping multiriga, senza overflow orizzontale oltre i margini della pagina A4 e senza font miniaturizzati illegibili.
 - **FR-18.3 (Separazione Righe CVE & Azione):** L'identificativo CVE e la label "Azione:" devono essere posizionati su righe distinte con spaziatura e gutter calibrati, eliminando sovrapposizioni di testo.

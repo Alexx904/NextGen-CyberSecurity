@@ -135,6 +135,24 @@ func TestAttackPathHandler_GetGraph_Unauthorized(t *testing.T) {
 	}
 }
 
+func TestAttackPathHandler_InvalidCVSS(t *testing.T) {
+	for _, value := range []string{"NaN", "Inf", "11", "-1", "abc"} {
+		t.Run(value, func(t *testing.T) {
+			svc := &mockAttackPathService{generateAttackGraphFunc: func(context.Context, uuid.UUID, float64) (*domain.AttackGraph, error) {
+				t.Fatal("invalid filter reached service")
+				return nil, nil
+			}}
+			router := setupAttackPathRouter(handler.NewAttackPathHandler(svc))
+			req := withAttackPathTenantContext(httptest.NewRequest(http.MethodGet, "/attack-paths/graph?min_cvss="+value, nil), uuid.New())
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400, got %d", rec.Code)
+			}
+		})
+	}
+}
+
 func TestAttackPathHandler_GetGraph_ServiceError(t *testing.T) {
 	tenantID := uuid.New()
 	mockSvc := &mockAttackPathService{
@@ -267,4 +285,3 @@ func TestAttackPathHandler_GetChokepoints_Unauthorized(t *testing.T) {
 		t.Fatalf("expected status 401, got %d", rec.Code)
 	}
 }
-

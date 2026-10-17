@@ -1,0 +1,1 @@
+ALTER TABLE ssh_servers ADD COLUMN client_name VARCHAR(160) NOT NULL DEFAULT '';

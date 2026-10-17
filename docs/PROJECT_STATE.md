@@ -5,7 +5,7 @@
 
 **Ultimo aggiornamento:** 2026-10-17
 **Modalità progetto:** esistente (onboarded formalmente sul branch chore/agent-onboarding)
-**Fase:** SCAN-UX-01, SCAN-TIME-01 e SCAN-COPY-01 accettati dal PO. Commit applicativo ce4a69f pubblicato su origin/feat/nmap-scan-workflow-review; nessun merge/deploy incluso.
+**Fase:** PO approva tutte le modifiche e autorizza pubblicazione diretta su main (2026-10-17). TEST-OPT-01, COMPANY-UX-02, COMPANY-PDF-03 e AP-REVIEW-01 accettati con limiti visuali espliciti. E28-S1-T1 e debiti SSH/Linux restano aperti. Preparazione commit/push, nessun deploy.
 
 ## Project Profile
 
@@ -15,6 +15,8 @@ Linguaggi/stack:         Golang 1.22+ (Chi Router, pgx/v5, gorilla/websocket, ro
 Gestore pacchetti:       Go Modules (backend), npm (frontend)
 Comando test mirati:     go test -v ./internal/<package>/... (backend), npx vitest run src/<path>/<file>.test.ts (frontend)
 Comando suite completa:  go test ./... (backend), npm test (frontend)
+Comando integrazione DB: go test -tags=integration -count=1 ./internal/repository/postgres (backend; TEST_DB_* esplicite, DB locale dedicato)
+Runner verifica:        powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1 -Profile Quick|Final|Full|Docs -Scope Backend|Frontend|All
 Comando build/typecheck: go build ./... (backend), npm run build (frontend)
 Comando lint/format:     go vet ./... (backend)
 Percorsi per livello:    unit=backend/pkg, backend/internal/domain, backend/internal/scanner; service=backend/internal/service; integration=backend/internal/delivery, backend/internal/repository/postgres; frontend=frontend/src/tests, frontend/src/**/*.test.tsx
@@ -25,6 +27,8 @@ Comandi vietati:         rm -rf fuori repo, git reset --hard non confermati, git
 ```
 
 ## Baseline test (prima di ogni intervento)
+
+La baseline è consultata prima degli interventi, non rieseguita automaticamente: politica proporzionata `AGENTS.md` sez. 8 e [Test Plan](05-qa/TEST_PLAN.md). Una sola suite finale per lato coinvolto; test mirati durante lo sviluppo e riuso solo con input/ambiente invariati. Il percorso rapido Go ora esclude PostgreSQL, che richiede tag `integration`; i PASS storici precedenti non vengono reinterpretati.
 
 Verifica pre-push 2026-10-16: `npm.cmd test` PASS (21 file, 145 test), `npm.cmd run build` PASS (12,65 s); `go test ./...`, `go build ./...`, `go vet ./...` PASS, tutti exit 0. Prove funzionali delle scansioni eseguite e confermate dal PO. Fetch origin eseguito; branch inizialmente allineato a origin/main (0 commit di divergenza). Messaggio previsto: `feat(scanner): simplify scan workflows and add batch progress estimates`; destinazione origin/feat/nmap-scan-workflow-review.
 
@@ -43,13 +47,31 @@ Verifica pre-push del 2026-10-15: `go test ./...`, `go build ./...`, `go vet ./.
 
 ## In corso
 
+**Aggiornamento autorevole 2026-10-17:** “Ok puoi pushare tutto sul main (non voglio vedere branch) Approvo tutto.” Tutte le modifiche presenti, incluse quelle preesistenti, sono autorizzate per commit e push su `https://github.com/Alexx904/NextGen-CyberSecurity.git`, destinazione `main`. Nessun nuovo branch o force push. I resoconti sotto sono evidenze storiche degli incrementi; gli stati precedenti `[!]`/`[~]` sono superati dall'accettazione PO per i quattro task consegnati. Rischio comunicato una volta: prove visuali non effettuate e laboratorio SSH assente. L'accettazione con questi limiti non dichiara PASS visuale né chiude lavoro non implementato. Test applicativi invariati rispetto alle ultime evidenze, riutilizzati secondo AGENTS sez. 8; controlli documentali/staging rieseguiti.
+
+- **COMPANY-PDF-03 (2026-10-17) `[!]`:** richiesta PO di separare anche le CVE per reparto nei PDF dell'intera azienda. Implementati schede tecniche complete per reparto e top cinque Executive locali con totale, KPI aziendali mantenuti, intestazioni di continuazione, target diretti e reparti vuoti distinti. Aziende senza reparti/singoli download conservano il flusso precedente. Raggruppamento per identità gruppo e scan/target, non IP/nome; test collisione etichetta “Senza reparto”. Gate finale backend runner PASS: suite 16,296 s, vet 1,034 s, build 1,340 s; documenti/diff PASS exit 0. Evidenza e Doc Sync nel [QA](05-qa/COMPANY_WORKFLOW_QA.md#incremento-company-pdf-03--cve-per-reparto). Assunzione: Executive resta sintesi; tutti i finding nel Tecnico. Renderer assente: contenuto/paginazione verificati, visuale aperto. Nessuna dipendenza/API/DB/frontend modificata, commit/push/deploy o mutazione dati. Modifiche TEST-OPT/COMPANY/AP preesistenti preservate.
+
+- **TEST-OPT-01 (2026-10-17) `[~]`:** PO autorizza l'ottimizzazione proposta. Regole proporzionate, runner con durate/report, integrazioni PostgreSQL esplicite e CI con DB effimero. Backend suite/build/vet, DB reale e 12 casi configurazione PASS; frontend runner smoke 30 test PASS; FAIL attesi senza DB/config e fail-fast runner verificati. Doc Sync e self-review completati; nessuna modifica applicativa o nuova dipendenza. Le modifiche preesistenti COMPANY/AP sono preservate. Nessun commit/push/deploy; CI remota non eseguita.
+
+- **COMPANY-UX-02 (2026-10-17):** PO richiede dashboard/aziende unica, reparti solo diretti, report per reparto/azienda e IP distinti nel documento, AP senza CVSS UI con selettore reparto, obbligo azienda per navigare. Successiva precisazione confermata: SSH/Firewall indipendente, sempre accessibile, con clienti autonomi per server.
+- Implementati guard route e sidebar, CRUD dashboard e aggregazioni reparti, gerarchia UI/service/trigger DB, refresh/paginazione CompanyContext, scope reparto AP e guida, PDF/CSV per reparto, campo/filtro/gruppi client_name SSH. Migrazioni 000008/000009 up/down. [Piano](04-development/plans/COMPANY-UX-02.md), [QA](05-qa/COMPANY_WORKFLOW_QA.md).
+- Verifiche: frontend 26 file/164 test e build PASS; backend suite/build/vet PASS con DB_NAME esplicito di test. Integrazione repository SSH/etichette, migrazioni/idempotenza, down/up e trigger PostgreSQL PASS exit 0. Database dedicato creato e mantenuto: nextgen_company_ux02_test_20261017. Database applicativo solo letto (0 sotto-reparti), nessuna modifica dati/schema o connessione SSH remota.
+- Limiti: computer-use senza app/browser e renderer PDF assente; PDF verificato in memoria per contenuto/paginazione, non visualmente. Task [!] per gate UI/PDF. Assunzioni dichiarate: clienti SSH non sono nuove ACL; dossier aziendali multipagina ammessi per inventario; reparto AP mostra solo catene interne, vista azienda include ipotesi tra reparti. Nessuna dipendenza, push, commit o deploy.
+
+
+- **AP-REVIEW-01:** richiesta PO di validazione cyber, funzionamento, miglioramento grafico e guida per `/attack-path`. Confermati dati presenti/scenari sintetici e 3D solo se utile. Corretti cammini disconnessi, falsa esposizione Internet, pivot/trust arbitrari, collisione TCP/UDP, scope globale di fallback, layout non terminante su cicli e fetch su selezione. UI 2D percorso/completa, inferenze esplicite, indice euristico, provenienza e guida integrata. [Report QA](05-qa/ATTACK_PATH_REVIEW.md), [piano](04-development/plans/AP-REVIEW-01.md).
+- **Verifica AP 2026-10-17:** test backend mirati rosso→verde, `go test ./...`, `go build ./...`, `go vet ./...` PASS exit 0; frontend `npm.cmd test` PASS (23 file, 156 test) e build PASS exit 0. Snapshot locale in sola lettura: 11 tenant, 17 target, 20 finding, nessuna CVE. Servizio aggiornato validato su snapshot per tenant a soglie 0/7/9. Nessun exploit, scansione o cambiamento DB. Browser assenti nel runtime (iab/Chrome indisponibili): niente screenshot né PASS visuale, task `[!]`.
+- **Assunzioni AP:** strumento di triage euristico, nessuna certificazione di reachability/compromissione; /24 convenzionale non maschera dimostrata. 2D scelto per sequenza senza occlusioni, non sulla base di user testing. Dati storici e cap dichiarati; approfondimenti in TECH-DEBT-08. Guida nel prodotto, `docs/` solo agenti. Nessuna dipendenza o migrazione.
+
 - **E28-S1-T1:** primo incremento backend implementato in working tree: preview e remediation SERVICE IPv4 TCP/UDP sul server del chokepoint, scelta confermata dal PO. Timer 60s obbligatorio, porta SSH protetta, server e grafo validati nel tenant, RBAC SecOps/admin. Correzioni watchdog su PID/concorrenza/conferma/rollback. Stato `[ ]`: gate operativo aperto per prova Linux e hardening preesistente SSH/watchdog (TECH-DEBT-06/07), nessuna consegna per accettazione ancora. Piano in `docs/04-development/plans/E28-S1-T1-chokepoint-remediation.md`.
 - Verifiche 2026-10-17 in `backend`: `go test ./...`, `go build ./...`, `go vet ./...` PASS exit 0; test mirati service/handler PASS exit 0. In `frontend`: `npm.cmd test` (145 test), `npm.cmd run build` PASS exit 0, eseguiti fuori sandbox dopo blocco esbuild. Cache Go locale ignorata dopo errore della cache predefinita. Race detector non eseguibile (CGO disabilitato, exit 1); nessuna prova remota/visuale.
 - Assunzioni tecniche esplicite: IPv4 letterale coincidente fra servizio e host SSH; niente DNS/IPv6/gateway o isolamento; riuso lifecycle firewall esistente, singola istanza backend. Nessuna nuova dipendenza o migrazione. Modifiche preesistenti a CHANGELOG, TASK_LIST e PROJECT_STATE preservate; nessun commit/push/deploy.
 
-- Nessuno. Commit applicativo `ce4a69f` pubblicato su `origin/feat/nmap-scan-workflow-review`, con tracking remoto configurato. Destinatario `https://github.com/Alexx904/NextGen-CyberSecurity.git` confermato esplicitamente dal PO dopo la richiesta della revisione automatica. Nessun merge su main né deploy.
+- Checkpoint `b16264b`: 23 file remediation/firewall, test/DTO e documenti/archivio task pubblicati prima della revisione AP. Dopo rifiuto iniziale dell'auto-review, PO conferma contenuto e repository/branch esplicitamente. Gate Linux di E28-S1-T1 invariato; commit non equivale ad accettazione funzionale.
 
 ## Accettati recentemente dal PO (`[x]`)
+
+- **TEST-OPT-01, COMPANY-UX-02, COMPANY-PDF-03, AP-REVIEW-01:** accettazione esplicita globale del PO il 2026-10-17 e richiesta di pubblicare tutto su main. Assunzioni confermate, inclusi Executive sintetico con cinque priorità per reparto, SSH indipendente con clienti autonomi e Attack Path euristico 2D. Limiti visuali dichiarati accettati per la consegna; nessuna prova visuale autonoma o attestazione di lateral movement reale dedotta. Rischi SSH/Linux e task futuri mantengono i loro stati tecnici.
 
 - **AGENT-CLEAN-03 / AGENT-CODEX-01:** confermati e approvati dal PO il 2026-10-16. Accettate pulizia repository e migrazione governance Codex; assunzioni documentali confermate. Task dettagliati archiviati nel CHANGELOG insieme ai task accettati preesistenti, essendo stato superato il limite di 10. Nessuna approvazione retroattiva del vecchio design Epic 27.1: registrato come superato.
 
@@ -80,9 +102,14 @@ Verifica pre-push del 2026-10-15: `go test ./...`, `go build ./...`, `go vet ./.
 
 ## In attesa di accettazione utente
 
-- Nessuna. AGENT-CLEAN-03 e AGENT-CODEX-01 approvati esplicitamente dal PO il 2026-10-16. Proposta Epic 27.1 archiviata come superata da SCAN-UX-01/SCAN-TIME-01 già accettati.
+Nessuno: tutti gli incrementi consegnati sono accettati dal PO il 2026-10-17. Evidenze e limiti nei report QA; nessun PASS tecnico aggiuntivo attribuito all'approvazione.
 
 ## Bloccati / Domande aperte per l'utente
+
+- **Limite visuale COMPANY-UX-02 / COMPANY-PDF-03:** collaudo autonomo desktop/mobile e PDF non eseguito, browser e renderer non disponibili. Prove automatiche/DB concluse; il PO accetta gli incrementi con questo limite esplicito e autorizza pubblicazione. Nessun PDF autonomo consegnato come verificato visualmente, nessuna domanda funzionale pendente.
+
+
+- **Limite visuale AP-REVIEW-01 accettato dal PO:** inventario browser vuoto, verifica grafica autonoma e screenshot non eseguiti; DOM e interazioni coperte da test. I dati locali privi di CVE non permettono validazione reale di catene di exploit; scenari sintetici coprono il modello. Nessun blocco alla pubblicazione richiesta.
 
 - Il PO conferma il 2026-10-17 che non è ancora disponibile un host Linux di laboratorio e chiede di mantenere aperta la verifica remota E28-S1-T1. Prima dell'uso operativo risolvere anche TECH-DEBT-06/07: host-key non verificata, chiamate SSH senza deadline e coordinamento watchdog. Nessuna azione remota eseguita.
 
@@ -98,6 +125,13 @@ Verifica pre-push del 2026-10-15: `go test ./...`, `go build ./...`, `go vet ./.
 - Roadmap di hardening sicurezza (Epiche SEC-P0, SEC-P1, SEC-P2) implementata al 100%.
 
 ## Decisioni recenti (ultime 10, dettagli negli ADR)
+
+- **ADR-19 (2026-10-17):** test mirati per iterazione, un gate finale condiviso per lato coinvolto, riuso di sole evidenze valide, misure per comando. PostgreSQL esplicito con TEST_DB_* senza fallback applicativo, host locale e DB dedicato; indisponibilità = FAIL. CI con job DB isolato. Decisione richiesta dal PO, non deroga estemporanea.
+
+- **ADR-18 (2026-10-17):** dashboard unica, guard aziendale con eccezione tool SSH, clienti SSH autonomi, gerarchia due livelli nelle nuove scritture, report/IP per reparto e selettore reparto AP senza soglia UI.
+
+
+- **ADR-17 (2026-10-17):** Attack Path come analisi euristica verificabile con evidenze/ipotesi distinte, percorsi su archi reali del modello, score non probabilistico, scope aziendale completo e guida UI 2D. Nessuna inferenza di trust dall'inventario SSH. Gate visuale separato.
 
 - **ADR-15 (2026-10-16):** telemetria XML Nmap, snapshot attivi e lettura batch per monitor lotto; API additive, nessuna migrazione DB, ETA esplicitamente euristica. Durate indicative richieste dal PO dopo la precedente rimozione delle stime promozionali.
 
@@ -123,18 +157,19 @@ Verifica pre-push del 2026-10-15: `go test ./...`, `go build ./...`, `go vet ./.
 
 ## Prossimi passi
 
-1. Chiudere il gate operativo E28-S1-T1: hardening SSH/watchdog TECH-DEBT-06/07 e prova su host Linux di laboratorio identificato.
-2. Solo dopo verifica, consegnare il backend per accettazione e avviare E28-S1-T2 (UI preview, applicazione e safety timer).
-3. Proseguire Epic 28 secondo dipendenze del backlog.
+1. Pubblicare le modifiche approvate su main con aggiornamento normale della cronologia e verificare allineamento remoto/working tree. Nessun nuovo branch; nessun deploy. Accettazione PO già acquisita, limiti visuali residui registrati.
+2. E28-S1-T1 resta separato: hardening SSH/watchdog TECH-DEBT-06/07 e prova Linux quando disponibile.
+3. Proseguire Epic 28 secondo dipendenze e priorità PO; nessun push/merge/deploy implicito della revisione AP.
 
 ## Log sessioni (ultime 5, la più recente in alto)
 
+- 2026-10-17 · COMPANY-PDF-03: raggruppamento CVE nei PDF intera azienda con reparti, schede Tecnico complete e Executive top cinque per reparto; riepilogo consolidato. Attribuzione gruppo/scan/target, fallback espliciti e sezioni vuote. Test mirati e gate finale backend suite/vet/build PASS exit 0, documenti/diff PASS. Self-review/Doc Sync; gate visuale renderer aperto `[!]`. Nessun DB/frontend/dipendenza/commit/push/deploy; modifiche preesistenti preservate.
+
+- 2026-10-17 · TEST-OPT-01: autorizzata ottimizzazione del testing, implementati gate per lato e riuso evidenze, runner misurato e tag integration con TEST_DB_* sicure, CI PostgreSQL effimero. Backend suite/build/vet e DB reali PASS, configurazione 12 casi PASS, smoke frontend 30 test PASS; negativi DB/config e runner FAIL attesi verificati. Container solo test arrestato/rimosso. Doc Sync e self-review; `[~]` in attesa PO. Nessuna dipendenza, modifica applicativa, commit/push/deploy; CI remota non eseguita. Modifiche preesistenti preservate.
+
+- 2026-10-17 · COMPANY-UX-02: integrata richiesta dashboard/aziende/reparti/report/AP e precisazione SSH indipendente con clienti autonomi confermata. UI/service/DB e DTO aggiornati; test gerarchia rosso→verde, frontend 164 test/build e Go suite/build/vet PASS. Up/down e trigger verificati su DB test separato, dati applicativi invariati. PDF contenuto/paginazione PASS, gate browser/render aperti [!]. Nessuna nuova dipendenza, commit/push/deploy; AP precedente preservato e non accettato.
+
+
+- 2026-10-17 · Checkpoint `b16264b` pubblicato dopo conferma esplicita del payload/destinazione richiesta da auto-review. Revisione AP-REVIEW-01: difetti backend riprodotti rosso→verde, correzioni modello/scope/layout e guida integrata. Suite Go/build/vet, frontend 156 test/build PASS exit 0; snapshot locale read-only 17 target/20 finding/0 CVE validato per tenant. Nessuna prova visuale per browser indisponibile, task `[!]`; revisione non committata/pushata. Self-review e Doc Sync, nessuna dipendenza/migrazione o modifica DB.
+
 - 2026-10-17 · Avviato E28-S1-T1 con feature.md/orchestration.md. PO sceglie blocco porta sul server chokepoint, isolamento separato. Backend/DTO/test e fix watchdog implementati; suite backend/build/vet e frontend 145 test/build PASS exit 0. Test PID rosso→verde; race non eseguibile senza CGO. Self-review e documenti allineati; task `[ ]` per gate Linux/hardening SSH residuo. Nessuna azione remota, commit o push; modifiche precedenti preservate.
-
-- 2026-10-16 · PO conferma AGENT-CLEAN-03 e AGENT-CODEX-01: marcati accettati e archiviati tutti i task conclusi dopo il superamento della soglia 10. Epic 27.1 conservata come proposta superata; rimossi i riferimenti pendenti. Nessuna modifica applicativa, commit o push in questo turno.
-
-- 2026-10-16 · Push scanner riuscito (exit 0): commit ce4a69f, 42 file, su origin/feat/nmap-scan-workflow-review. Dopo il blocco iniziale dell'auto-review il PO ha confermato esplicitamente repository e branch; nessun aggiramento del controllo. Branch remoto creato e tracking impostato; nessun merge/deploy.
-
-- 2026-10-16 · SCAN-UX-01 e SCAN-TIME-01 accettati dopo test dichiarati dal PO, push di tutte le modifiche autorizzato. Rieseguite suite frontend (145 test), backend, build/vet PASS exit 0. Audit circoscritto del diff da 88f0ef2: nessuna nuova dipendenza/migrazione/skip, perimetro tenant, allowlist, lifecycle snapshot e polling verificati; TECH-DEBT-05 resta aperto. Destinazione branch feature, nessun merge/deploy implicito.
-
-- 2026-10-16 · SCAN-COPY-01 accettato dal PO: task promosso a `[x]`, rimosso dalle attese e registrato nel changelog. Applicato feedback.md ramo accettazione, nessuna modifica applicativa né commit/push/deploy; stati degli altri task invariati.

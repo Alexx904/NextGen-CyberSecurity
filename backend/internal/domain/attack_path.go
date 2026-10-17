@@ -43,15 +43,15 @@ const (
 
 // AttackNode rappresenta un vertice all'interno della topologia di minaccia.
 type AttackNode struct {
-	ID        string                 `json:"id"`
-	Type      AttackNodeType         `json:"type"`
-	Label     string                 `json:"label"`
-	IP        string                 `json:"ip,omitempty"`
-	Port      int                    `json:"port,omitempty"`
-	Protocol  string                 `json:"protocol,omitempty"`
-	Severity  string                 `json:"severity,omitempty"`
-	CVSS      float64                `json:"cvss,omitempty"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	ID       string                 `json:"id"`
+	Type     AttackNodeType         `json:"type"`
+	Label    string                 `json:"label"`
+	IP       string                 `json:"ip,omitempty"`
+	Port     int                    `json:"port,omitempty"`
+	Protocol string                 `json:"protocol,omitempty"`
+	Severity string                 `json:"severity,omitempty"`
+	CVSS     float64                `json:"cvss,omitempty"`
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // AttackSeverityFromCVSS converte uno score CVSS nella corretta severità allineata allo standard (SEC-P2-01)
@@ -117,16 +117,28 @@ type AttackGraphSummary struct {
 
 // AttackGraph modella l'intera struttura del grafo di attacco per il tenant.
 type AttackGraph struct {
-	TenantID    uuid.UUID          `json:"tenant_id"`
-	GeneratedAt time.Time          `json:"generated_at"`
-	Nodes       []AttackNode       `json:"nodes"`
-	Edges       []AttackEdge       `json:"edges"`
-	Paths       []AttackPath       `json:"paths"`
-	Chokepoints []Chokepoint       `json:"chokepoints"`
-	Summary     AttackGraphSummary `json:"summary"`
+	TenantID    uuid.UUID           `json:"tenant_id"`
+	GeneratedAt time.Time           `json:"generated_at"`
+	Nodes       []AttackNode        `json:"nodes"`
+	Edges       []AttackEdge        `json:"edges"`
+	Paths       []AttackPath        `json:"paths"`
+	Chokepoints []Chokepoint        `json:"chokepoints"`
+	Summary     AttackGraphSummary  `json:"summary"`
+	Analysis    AttackGraphAnalysis `json:"analysis"`
 }
 
-// CalculateCumulativeRisk calcola il punteggio di rischio probabilistico (0.0 - 100.0) di una sequenza di nodi (SEC-P2-02).
+// AttackGraphAnalysis makes the assumptions and bounded coverage explicit.
+type AttackGraphAnalysis struct {
+	Model              string   `json:"model"`
+	Warnings           []string `json:"warnings"`
+	PathsTruncated     bool     `json:"paths_truncated"`
+	InventoryTruncated bool     `json:"inventory_truncated"`
+	TargetCount        int      `json:"target_count"`
+	FindingCount       int      `json:"finding_count"`
+	MaxPaths           int      `json:"max_paths"`
+}
+
+// CalculateCumulativeRisk is a legacy heuristic priority index, not a calibrated probability.
 func CalculateCumulativeRisk(pathNodes []AttackNode, hopCount int) float64 {
 	if len(pathNodes) == 0 {
 		return 0.0
@@ -240,11 +252,11 @@ func CalculateChokepoints(paths []AttackPath, nodes []AttackNode) []Chokepoint {
 		var remediation string
 		switch n.Type {
 		case NodeTypeVulnerability:
-			remediation = fmt.Sprintf("Applicare patch immediata o aggiornamento del servizio per sanare la vulnerabilità '%s'.", n.Label)
+			remediation = fmt.Sprintf("Verificare applicabilità di '%s', quindi pianificare patch o aggiornamento e ripetere la scansione.", n.Label)
 		case NodeTypeHost:
-			remediation = fmt.Sprintf("Isolare l'host '%s' o restringere le regole firewall per bloccare il lateral movement verso la rete interna.", n.Label)
+			remediation = fmt.Sprintf("Valutare isolamento o restrizioni firewall per '%s', verificando dipendenze operative e raggiungibilità effettiva. Copertura limitata ai percorsi del modello.", n.Label)
 		case NodeTypeService:
-			remediation = fmt.Sprintf("Chiudere la porta %d o abilitare autenticazione forte e whitelist IP sul servizio '%s'.", n.Port, n.Label)
+			remediation = fmt.Sprintf("Valutare chiusura o allowlist sulla porta %d/%s del servizio '%s', verificando necessità del servizio e impatto operativo.", n.Port, n.Protocol, n.Label)
 		default:
 			remediation = fmt.Sprintf("Rimuovere o mitigare il nodo di transito '%s'.", n.Label)
 		}
@@ -261,6 +273,9 @@ func CalculateChokepoints(paths []AttackPath, nodes []AttackNode) []Chokepoint {
 	// Ordina per MitigatedRisk decrescente, poi MitigatedPaths decrescente
 	sort.Slice(chokepoints, func(i, j int) bool {
 		if chokepoints[i].MitigatedRisk == chokepoints[j].MitigatedRisk {
+			if chokepoints[i].MitigatedPaths == chokepoints[j].MitigatedPaths {
+				return chokepoints[i].NodeID < chokepoints[j].NodeID
+			}
 			return chokepoints[i].MitigatedPaths > chokepoints[j].MitigatedPaths
 		}
 		return chokepoints[i].MitigatedRisk > chokepoints[j].MitigatedRisk
@@ -286,10 +301,15 @@ func (g *AttackGraph) Validate() error {
 		nodeSet[n.ID] = true
 	}
 
+	edgeMap := make(map[string]AttackEdge, len(g.Edges))
 	for _, e := range g.Edges {
 		if e.ID == "" {
 			return errors.New("attack edge id must not be empty")
 		}
+		if _, exists := edgeMap[e.ID]; exists {
+			return fmt.Errorf("duplicate attack edge id: %s", e.ID)
+		}
+		edgeMap[e.ID] = e
 		if !nodeSet[e.Source] {
 			return fmt.Errorf("edge %s references unknown source node: %s", e.ID, e.Source)
 		}
@@ -302,6 +322,15 @@ func (g *AttackGraph) Validate() error {
 		if p.ID == "" {
 			return errors.New("attack path id must not be empty")
 		}
+		if len(p.NodeIDs) < 2 || len(p.EdgeIDs) != len(p.NodeIDs)-1 || p.HopCount != len(p.EdgeIDs) {
+			return fmt.Errorf("path %s has inconsistent node/edge/hop counts", p.ID)
+		}
+		for i, id := range p.EdgeIDs {
+			e, ok := edgeMap[id]
+			if !ok || e.Source != p.NodeIDs[i] || e.Target != p.NodeIDs[i+1] {
+				return fmt.Errorf("path %s has disconnected edge %s", p.ID, id)
+			}
+		}
 		for _, nodeID := range p.NodeIDs {
 			if !nodeSet[nodeID] {
 				return fmt.Errorf("path %s references unknown node: %s", p.ID, nodeID)
@@ -311,4 +340,3 @@ func (g *AttackGraph) Validate() error {
 
 	return nil
 }
-

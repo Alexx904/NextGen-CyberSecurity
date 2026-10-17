@@ -7,6 +7,21 @@
 
 ## 1. Organizzazione Gerarchica Asset & Workstation Multi-Company Workflow (`FR-09`, `FR-15`)
 
+### COMPANY-UX-02 · Contratto corrente · 2026-10-17 · working tree
+
+Questa sezione supera i riferimenti storici sotto ad alberi arbitrari e pagina separata `/companies`.
+
+- Dashboard e CRUD aziende unificati in `/`. `/companies` e `/dashboard` redirigono `/`; nessuna voce duplicata. Metriche e target delle card comprendono i reparti; niente card reparto separate nella dashboard.
+- Nessuna azienda valida: pagine operative non montate, redirect dashboard e sidebar disabilitata. Guard in attesa di CompanyContext, ID persistiti non validi rifiutati. **SSH/Firewall indipendente e sempre accessibile**, anche dalla sezione Tool. Autorizzazione API per tenant invariata.
+- Nuove gerarchie Azienda → Reparto. Target crea reparti solo sotto l'azienda corrente e non modifica/elimina la radice. Service e trigger `000009` impediscono nuove profondità >2 e spostamenti di aziende con figli sotto altra radice; assegnazioni parent serializzate per tenant. Nessun albero legacy riscritto, lettura ricorsiva preservata.
+- Modifiche target/reparti aggiornano CompanyContext; inventario target paginato senza limite silenzioso 500.
+- Download reparto e azienda mantengono gli endpoint esistenti. Service aggrega radice e discendenti con filtri repository esatti e paginazione; prima il filtro radice poteva omettere i reparti. Errori lettura finding non più ignorati.
+- `PDFReportData.Departments`: sezioni `{Name, Targets, Findings}` con target censiti anche senza finding e IP osservati attribuiti tramite target/scan, non sola uguaglianza IP. Target diretti: “Senza reparto”; provenienza mancante: “Non attribuito”. IP uguali in reparti diversi distinti nei finding, deduplicati per target/host/porta/protocollo/CVE.
+- COMPANY-PDF-03: `GroupFindingsByDepartment` attivo solo per download azienda radice con reparti censiti. Riepilogo consolidato invariato; schede tecniche complete separate per reparto, Executive con massimo cinque priorità per reparto e conteggio esplicito. Nuova pagina per reparto, intestazione ripetuta nelle continuazioni, reparti senza finding indicati senza dichiararli sicuri. Report di singola scansione/reparto e aziende senza reparti conservano il flusso non raggruppato. Nessun cambiamento API pubblica, DB o dipendenze.
+- PDF Executive/Technical consolidati aggiungono inventario multipagina per reparto e possono superare due pagine. PDF singola scansione invariato. CSV consolidato aggiunge `reparto`, ordinato per reparto/IP e protetto da prefissi formula nel nuovo campo; CSV scansione invariato.
+
+[Piano](../04-development/plans/COMPANY-UX-02.md), [QA](../05-qa/COMPANY_WORKFLOW_QA.md). Gate browser e render PDF aperti, nessun PASS visuale.
+
 ### 1.1 Struttura Cartelle Ricorsiva & Company-Centric Scope
 - Modello `TargetGroup` auto-referenziale su PostgreSQL con colonna `parent_id` (foreign key verso `target_groups.id`).
 - I `TargetGroup` fungono sia da contenitori logici/reparti sia da **Aziende / Clienti distinti** per consulenti e auditor che operano su più perimetri dalla medesima workstation.
@@ -100,5 +115,5 @@ $$\text{PostureScore} = \text{clamp}\left(0, \, 100, \, \text{round}(100 - \text
 ---
 
 ## 5. Ultimo Allineamento
-- **Data:** 2026-10-11
-- **Hash commit:** In attesa di accettazione PO (Epic 27 FEAT-COMPANY-SCOPE)
+- **Data:** 2026-10-17
+- **Hash commit:** working tree · COMPANY-UX-02 / COMPANY-PDF-03, gate visuale aperto.

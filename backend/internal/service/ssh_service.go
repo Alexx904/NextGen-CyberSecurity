@@ -28,22 +28,24 @@ type SSHConnectionTestResult struct {
 
 // CreateSSHServerRequest racchiude i parametri per registrare un nuovo server remoto
 type CreateSSHServerRequest struct {
-	Name      string             `json:"name"`
-	Host      string             `json:"host"`
-	Port      int                `json:"port"`
-	Username  string             `json:"username"`
-	AuthType  domain.SSHAuthType `json:"auth_type"`
-	RawSecret string             `json:"raw_secret"`
+	ClientName string             `json:"client_name"`
+	Name       string             `json:"name"`
+	Host       string             `json:"host"`
+	Port       int                `json:"port"`
+	Username   string             `json:"username"`
+	AuthType   domain.SSHAuthType `json:"auth_type"`
+	RawSecret  string             `json:"raw_secret"`
 }
 
 // UpdateSSHServerRequest racchiude i parametri per aggiornare un server remoto esistente
 type UpdateSSHServerRequest struct {
-	Name      string             `json:"name"`
-	Host      string             `json:"host"`
-	Port      int                `json:"port"`
-	Username  string             `json:"username"`
-	AuthType  domain.SSHAuthType `json:"auth_type"`
-	RawSecret *string            `json:"raw_secret,omitempty"`
+	ClientName *string            `json:"client_name,omitempty"`
+	Name       string             `json:"name"`
+	Host       string             `json:"host"`
+	Port       int                `json:"port"`
+	Username   string             `json:"username"`
+	AuthType   domain.SSHAuthType `json:"auth_type"`
+	RawSecret  *string            `json:"raw_secret,omitempty"`
 }
 
 // SSHExecutor definisce l'interfaccia per l'esecuzione di comandi remoti SSH
@@ -109,6 +111,7 @@ func (s *sshService) CreateServer(ctx context.Context, tenantID uuid.UUID, req C
 		ID:                   uuid.New(),
 		TenantID:             tenantID,
 		Name:                 strings.TrimSpace(req.Name),
+		ClientName:           strings.TrimSpace(req.ClientName),
 		Host:                 strings.TrimSpace(req.Host),
 		Port:                 req.Port,
 		Username:             strings.TrimSpace(req.Username),
@@ -147,6 +150,9 @@ func (s *sshService) UpdateServer(ctx context.Context, tenantID, serverID uuid.U
 	}
 
 	server.Name = strings.TrimSpace(req.Name)
+	if req.ClientName != nil {
+		server.ClientName = strings.TrimSpace(*req.ClientName)
+	}
 	server.Host = strings.TrimSpace(req.Host)
 	if req.Port > 0 {
 		server.Port = req.Port
@@ -349,4 +355,3 @@ func extractPublicKeyFingerprint(privateKeyPEM []byte) (string, error) {
 	}
 	return ssh.FingerprintSHA256(signer.PublicKey()), nil
 }
-

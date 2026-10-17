@@ -4,6 +4,29 @@
 
 ## 7. Architecture Decision Records (ADR)
 
+<a id="adr-19"></a>
+
+### ADR-19 · Verifica proporzionata e PostgreSQL obbligatorio esplicito (2026-10-17)
+
+- Contesto: suite/build richieste per ogni sotto-task aumentavano le ripetizioni; i test PostgreSQL potevano saltare la prova dopo tentativi di connessione falliti e la CI non forniva il DB.
+- Decisione autorizzata dal PO: test mirati durante lo sviluppo, un gate finale completo per lato coinvolto; entrambi i lati per contratti comuni, sicurezza o impatto incerto. Riutilizzo solo di evidenze con input/ambiente invariati. Profilo Full include PostgreSQL; Quick non sostituisce la verifica finale.
+- Implementazione: `scripts/verify.ps1` misura comandi e registra JSON temporanei; build tag `integration` separa i test PostgreSQL. Configurazione esclusivamente `TEST_DB_*`, host locale e nome dedicato `_test`/`_test_<id>`; nessun fallback applicativo e nessuno skip su indisponibilità DB. CI con terzo job indipendente PostgreSQL 16 effimero, health check e cache Go; esecuzioni obsolete dello stesso evento/ref cancellate.
+- Conseguenze: `go test ./...` ora prova il percorso rapido, non il DB; chiamanti/CI devono richiedere le integrazioni esplicitamente. Nessuna migrazione/schema/API applicativa modificata. Timeout funzionali e asserzioni preservati. Profiling prima di refactor temporali; nessun risparmio percentuale dichiarato senza benchmark. Browser/PDF e rollback pertinenti restano gate separati. Strategia e limiti nel [Test Plan](../../05-qa/TEST_PLAN.md).
+
+### ADR-18 · Dashboard unica e clienti SSH indipendenti (2026-10-17)
+
+- Decisione PO: dashboard/CRUD aziende unificati; feature aziendali con selezione obbligatoria, SSH/Firewall esplicitamente indipendente e sempre disponibile. I clienti SSH sono etichette autonome, senza FK verso le aziende.
+- Gerarchia nuova Azienda → Reparto protetta da UI/service e trigger PostgreSQL con lock per tenant sulle assegnazioni parent. Nessuna riscrittura di alberi legacy. Migrazioni 000008 (clienti SSH) e 000009 (vincolo di scrittura) con down.
+- Report aggregati da radice e discendenti, attribuzione IP via target/scan, inventario PDF per reparto e colonna CSV additiva. PDF aziendale può superare due pagine. Scope reparto AP locale senza soglia CVSS UI; backend compatibile.
+- Guard frontend è politica di navigazione, non autorizzazione API aggiuntiva. Rollback 000008 perde le etichette cliente: esportarle prima. Prove e limiti in [QA](../../05-qa/COMPANY_WORKFLOW_QA.md).
+
+### ADR-17 · Attack Path come modello euristico verificabile (2026-10-17)
+
+- Contesto: revisione PO di utilità cyber e grafo; la baseline confondeva esposizione, correlazione CVE e compromissione, con percorsi disconnessi e layout ciclico non terminante.
+- Decisione: origine di analisi ipotetica, nessun trust da inventario SSH né pivot cross-subnet inventato. Relazioni /24 dichiarate ipotesi deboli; percorsi validati su archi orientati e score storico esplicitamente euristico. Provenienza e limiti visibili. Scope aziendale proiettato sull'intero grafo; JWT tenant invariato.
+- UI: 2D percorso/completa, guida contestuale e tastiera; niente dipendenza 3D. La scelta riduce occlusioni e preserva la sequenza, senza dichiarare superiorità dimostrata da user testing.
+- Compatibilità: API e firma servizio preservate, `analysis` additivo, identità dei nodi specifica per protocollo e snapshot. Nessuna migrazione. Modello corretto ma validazione reale di reachability/exploit e prova visuale restano distinte. Dettagli nel [dominio](../../domains/attack_path.md) e [report QA](../../05-qa/ATTACK_PATH_REVIEW.md).
+
 ### ADR-16 · Remediation sul server del chokepoint (2026-10-17)
 
 - Contesto: E28-S1-T1 collega analisi euristica e mutazioni remote. Il PO sceglie blocco porta sul server del chokepoint; isolamento host separato.

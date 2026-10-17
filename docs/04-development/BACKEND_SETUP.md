@@ -17,7 +17,7 @@ Il backend legge variabili di ambiente; non presumere che carichi automaticament
 
 ## Verifica
 
-Da `backend`: `go test ./...`, `go build ./...`, `go vet ./...`. Per test mirati usare il package reale. I servizi richiesti e le eventuali esclusioni interne devono essere riportati nell'evidenza.
+Ultimo allineamento: 2026-10-17 · working tree. Da `backend`: test mirati durante lo sviluppo, una verifica finale con `go test ./...`, `go build ./...`, `go vet ./...` per il lato backend. Il percorso rapido esclude PostgreSQL tramite build tag: per repository/DB aggiungere `go test -tags=integration -count=1 ./internal/repository/postgres` con `TEST_DB_*` esplicite e database locale dedicato; nessun fallback su `DB_*` e nessuno skip. Dalla root il runner `scripts/verify.ps1 -Profile Final -Scope Backend -Integration` registra durate/esiti. Parametri, profili e criteri di riuso nel [Test Plan](../05-qa/TEST_PLAN.md).
 
 ## Migrazioni
 

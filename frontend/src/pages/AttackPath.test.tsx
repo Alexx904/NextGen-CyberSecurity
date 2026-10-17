@@ -4,6 +4,16 @@ import { MemoryRouter } from 'react-router-dom';
 import { AttackPath } from './AttackPath';
 import { attackPathApi } from '../api/attackPath';
 import { AttackGraph } from '../types/attackPath';
+import type { TargetGroupNode, TargetItem } from '../types/target';
+
+const companyState = vi.hoisted(() => ({
+  selectedCompanyId: null as string | null,
+  selectedCompany: null,
+  departments: [] as TargetGroupNode[],
+  allTargets: [] as TargetItem[],
+  companyTargetValues: new Set<string>(),
+}));
+vi.mock('../context/CompanyContext', () => ({ useCompany: () => companyState }));
 
 vi.mock('../api/attackPath', () => ({
   attackPathApi: {
@@ -43,6 +53,7 @@ describe('AttackPath Page - Visual Graph Explorer & Chokepoints', () => {
       {
         id: 'vuln-cve-2021-41773',
         type: 'VULNERABILITY',
+        ip: '192.168.1.10',
         label: 'Apache Path Traversal RCE (CVE-2021-41773)',
         severity: 'HIGH',
         cvss: 7.5,
@@ -82,7 +93,7 @@ describe('AttackPath Page - Visual Graph Explorer & Chokepoints', () => {
       },
       {
         id: 'edge-4',
-        source: 'host-192-168-1-10',
+        source: 'vuln-cve-2021-41773',
         target: 'host-10-0-0-50',
         type: 'PIVOTS_TO',
         label: 'Pivot Rete Interna',
@@ -96,13 +107,14 @@ describe('AttackPath Page - Visual Graph Explorer & Chokepoints', () => {
         node_ids: [
           'entry-internet',
           'host-192-168-1-10',
+          'srv-192-168-1-10-80',
           'vuln-cve-2021-41773',
           'host-10-0-0-50',
         ],
-        edge_ids: ['edge-1', 'edge-3', 'edge-4'],
+        edge_ids: ['edge-1', 'edge-2', 'edge-3', 'edge-4'],
         cumulative_risk: 86.4,
         severity: 'CRITICAL',
-        hop_count: 3,
+        hop_count: 4,
         target_asset: 'Database Interno (10.0.0.50)',
         description: 'Lateral movement da DMZ a LAN interna',
       },
@@ -129,6 +141,10 @@ describe('AttackPath Page - Visual Graph Explorer & Chokepoints', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    companyState.selectedCompanyId = null;
+    companyState.companyTargetValues = new Set();
+    companyState.departments = [];
+    companyState.allTargets = [];
   });
 
   it('rende correttamente i dati del grafo, i KPI e le card di riepilogo', async () => {
@@ -209,7 +225,7 @@ describe('AttackPath Page - Visual Graph Explorer & Chokepoints', () => {
     expect(screen.getByText('Chokepoint di Massima Priorità')).toBeDefined();
   });
 
-  it('filtra per punteggio CVSS inviando il parametro corretto all’API', async () => {
+  it('rimuove il filtro CVSS e carica tutte le vulnerabilità senza soglia', async () => {
     vi.mocked(attackPathApi.getGraph).mockResolvedValue(mockGraphData);
 
     render(
@@ -219,15 +235,11 @@ describe('AttackPath Page - Visual Graph Explorer & Chokepoints', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Filtro CVSS')).toBeDefined();
+      expect(screen.getByLabelText('Reparto Attack Path')).toBeDefined();
     });
 
-    const select = screen.getByLabelText('Filtro CVSS');
-    fireEvent.change(select, { target: { value: '7.0' } });
-
-    await waitFor(() => {
-      expect(attackPathApi.getGraph).toHaveBeenCalledWith({ min_cvss: 7.0 });
-    });
+    expect(screen.queryByLabelText('Filtro CVSS')).toBeNull();
+    expect(attackPathApi.getGraph).toHaveBeenCalledWith();
   });
 
   it('mostra correttamente lo stato vuoto quando non ci sono target né vulnerabilità scoperte', async () => {
@@ -291,14 +303,14 @@ describe('AttackPath Page - Visual Graph Explorer & Chokepoints', () => {
     expect(screen.getByText('Riprova')).toBeDefined();
   });
 
-  it('mostra correttamente il badge INFERRED con percentuale di confidenza per archi inferiti', async () => {
+  it('distingue le inferenze senza presentare percentuali non calibrate come prove', async () => {
     const graphWithInferred: AttackGraph = {
       ...mockGraphData,
       edges: [
         ...mockGraphData.edges,
         {
           id: 'edge-inferred-1',
-          source: 'host-192-168-1-10',
+          source: 'vuln-cve-2021-41773',
           target: 'host-10-0-0-50',
           type: 'PIVOTS_TO',
           label: 'Pivot Rete Interna',
@@ -318,9 +330,62 @@ describe('AttackPath Page - Visual Graph Explorer & Chokepoints', () => {
       </MemoryRouter>
     );
 
-    await waitFor(() => {
-      expect(screen.getByText('INFERRED 85%')).toBeDefined();
-    });
+    await screen.findByRole('button', { name: 'Mappa completa' });
+    fireEvent.click(screen.getByRole('button', { name: 'Mappa completa' }));
+    const edge = document.querySelector('[data-edge-id="edge-inferred-1"]');
+    expect(edge?.getAttribute('stroke-dasharray')).toBe('7 5');
+    expect(screen.getByText('Ipotesi / correlazione da verificare')).toBeDefined();
+    expect(screen.queryByText('INFERRED 85%')).toBeNull();
+  });
+
+  it('non ricarica il grafo cambiando selezione e rende disponibile la guida', async () => {
+    vi.mocked(attackPathApi.getGraph).mockResolvedValue(mockGraphData);
+    render(<MemoryRouter><AttackPath /></MemoryRouter>);
+    const path = await screen.findByRole('button', { name: /Seleziona percorso/ });
+    fireEvent.click(path);
+    fireEvent.click(path);
+    expect(attackPathApi.getGraph).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByText('Guida all’uso di Attack Path'));
+    expect(screen.getByText('Dalla scansione alla priorità')).toBeDefined();
+  });
+
+  it('non mostra dati globali se l’azienda attiva è vuota', async () => {
+    companyState.selectedCompanyId = 'empty-company';
+    vi.mocked(attackPathApi.getGraph).mockResolvedValue(mockGraphData);
+    render(<MemoryRouter><AttackPath /></MemoryRouter>);
+    await screen.findByText('Nessun percorso di attacco rilevato');
+    expect(screen.queryByText('Compromissione DMZ verso Database Interno')).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Grafo dei percorsi di analisi' })).toBeNull();
+  });
+
+  it('esclude la catena cross-company anche quando un suo host è nello scope', async () => {
+    companyState.selectedCompanyId = 'dmz-company';
+    companyState.companyTargetValues = new Set(['192.168.1.0/24']);
+    vi.mocked(attackPathApi.getGraph).mockResolvedValue(mockGraphData);
+    render(<MemoryRouter><AttackPath /></MemoryRouter>);
+    await screen.findByText('Percorsi (0)');
+    expect(screen.queryByText('Compromissione DMZ verso Database Interno')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Ispeziona Database Interno/ })).toBeNull();
+    expect(screen.getByText('Chokepoints (0)')).toBeDefined();
+  });
+
+  it('limita il grafo al reparto e non usa fallback quando il reparto è vuoto', async () => {
+    companyState.selectedCompanyId = 'company';
+    companyState.companyTargetValues = new Set(['192.168.1.10', '10.0.0.50']);
+    companyState.departments = [
+      { id: 'it', name: 'IT', parent_id: 'company' } as TargetGroupNode,
+      { id: 'empty', name: 'Vuoto', parent_id: 'company' } as TargetGroupNode,
+    ];
+    companyState.allTargets = [{ group_id: 'it', value: '192.168.1.10' } as TargetItem];
+    vi.mocked(attackPathApi.getGraph).mockResolvedValue(mockGraphData);
+    render(<MemoryRouter><AttackPath /></MemoryRouter>);
+    await screen.findByText('Percorsi (1)');
+    fireEvent.change(screen.getByLabelText('Reparto Attack Path'), { target: { value: 'it' } });
+    expect(screen.getByText('Percorsi (0)')).toBeDefined();
+    expect(screen.queryByRole('button', { name: /Ispeziona Database Interno/ })).toBeNull();
+    fireEvent.change(screen.getByLabelText('Reparto Attack Path'), { target: { value: 'empty' } });
+    expect(screen.getByText('Nessun percorso di attacco rilevato')).toBeDefined();
+    expect(attackPathApi.getGraph).toHaveBeenCalledTimes(1);
   });
 });
 

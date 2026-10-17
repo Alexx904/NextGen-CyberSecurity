@@ -5,6 +5,12 @@
 
 ## 4. Schema Database (ERD Esteso)
 
+TEST-OPT-01 · Ultimo allineamento 2026-10-17 · working tree: schema e migrazioni invariati. Test repository PostgreSQL con tag `integration`, configurazione `TEST_DB_*` esclusiva su host locale e database dedicato `_test`/`_test_<id>`; nessun fallback su DB applicativo e indisponibilità = FAIL. Percorso rapido senza DB. Contratto operativo e comandi nel [Test Plan](../../05-qa/TEST_PLAN.md).
+
+COMPANY-UX-02 · 2026-10-17 · working tree: `000008` aggiunge `ssh_servers.client_name VARCHAR(160) NOT NULL DEFAULT ''`, senza FK aziendale. `000009` aggiunge trigger `company_department_depth` e funzione associata: nuove scritture parent solo sotto radice del tenant, nodo con figli non spostabile sotto radice. Lock advisory transazionale per tenant sulle assegnazioni parent, nessuna migrazione dati legacy. Down 000009 rimuove trigger/funzione; down 000008 rimuove le etichette cliente. Up/down verificati solo sul DB dedicato `nextgen_company_ux02_test_20261017`.
+
+AP-REVIEW-01 · 2026-10-17 · working tree: schema invariato, nessuna migrazione. Le letture paginate dei target aggiungono `id ASC` come spareggio a `created_at DESC`; i finding aggiungono `id ASC` dopo severità/porta. Ordinamento stabile a dati fermi, senza garanzia di snapshot consistente durante scritture concorrenti. Serve a evitare perdita/duplicazione per pareggi nella costruzione del [grafo euristico](../../domains/attack_path.md).
+
 ```mermaid
 erDiagram
     TENANTS ||--o{ USERS : "contains"

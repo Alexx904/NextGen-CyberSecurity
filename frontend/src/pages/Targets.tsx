@@ -29,6 +29,7 @@ export const Targets: React.FC = () => {
     selectedCompany,
     setSelectedCompanyId,
     companyGroupIds,
+    refreshCompanies,
   } = useCompany();
 
   const [targets, setTargets] = useState<TargetItem[]>([]);
@@ -111,6 +112,7 @@ export const Targets: React.FC = () => {
           return next;
         });
         fetchTargets();
+        void refreshCompanies();
       } else {
         alert(response.data?.error?.message || 'Impossibile eliminare il target');
       }
@@ -200,6 +202,7 @@ export const Targets: React.FC = () => {
       setSelectedTargetIds(new Set());
       setIsBulkDeleteModalOpen(false);
       fetchTargets();
+      void refreshCompanies();
     } catch (err: any) {
       alert(err.response?.data?.error?.message || 'Errore durante l\'eliminazione massiva dei target');
     } finally {
@@ -672,7 +675,7 @@ export const Targets: React.FC = () => {
       <TargetModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
-        onTargetCreated={fetchTargets}
+        onTargetCreated={() => { void fetchTargets(); void refreshCompanies(); }}
         defaultGroupId={selectedGroupId || selectedCompanyId}
       />
 

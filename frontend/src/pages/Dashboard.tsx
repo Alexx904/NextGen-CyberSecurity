@@ -22,7 +22,8 @@ import { ApiResponse } from '../types/auth';
 import { TargetGroupNode, TargetItem, TargetListResponseData } from '../types/target';
 import { ReportListResponseData, ReportItem } from '../types/report';
 import { ScanListResponseData, ScanItem } from '../types/scan';
-import { useCompany } from '../context/CompanyContext';
+import { useCompany, getAllDescendantGroupIds } from '../context/CompanyContext';
+import { CompanyModal } from '../components/CompanyModal';
 
 export const Dashboard: React.FC = () => {
   const {
@@ -31,7 +32,14 @@ export const Dashboard: React.FC = () => {
     setSelectedCompanyId,
     departments,
     companyGroupIds,
+    createCompany,
+    updateCompany,
+    deleteCompany,
   } = useCompany();
+  const [companyModalOpen, setCompanyModalOpen] = useState(false);
+  const [companyToEdit, setCompanyToEdit] = useState<TargetGroupNode | null>(null);
+  const [companyToDelete, setCompanyToDelete] = useState<TargetGroupNode | null>(null);
+  const [deletingCompany, setDeletingCompany] = useState(false);
 
   const [groups, setGroups] = useState<TargetGroupNode[]>([]);
   const [targets, setTargets] = useState<TargetItem[]>([]);
@@ -153,8 +161,10 @@ export const Dashboard: React.FC = () => {
     }> = [];
 
     flatGroupsMap.forEach((gNode, gId) => {
-      const gTargets = targetsByGroup.get(gId) || [];
-      const gReports = reportsByGroup.get(gId) || [];
+      if (gNode.parent_id) return;
+      const scopeIds = new Set(getAllDescendantGroupIds(gNode));
+      const gTargets = targets.filter(t => t.group_id && scopeIds.has(t.group_id));
+      const gReports = reports.filter(r => r.group_id && scopeIds.has(r.group_id));
 
       let crit = 0;
       let high = 0;
@@ -222,7 +232,7 @@ export const Dashboard: React.FC = () => {
     });
 
     const scopedList = selectedCompanyId
-      ? result.filter((c) => companyGroupIds.has(c.id))
+      ? result.filter((c) => c.id === selectedCompanyId)
       : result.filter((c) => !c.parentId);
 
     return {
@@ -303,7 +313,7 @@ export const Dashboard: React.FC = () => {
             </div>
             <div>
               <h2 className="text-2xl font-bold tracking-tight text-white flex items-center space-x-2.5">
-                <span>Panoramica Sicurezza {selectedCompany ? `· ${selectedCompany.name}` : 'per Azienda'}</span>
+                <span>Dashboard Panoramica {selectedCompany ? `· ${selectedCompany.name}` : '& Gestione Aziende'}</span>
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 font-medium">
                   {selectedCompany ? 'Scope Aziendale Attivo' : 'MSSP Multi-Company Posture'}
                 </span>
@@ -318,6 +328,7 @@ export const Dashboard: React.FC = () => {
         </div>
 
         <div className="flex items-center space-x-2 self-start sm:self-auto">
+          <button type="button" onClick={() => { setCompanyToEdit(null); setCompanyModalOpen(true); }} className="px-3 py-2 rounded-lg bg-cyan-500 text-slate-950 font-semibold text-xs">Nuova Azienda</button>
           {selectedCompany && (
             <button
               onClick={() => setSelectedCompanyId(null)}
@@ -369,10 +380,10 @@ export const Dashboard: React.FC = () => {
           </div>
           <div className="flex items-center space-x-2 self-start sm:self-auto">
             <Link
-              to="/companies"
+              to="/"
               className="px-3 py-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 text-xs font-medium transition-colors"
             >
-              Gestisci Aziende
+              Aziende nella panoramica
             </Link>
             <Link
               to="/targets"
@@ -399,7 +410,7 @@ export const Dashboard: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-5 gap-3 text-xs">
           {/* Step 1 */}
           <Link
-            to="/discovery"
+            to="/network-discovery"
             className="p-3 rounded-xl border border-cyber-border bg-slate-900/60 hover:border-cyan-500/50 hover:bg-cyan-500/5 transition-all group"
           >
             <div className="flex items-center justify-between text-slate-400 group-hover:text-cyan-400 font-mono text-[11px]">
@@ -507,7 +518,7 @@ export const Dashboard: React.FC = () => {
 
         <div className="text-xs text-slate-400">
           Mostrando <strong className="text-white">{companyCards.companies.length}</strong>{' '}
-          {selectedCompanyId ? 'entità e reparti aziendali' : 'aziende clienti'}
+          {selectedCompanyId ? 'azienda attiva' : 'aziende clienti'}
         </div>
       </div>
 
@@ -579,6 +590,10 @@ export const Dashboard: React.FC = () => {
                   </div>
 
                   {/* Posture Badge */}
+                  <div className="flex gap-2 text-xs">
+                    <button type="button" aria-label={`Modifica azienda ${company.name}`} onClick={() => { setCompanyToEdit(groups.find(g => g.id === company.id) || null); setCompanyModalOpen(true); }} className="text-cyan-300">Modifica</button>
+                    <button type="button" aria-label={`Elimina azienda ${company.name}`} onClick={() => setCompanyToDelete(groups.find(g => g.id === company.id) || null)} className="text-rose-300">Elimina</button>
+                  </div>
                   <span
                     className={`px-2 py-0.5 rounded text-xs font-mono font-bold border ${getGradeBadge(
                       company.postureGrade
@@ -732,6 +747,22 @@ export const Dashboard: React.FC = () => {
           </Link>
         </div>
       )}
+      {!selectedCompanyId && <p role="status" className="rounded-xl border border-cyan-500/30 bg-cyan-950/30 p-4 text-sm text-cyan-200">Seleziona un’azienda per accedere a target, scansioni, analisi e report. I tool SSH e Firewall sono sempre disponibili.</p>}
+      <section className="rounded-xl border border-slate-700 bg-slate-900 p-5">
+        <h2 className="text-lg font-semibold text-white">Tool indipendenti dalle aziende</h2>
+        <p className="mt-1 text-sm text-slate-400">Gestisci server dei clienti, connessioni SSH e firewall senza modificare lo scope aziendale.</p>
+        <Link to="/ssh-servers" className="inline-flex mt-4 rounded-lg bg-slate-800 px-4 py-2 text-cyan-300">Server SSH & Firewall</Link>
+      </section>
+      <CompanyModal isOpen={companyModalOpen} onClose={() => setCompanyModalOpen(false)} companyToEdit={companyToEdit}
+        onSubmit={async data => { if (companyToEdit) await updateCompany(companyToEdit.id, data); else await createCompany(data); await fetchDashboardData(); }} />
+      {companyToDelete && <div role="dialog" aria-modal="true" aria-label="Elimina azienda" className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6">
+        <div className="rounded-xl border border-slate-700 bg-slate-900 p-6 max-w-md space-y-4">
+          <h2 className="font-semibold text-white">Elimina {companyToDelete.name}?</h2>
+          <p className="text-sm text-slate-400">L’azienda e i suoi reparti verranno rimossi. I target saranno scollegati: verifica l’impatto prima di confermare.</p>
+          <button type="button" disabled={deletingCompany} onClick={() => setCompanyToDelete(null)} className="mr-4 text-slate-300">Annulla</button>
+          <button type="button" disabled={deletingCompany} className="text-rose-300" onClick={async () => { setDeletingCompany(true); try { await deleteCompany(companyToDelete.id); setCompanyToDelete(null); await fetchDashboardData(); } catch { setError('Impossibile eliminare l’azienda'); } finally { setDeletingCompany(false); } }}>Conferma eliminazione</button>
+        </div>
+      </div>}
     </div>
   );
 };

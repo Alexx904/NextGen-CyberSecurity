@@ -8,6 +8,8 @@ React 18, Tailwind CSS, icone Lucide. Token `cyber`: dark `#0a0d14`, card `#1117
 
 ## Componenti e stati richiesti
 
+COMPANY-UX-02 · 2026-10-17: unica dashboard con CRUD aziende; route aziende precedente rediretta. Scope globale: sidebar operativa disabilitata e route guard; SSH/Firewall sempre accessibile da sezione Tool indipendente. Clienti SSH autonomi in form e tabella raggruppata con filtro. Target mostra sola gerarchia Azienda → Reparto, parent bloccato all'azienda corrente. Attack Path: selettore reparto/azienda, nessun filtro CVSS. Report PDF consolidato con inventario IP per reparto su pagine aggiuntive; CSV reparto additivo. COMPANY-PDF-03: nei PDF aziendali con reparti, anche schede CVE separate per reparto, interruzione pagina tra reparti e intestazione ripetuta nelle continuazioni. Tecnico completo; Executive massimo cinque priorità per reparto con conteggio. Riepilogo consolidato mantenuto. Atteso responsive; browser/PDF render ancora da collaudare. [QA](../05-qa/COMPANY_WORKFLOW_QA.md).
+
 - Layout: navigazione desktop/mobile, indicazione azienda attiva, contenuto e fallback di caricamento.
 - Form: label, validazione contestuale, errore remoto, stato di invio e protezione da invii duplicati.
 - Tabelle e card: dati, loading, empty, error e azioni coerenti con i permessi.
@@ -15,6 +17,12 @@ React 18, Tailwind CSS, icone Lucide. Token `cyber`: dark `#0a0d14`, card `#1117
 - Operazioni invasive: spiegare impatto e consenso; mostrare conferma e recupero dove previsti.
 
 ## Specifiche per incremento
+
+### AP-REVIEW-01 · 2026-10-17 · working tree
+
+`/attack-path`: vista percorso 2D con sequenza sinistra→destra e scorrimento orizzontale per mantenere le dimensioni delle card; mappa completa con layout finito su cicli. Archi osservati continui, inferenze tratteggiate, ipotesi laterali arancioni; motivazione al passaggio del puntatore. Selezione tastiera Tab/Invio/Spazio, zoom/pan Pointer Events e adattamento vista. Nessuna animazione pulsante necessaria per leggere il grafo. Guida espandibile integrata nel prodotto, con prerequisiti, procedura, esempio e limiti.
+
+Scope aziendale limita anche canvas, KPI e chokepoint; selezione vuota non ripiega su altri dati. Banner distingue ipotesi e osservazioni; etichetta indice euristico, avvisi di copertura parziale e metadati di provenienza. Stati loading/empty/error conservati; errori di aggiornamento rimuovono il grafo precedente. Desktop: grafo e pannello laterale; mobile: colonne impilate e canvas scorrevole. 3D non aggiunto per evitare occlusioni nella lettura della catena. Verifica browser reale ancora aperta: [report QA](../05-qa/ATTACK_PATH_REVIEW.md), nessuna conformità visuale dichiarata.
 
 Collegare requisito/storia, route, componenti interessati, comportamento responsive, stati, accessibilità, criteri visuali e screenshot di verifica. Usare Mermaid per flussi e sequenze; usare wireframe o immagini quando servono a definire il layout.
 

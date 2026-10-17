@@ -18,6 +18,7 @@ import { apiClient } from '../api/client';
 import { ApiResponse } from '../types/auth';
 import { TargetGroup, TargetGroupNode, TargetItem } from '../types/target';
 import { GroupModal } from './GroupModal';
+import { useCompany } from '../context/CompanyContext';
 
 interface TreeExplorerProps {
   selectedGroupId: string | null;
@@ -62,6 +63,7 @@ export const TreeExplorer: React.FC<TreeExplorerProps> = ({
   className = '',
   companyId,
 }) => {
+  const { refreshCompanies } = useCompany();
   const [treeData, setTreeData] = useState<TargetGroupNode[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -145,6 +147,7 @@ export const TreeExplorer: React.FC<TreeExplorerProps> = ({
 
   const handleOpenCreateSub = (parent: TargetGroupNode, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (parent.parent_id) return;
     setGroupToEdit(null);
     setDefaultParentId(parent.id);
     setIsGroupModalOpen(true);
@@ -177,6 +180,7 @@ export const TreeExplorer: React.FC<TreeExplorerProps> = ({
         }
         setGroupToDelete(null);
         fetchTree(true);
+        void refreshCompanies();
       } else {
         alert(response.data?.error?.message || 'Impossibile eliminare la cartella');
       }
@@ -340,16 +344,17 @@ export const TreeExplorer: React.FC<TreeExplorerProps> = ({
             {/* Quick Actions (Visibili all'hover o se selezionato) */}
             <div className="hidden group-hover:flex items-center space-x-0.5 bg-slate-900/90 rounded px-1 border border-cyber-border/80 ml-1">
               {/* Nuova Sottocartella */}
-              <button
+              {!node.parent_id && <button
                 type="button"
                 onClick={(e) => handleOpenCreateSub(node, e)}
                 className="p-1 rounded text-slate-400 hover:text-cyan-400 hover:bg-slate-800 transition-colors"
-                title="Nuova sottocartella"
+                title="Nuovo reparto"
               >
                 <Plus className="w-3 h-3" />
-              </button>
+              </button>}
 
               {/* Modifica */}
+              {(!companyId || node.parent_id) && <>
               <button
                 type="button"
                 onClick={(e) => handleOpenEdit(node, e)}
@@ -368,6 +373,7 @@ export const TreeExplorer: React.FC<TreeExplorerProps> = ({
               >
                 <Trash2 className="w-3 h-3" />
               </button>
+              </>}
             </div>
           </div>
         </div>
@@ -503,10 +509,12 @@ export const TreeExplorer: React.FC<TreeExplorerProps> = ({
         }}
         onGroupSaved={() => {
           fetchTree(true);
+          void refreshCompanies();
         }}
         groupToEdit={groupToEdit}
         defaultParentId={defaultParentId}
         existingGroups={allFlatGroups}
+        companyId={companyId}
       />
 
 

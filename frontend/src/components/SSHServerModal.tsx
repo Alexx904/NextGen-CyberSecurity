@@ -19,6 +19,7 @@ export const SSHServerModal: React.FC<SSHServerModalProps> = ({
   const isEditing = !!server;
 
   const [name, setName] = useState('');
+  const [clientName, setClientName] = useState('');
   const [host, setHost] = useState('');
   const [port, setPort] = useState(22);
   const [username, setUsername] = useState('root');
@@ -31,6 +32,7 @@ export const SSHServerModal: React.FC<SSHServerModalProps> = ({
   useEffect(() => {
     if (server) {
       setName(server.name);
+      setClientName(server.client_name || '');
       setHost(server.host);
       setPort(server.port);
       setUsername(server.username);
@@ -38,6 +40,7 @@ export const SSHServerModal: React.FC<SSHServerModalProps> = ({
       setRawSecret('');
     } else {
       setName('');
+      setClientName('');
       setHost('');
       setPort(22);
       setUsername('root');
@@ -78,6 +81,7 @@ export const SSHServerModal: React.FC<SSHServerModalProps> = ({
     try {
       if (isEditing && server) {
         await sshApi.updateServer(server.id, {
+          client_name: clientName.trim(),
           name: name.trim(),
           host: host.trim(),
           port,
@@ -87,6 +91,7 @@ export const SSHServerModal: React.FC<SSHServerModalProps> = ({
         });
       } else {
         await sshApi.createServer({
+          client_name: clientName.trim(),
           name: name.trim(),
           host: host.trim(),
           port,
@@ -122,6 +127,9 @@ export const SSHServerModal: React.FC<SSHServerModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <label className="block text-xs text-slate-300">Cliente (inventario SSH indipendente)
+            <input aria-label="Cliente SSH" maxLength={160} value={clientName} onChange={e => setClientName(e.target.value)} placeholder="Es. Cliente Alfa" className="mt-2 w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-white" />
+          </label>
           {error && (
             <div className="p-3 rounded-lg border border-rose-900/50 bg-rose-950/20 text-rose-300 text-xs flex items-center space-x-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />

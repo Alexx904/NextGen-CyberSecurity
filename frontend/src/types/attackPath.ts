@@ -63,6 +63,15 @@ export interface AttackGraph {
   paths: AttackPath[];
   chokepoints: Chokepoint[];
   summary: AttackGraphSummary;
+  analysis?: {
+    model: string;
+    warnings: string[];
+    paths_truncated: boolean;
+    inventory_truncated: boolean;
+    target_count: number;
+    finding_count: number;
+    max_paths: number;
+  };
 }
 
 export interface AttackGraphFilterParams {

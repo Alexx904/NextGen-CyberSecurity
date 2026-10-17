@@ -18,7 +18,7 @@ Segui le regole di `AGENTS.md`. Input: il messaggio dell'utente sull'esito di un
    **KO (non funziona):**
    - Raccogli solo i dettagli essenziali mancanti (cosa ha fatto, cosa ha visto, cosa si aspettava). Se hai già abbastanza, non fare domande.
    - Riporta il task in `[ ]` e registra il bug in `docs/04-development/TASK_LIST.md`.
-   - Riproduci il problema con un test che fallisce, individua la causa radice, correggi, riesegui test mirati e suite completa (failure loop, max 3 tentativi).
+   - Riproduci il problema con un test che fallisce, individua la causa radice, correggi, riesegui test mirati e regressione pertinente; una sola verifica finale per lato coinvolto secondo `AGENTS.md` sez. 8 (failure loop, max 3 tentativi).
    - Verifica che il comportamento rifiutato non dipenda da un requisito mal interpretato: se sì, correggi anche `docs/01-product/REQUIREMENTS.md`.
    - Esegui il Doc Sync (`AGENTS.md` sez. 7) anche per il fix.
    - Consegna un nuovo Pacchetto di Accettazione, con il task in `[~]`.

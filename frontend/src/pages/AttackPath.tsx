@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Network,
@@ -23,6 +23,8 @@ import {
 } from '../types/attackPath';
 import { AttackPathGraph } from '../components/graph/AttackPathGraph';
 import { useCompany } from '../context/CompanyContext';
+import { scopeAttackGraph } from '../components/graph/attackPathModel';
+import { AttackPathGuide } from '../components/graph/AttackPathGuide';
 
 export const AttackPath: React.FC = () => {
   const {
@@ -30,12 +32,21 @@ export const AttackPath: React.FC = () => {
     selectedCompany,
     departments,
     companyTargetValues,
+    allTargets = [],
   } = useCompany();
+  const [departmentId, setDepartmentId] = useState('');
+  const activeDepartmentId = departments.some(d => d.id === departmentId) ? departmentId : '';
+  const scopeValues = useMemo(() => activeDepartmentId
+    ? new Set(allTargets.filter(t => t.group_id === activeDepartmentId).map(t => t.value))
+    : companyTargetValues, [activeDepartmentId, allTargets, companyTargetValues]);
 
-  const [graph, setGraph] = useState<AttackGraph | null>(null);
+  const [rawGraph, setRawGraph] = useState<AttackGraph | null>(null);
+  const requestVersion = useRef(0);
+  const graph = useMemo(() => rawGraph && selectedCompanyId
+    ? scopeAttackGraph(rawGraph, scopeValues) : rawGraph,
+  [rawGraph, selectedCompanyId, scopeValues]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [minCVSS, setMinCVSS] = useState<number>(0.0);
 
   // Stati di interattività e selezione
   const [selectedPathId, setSelectedPathId] = useState<string | null>(null);
@@ -43,40 +54,45 @@ export const AttackPath: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'paths' | 'chokepoints' | 'node'>('paths');
   const [copiedChokepoint, setCopiedChokepoint] = useState<string | null>(null);
 
-  const displayedPaths = useMemo(() => {
-    if (!graph?.paths) return [];
-    if (!selectedCompanyId || companyTargetValues.size === 0) return graph.paths;
-    const filtered = graph.paths.filter((p) => companyTargetValues.has(p.target_asset));
-    return filtered.length > 0 ? filtered : graph.paths;
-  }, [graph?.paths, selectedCompanyId, companyTargetValues]);
+  const displayedPaths = graph?.paths || [];
+
+  useLayoutEffect(() => {
+    setSelectedPathId(graph?.paths[0]?.id || null);
+    setSelectedNode(null);
+    setActiveTab('paths');
+  }, [graph]);
 
   const fetchGraph = useCallback(async () => {
+    const version = ++requestVersion.current;
     setLoading(true);
     setError(null);
     try {
-      const data = await attackPathApi.getGraph({ min_cvss: minCVSS });
-      setGraph(data);
-
-      if (data.paths && data.paths.length > 0 && !selectedPathId) {
-        setSelectedPathId(data.paths[0].id);
-      }
+      const data = await attackPathApi.getGraph();
+      if (version !== requestVersion.current) return;
+      setRawGraph(data);
     } catch (err) {
+      if (version !== requestVersion.current) return;
+      setRawGraph(null);
       setError(
         err instanceof Error ? err.message : 'Impossibile recuperare il grafo di attacco'
       );
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
-  }, [minCVSS, selectedPathId]);
+  }, []);
 
   useEffect(() => {
     fetchGraph();
+    return () => { requestVersion.current++; };
   }, [fetchGraph]);
 
   const handleSelectNode = (node: AttackNode | null) => {
     setSelectedNode(node);
     if (node) {
+      setSelectedPathId(null);
       setActiveTab('node');
+    } else {
+      setActiveTab('paths');
     }
   };
 
@@ -87,10 +103,13 @@ export const AttackPath: React.FC = () => {
     }
   };
 
-  const handleCopyRemediation = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedChokepoint(id);
-    setTimeout(() => setCopiedChokepoint(null), 2000);
+  const handleCopyRemediation = async (text: string, id: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedChokepoint(id);
+    } catch {
+      setError('Copia non disponibile: seleziona e copia il testo della raccomandazione.');
+    }
   };
 
   return (
@@ -117,17 +136,15 @@ export const AttackPath: React.FC = () => {
           {/* Filtro Min CVSS */}
           <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-300">
             <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400" />
-            <span>Filtro CVSS:</span>
+            <span>Perimetro:</span>
             <select
-              aria-label="Filtro CVSS"
-              value={minCVSS}
-              onChange={(e) => setMinCVSS(parseFloat(e.target.value))}
+              aria-label="Reparto Attack Path"
+              value={activeDepartmentId}
+              onChange={(e) => setDepartmentId(e.target.value)}
               className="bg-transparent text-cyan-400 font-mono font-medium focus:outline-none cursor-pointer"
             >
-              <option value="0.0" className="bg-slate-900">Tutte le vulnerabilità</option>
-              <option value="4.0" className="bg-slate-900">CVSS ≥ 4.0 (Medium+)</option>
-              <option value="7.0" className="bg-slate-900">CVSS ≥ 7.0 (High+)</option>
-              <option value="9.0" className="bg-slate-900">CVSS ≥ 9.0 (Critical)</option>
+              <option value="" className="bg-slate-900">Intera azienda</option>
+              {departments.map(d => <option key={d.id} value={d.id} className="bg-slate-900">{d.name}</option>)}
             </select>
           </div>
 
@@ -142,6 +159,17 @@ export const AttackPath: React.FC = () => {
             <span>Aggiorna</span>
           </button>
         </div>
+      </div>
+
+      <AttackPathGuide />
+      <div className="rounded-xl border border-violet-500/30 bg-violet-950/20 p-4 text-sm text-slate-300 space-y-2">
+        <p className="font-semibold text-violet-200">Modello di analisi: evidenze e ipotesi, nessun exploit eseguito</p>
+        <p>Le frecce tratteggiate richiedono verifica. Una CVE non dimostra RCE o lateral movement; l’indice 0–100 serve a ordinare le analisi e non è una probabilità.</p>
+        {graph && <details className="text-xs text-slate-400"><summary className="cursor-pointer">Copertura e limiti dei dati</summary>
+          <ul className="list-disc pl-5 space-y-1 mt-2">{(graph.analysis?.warnings || ['Verifica età delle scansioni, accessibilità di rete e prerequisiti delle CVE prima di intervenire.']).map(w => <li key={w}>{w}</li>)}</ul>
+          <p className="mt-2">Generato: {new Date(graph.generated_at).toLocaleString('it-IT')}. Lo scope aziendale filtra la vista; l’autorizzazione API è per tenant.</p>
+        </details>}
+        {(graph?.analysis?.paths_truncated || graph?.analysis?.inventory_truncated) && <p role="status" className="text-amber-300">Copertura parziale: limite di inventario o percorsi raggiunto prima del filtro aziendale. KPI e chokepoint descrivono solo il campione visualizzato.</p>}
       </div>
 
       {/* Banner Scope Aziendale Attivo */}
@@ -185,7 +213,7 @@ export const AttackPath: React.FC = () => {
 
           <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-slate-400">Catene di Penetrazione</p>
+              <p className="text-xs font-medium text-slate-400">Percorsi da verificare</p>
               <div className="flex items-center gap-2 mt-1">
                 <p className="text-2xl font-bold text-slate-100 font-mono">
                   {graph.summary.total_paths}
@@ -204,7 +232,7 @@ export const AttackPath: React.FC = () => {
 
           <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-slate-400">Rischio Cumulativo Max</p>
+              <p className="text-xs font-medium text-slate-400">Indice euristico Max</p>
               <p
                 className={`text-2xl font-bold mt-1 font-mono ${
                   graph.summary.highest_risk_score >= 80
@@ -225,7 +253,7 @@ export const AttackPath: React.FC = () => {
 
           <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
             <div className="min-w-0 pr-2">
-              <p className="text-xs font-medium text-slate-400">Top Chokepoint (Max ROI)</p>
+              <p className="text-xs font-medium text-slate-400">Priorità nel modello</p>
               <p
                 className="text-sm font-bold text-amber-300 mt-1 truncate"
                 title={graph.summary.top_chokepoint || 'Nessuno'}
@@ -277,8 +305,8 @@ export const AttackPath: React.FC = () => {
           </h2>
           <p className="text-sm text-slate-400 mt-2 leading-relaxed">
             Il grafo delle minacce correla automaticamente i target censiti con le porte aperte e le vulnerabilità scoperte dalle scansioni Nmap. Esegui un audit con il profilo{' '}
-            <strong className="text-slate-200">Tutto in Uno (360°)</strong> o{' '}
-            <strong className="text-slate-200">Falle di Sistema</strong> per costruire la mappa di lateral movement.
+            <strong className="text-slate-200">Audit completo</strong> o{' '}
+            <strong className="text-slate-200">Vulnerabilità</strong> per arricchire le ipotesi del modello. Nessun percorso non significa assenza di rischio.
           </p>
           <Link
             to="/scans"
@@ -360,7 +388,7 @@ export const AttackPath: React.FC = () => {
 
                 {displayedPaths.length === 0 && (
                   <p className="text-xs text-slate-500 py-4 text-center">
-                    Nessun cammino critico identificato per questo filtro CVSS nel perimetro.
+                    Nessun percorso identificato per l’azienda o reparto selezionato.
                   </p>
                 )}
 
@@ -372,6 +400,11 @@ export const AttackPath: React.FC = () => {
                   return (
                     <div
                       key={path.id}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Seleziona percorso ${path.name}`}
+                      aria-pressed={isSelected}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedPathId(isSelected ? null : path.id); } }}
                       onClick={() => setSelectedPathId(isSelected ? null : path.id)}
                       className={`p-3.5 rounded-xl border transition cursor-pointer ${
                         isSelected
@@ -394,7 +427,7 @@ export const AttackPath: React.FC = () => {
                               {path.severity}
                             </span>
                             <span className="text-xs font-mono text-slate-400">
-                              {path.hop_count} Hop
+                              {path.hop_count} passaggi
                             </span>
                           </div>
 
@@ -411,7 +444,7 @@ export const AttackPath: React.FC = () => {
                           >
                             {path.cumulative_risk.toFixed(1)}
                           </span>
-                          <span className="text-[10px] text-slate-500 block">Rischio</span>
+                          <span className="text-[10px] text-slate-500 block">Indice</span>
                         </div>
                       </div>
 
@@ -429,8 +462,9 @@ export const AttackPath: React.FC = () => {
                       {/* Sequenza step espansa */}
                       {isSelected && (
                         <div className="mt-3 pt-2.5 border-t border-slate-700/60 space-y-1.5">
+                          {path.description && <p className="text-xs text-slate-400 leading-relaxed mb-3">{path.description}</p>}
                           <p className="text-[11px] font-medium text-slate-300 mb-1">
-                            Sequenza di Compromissione:
+                            Sequenza di analisi:
                           </p>
                           {path.node_ids.map((nodeId, idx) => {
                             const node = graph.nodes.find((n) => n.id === nodeId);
@@ -458,7 +492,7 @@ export const AttackPath: React.FC = () => {
             {activeTab === 'chokepoints' && (
               <div className="p-4 space-y-3 max-h-[580px] overflow-y-auto">
                 <div className="text-xs text-slate-400 mb-1">
-                  Punti di strozzatura strategici la cui correzione interrompe il massimo numero di percorsi:
+                  Nodi comuni ai percorsi visualizzati. Valuta la raccomandazione e l’impatto operativo prima di intervenire.
                 </div>
 
                 {(!graph.chokepoints || graph.chokepoints.length === 0) && (
@@ -502,11 +536,11 @@ export const AttackPath: React.FC = () => {
 
                       <div className="grid grid-cols-2 gap-2 mt-2 py-2 border-y border-slate-800/80 text-[11px] font-mono">
                         <div>
-                          <span className="text-slate-500 block text-[10px]">Interrompe</span>
+                          <span className="text-slate-500 block text-[10px]">Nel modello</span>
                           <strong className="text-amber-300">{cp.mitigated_paths} percorsi</strong>
                         </div>
                         <div>
-                          <span className="text-slate-500 block text-[10px]">Rischio Mitigato</span>
+                          <span className="text-slate-500 block text-[10px]">Indice aggregato</span>
                           <strong className="text-rose-400">
                             {cp.mitigated_risk.toFixed(1)} pts
                           </strong>
@@ -515,7 +549,7 @@ export const AttackPath: React.FC = () => {
 
                       <div className="mt-2.5">
                         <p className="text-[10px] text-slate-400 font-medium mb-1">
-                          Azione Prescrittiva di Remediation:
+                          Raccomandazione da verificare:
                         </p>
                         <div className="p-2 bg-slate-900 rounded-lg border border-slate-800 text-[11px] text-slate-300 leading-relaxed font-sans relative group">
                           {cp.remediation}
@@ -580,13 +614,22 @@ export const AttackPath: React.FC = () => {
                   )}
                   {selectedNode.cvss && (
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-400">CVSS Score v3.1:</span>
+                      <span className="text-slate-400">CVSS del finding:</span>
                       <span className="font-mono font-bold text-rose-400">
                         {selectedNode.cvss.toFixed(1)}
                       </span>
                     </div>
                   )}
                 </div>
+
+                {selectedNode.metadata && Object.keys(selectedNode.metadata).length > 0 && (
+                  <div className="border-t border-slate-800 pt-3 text-xs space-y-2">
+                    <h4 className="text-slate-200 font-semibold">Provenienza del finding</h4>
+                    {Object.entries(selectedNode.metadata).map(([key, value]) => <div key={key} className="break-words">
+                      <span className="text-slate-400">{key}: </span><span className="font-mono text-slate-200">{value === null || value === '' ? 'Non disponibile' : typeof value === 'object' ? JSON.stringify(value) : String(value)}</span>
+                    </div>)}
+                  </div>
+                )}
 
                 {/* Box se il nodo è anche un Chokepoint */}
                 {graph.chokepoints?.some((cp) => cp.node_id === selectedNode.id) && (

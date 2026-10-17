@@ -1,3 +1,5 @@
+//go:build integration
+
 package postgres_test
 
 import (
@@ -13,14 +15,14 @@ import (
 )
 
 func TestScheduleRepo_Integration(t *testing.T) {
-	cfg := getTestConfig()
+	cfg := getTestConfig(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	db, err := postgres.New(ctx, cfg)
 	if err != nil {
-		t.Skipf("Database non raggiungibile per i test di integrazione (%v): salto il test", err)
+		t.Fatal("Integration test database is unavailable")
 		return
 	}
 	defer db.Close()

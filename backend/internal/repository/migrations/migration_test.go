@@ -19,6 +19,10 @@ func TestMigrationFilesExistAndNotEmpty(t *testing.T) {
 		"000004_tree_target_groups.down.sql",
 		"000005_ssh_servers_firewall.up.sql",
 		"000005_ssh_servers_firewall.down.sql",
+		"000008_ssh_client_labels.up.sql",
+		"000008_ssh_client_labels.down.sql",
+		"000009_company_department_depth.up.sql",
+		"000009_company_department_depth.down.sql",
 	}
 
 	for _, file := range files {

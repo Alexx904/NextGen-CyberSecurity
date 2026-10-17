@@ -4,6 +4,7 @@ import { AuthProvider } from './context/AuthContext';
 import { DebugProvider } from './context/DebugContext';
 import { CompanyProvider } from './context/CompanyContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { CompanyRoute } from './components/auth/CompanyRoute';
 import { AppLayout } from './components/layout/AppLayout';
 import { DebugFloatingToggle } from './components/debug/DebugFloatingToggle';
 import { DebugConsoleDrawer } from './components/debug/DebugConsoleDrawer';
@@ -11,7 +12,6 @@ import { DebugConsoleDrawer } from './components/debug/DebugConsoleDrawer';
 // Code-splitting via React.lazy per ottimizzazione bundle e caricamento su richiesta
 const Login = lazy(() => import('./pages/Login').then(m => ({ default: m.Login })));
 const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
-const Companies = lazy(() => import('./pages/Companies').then(m => ({ default: m.Companies })));
 const Targets = lazy(() => import('./pages/Targets').then(m => ({ default: m.Targets })));
 const Scans = lazy(() => import('./pages/Scans').then(m => ({ default: m.Scans })));
 const ScanDetail = lazy(() => import('./pages/ScanDetail').then(m => ({ default: m.ScanDetail })));
@@ -48,16 +48,19 @@ export default function App() {
                 <Route element={<ProtectedRoute />}>
                   <Route element={<AppLayout />}>
                     <Route path="/" element={<Dashboard />} />
-                    <Route path="/companies" element={<Companies />} />
+                    <Route path="/companies" element={<Navigate to="/" replace />} />
+                    <Route path="/dashboard" element={<Navigate to="/" replace />} />
+                    <Route path="/ssh-servers" element={<SSHServers />} />
+                    <Route element={<CompanyRoute />}>
                     <Route path="/targets" element={<Targets />} />
                     <Route path="/network-discovery" element={<NetworkDiscovery />} />
                     <Route path="/scans" element={<Scans />} />
                     <Route path="/scans/:id" element={<ScanDetail />} />
-                    <Route path="/ssh-servers" element={<SSHServers />} />
                     <Route path="/findings" element={<Findings />} />
                     <Route path="/attack-path" element={<AttackPath />} />
                     <Route path="/reports" element={<Reports />} />
                     <Route path="/settings" element={<Settings />} />
+                    </Route>
                   </Route>
                 </Route>
 

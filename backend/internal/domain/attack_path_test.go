@@ -134,7 +134,7 @@ func TestAttackGraph_Validate(t *testing.T) {
 			{ID: "e1", Source: "n1", Target: "n2", Type: EdgeTypeNetworkAccess},
 		},
 		Paths: []AttackPath{
-			{ID: "p1", NodeIDs: []string{"n1", "n2"}},
+			{ID: "p1", NodeIDs: []string{"n1", "n2"}, EdgeIDs: []string{"e1"}, HopCount: 1},
 		},
 	}
 	if err := validGraph.Validate(); err != nil {
@@ -176,4 +176,3 @@ func TestAttackGraph_Validate(t *testing.T) {
 		t.Error("expected error for path referencing unknown node")
 	}
 }
-

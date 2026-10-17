@@ -90,7 +90,6 @@ export const AppLayout: React.FC = () => {
     {
       category: 'Organizzazione & Scope',
       items: [
-        { name: 'Gestione Aziende', path: '/companies', icon: Building2, badge: 'Aziende' },
         { name: 'Target & Reparti', path: '/targets', icon: Crosshair, badge: 'Reparti' },
       ],
     },
@@ -104,7 +103,7 @@ export const AppLayout: React.FC = () => {
       ],
     },
     {
-      category: 'Infrastruttura & Difesa',
+      category: 'Tool indipendenti dalle aziende',
       items: [
         { name: 'Server SSH & Firewall', path: '/ssh-servers', icon: Server, badge: 'iptables' },
       ],
@@ -131,7 +130,7 @@ export const AppLayout: React.FC = () => {
           <span>Azienda / Scope</span>
         </div>
         <NavLink
-          to="/companies"
+          to="/"
           onClick={onItemClick}
           className="text-[10px] text-slate-400 hover:text-cyan-400 transition flex items-center gap-0.5"
           title="Gestisci Aziende"
@@ -202,6 +201,8 @@ export const AppLayout: React.FC = () => {
           <div className="space-y-0.5">
             {section.items.map((item) => {
               const Icon = item.icon;
+              const locked = item.path !== '/' && item.path !== '/ssh-servers' && !companies.some(c => c.id === selectedCompanyId);
+              if (locked) return <div key={item.path} aria-disabled="true" title="Seleziona un’azienda dalla Dashboard" className="flex items-center gap-2.5 px-3 py-2 text-xs text-slate-600 cursor-not-allowed"><Icon className="w-4 h-4" />{item.name}</div>;
               return (
                 <NavLink
                   key={item.path}

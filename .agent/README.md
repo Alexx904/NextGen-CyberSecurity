@@ -37,6 +37,8 @@ Il Tech Lead orchestra secondo [orchestration.md](workflows/orchestration.md); i
 
 ## Regole comuni
 
+Ultimo allineamento: 2026-10-17 · working tree. Testing proporzionato: test mirati durante lo sviluppo, un gate finale condiviso per lato coinvolto e riuso delle sole evidenze valide secondo `AGENTS.md` sez. 8. Il [playbook verify](workflows/verify.md) descrive i profili di `scripts/verify.ps1`; strategia e comandi sono in [Test Plan](../docs/05-qa/TEST_PLAN.md). PostgreSQL è una verifica esplicita e obbligatoria quando coinvolto, mai uno skip implicito.
+
 1. Leggi integralmente il playbook selezionato prima di agire.
 2. I playbook non ampliano i permessi: conferme, sandbox e sicurezza di `AGENTS.md` restano vincolanti.
 3. Se più playbook sono applicabili, usa il minimo insieme e dichiarane l'ordine.

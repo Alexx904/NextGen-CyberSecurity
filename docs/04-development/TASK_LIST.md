@@ -1,7 +1,7 @@
 # 3. Interactive Task List & Implementation Backlog
 
 > **Stato:** ATTIVO (Priorità validate dal Product Owner)
-> **Ultimo Aggiornamento:** 2026-10-16
+> **Ultimo Aggiornamento:** 2026-10-17
 > **Autore / Ruolo:** Codex Tech Lead (System Architect & QA)
 > **Documenti Correlati:** [REQUIREMENTS.md](../01-product/REQUIREMENTS.md) | [PRD.md](../01-product/PRD.md) | [HLD.md](../03-architecture/HLD.md) | [CHANGELOG.md](../../CHANGELOG.md)
 
@@ -31,6 +31,47 @@ Le attività concluse e la proposta Epic 27.1 superata sono archiviate nel [CHAN
 
 ## 🔮 Prossimi Obiettivi & Roadmap Approvata dal PO
 
+### TEST-OPT-01 · Ottimizzazione della verifica software
+
+- [x] TEST-OPT-01 · Test proporzionati, integrazioni esplicite e durate misurate
+  - Accettazione PO: 2026-10-17, “Approvo tutto”, commit e push su main esplicitamente autorizzati.
+  - File: AGENTS.md, playbook feature/feedback/fix/refactor/verify, scripts/verify.ps1, test PostgreSQL, .github/workflows/ci.yml.
+  - Dipende da: nessuno; modifiche applicative preesistenti preservate.
+  - Test: percorso rapido, backend suite/build/vet, integrazione reale e configurazione (12 casi) PASS exit 0; DB/config assenti FAIL atteso exit 1 senza skip; runner happy/rejection/fail-fast/report PASS; frontend smoke 30 test PASS. Documenti/diff PASS; CI GitHub non eseguita. Container effimero arrestato/rimosso, container applicativi preservati.
+  - Docs: Test Plan, CI/CD, schema DB (contratto test), ADR-19, registry e PROJECT_STATE.
+  - DoD: (1) verifiche mirate PASS; (2) integration reale PASS, CI remota non eseguita dichiarata; (3) backend suite/build/vet e runner PASS; (4) Doc Sync e self-review completati.
+
+### COMPANY-UX-02 · Aziende/reparti e tool indipendenti
+
+- [x] COMPANY-PDF-03 · CVE nei PDF aziendali separate per reparto
+  - Accettazione PO: 2026-10-17, “Approvo tutto”. Limite visuale dichiarato accettato, nessun PASS render inventato.
+  - File: service report/departments e test, pkg/report/pdf_generator.go e test.
+  - Dipende da: COMPANY-UX-02; preserva modifiche AP/TEST-OPT preesistenti.
+  - Test: mirati service/generatore PASS; gate finale backend 2026-10-17 suite (16,296 s), vet (1,034 s), build (1,340 s), documenti/diff PASS exit 0. PDF contenuto/paginazione PASS, visuale da verificare.
+  - Docs: reporting_and_assets, REQUIREMENTS, UI_SPECIFICATIONS, piano COMPANY-UX-02, COMPANY_WORKFLOW_QA, PROJECT_STATE.
+  - DoD: attribuzione target/scan corretta; schede per reparto nei due modelli, riepilogo consolidato; suite/build/vet e Doc Sync; PDF renderizzato.
+  - Limite residuo: renderer PDF indisponibile, nessun PASS visivo né PDF autonomo consegnato. Self-review e Doc Sync completati. PO autorizza pubblicazione su main con questo limite.
+
+- [x] COMPANY-UX-02 · Dashboard unica, gerarchia due livelli, report per reparto e clienti SSH
+  - Accettazione PO: 2026-10-17, “Approvo tutto”; limiti visuali dichiarati accettati per pubblicazione.
+  - File: App/layout/CompanyRoute, Dashboard/Targets/GroupModal/TreeExplorer, CompanyContext, AttackPath e guida, SSH modal/page/types; service gruppi/report/SSH, generatori PDF/CSV, repository SSH/gruppi, migrazioni 000008/000009 e test.
+  - Dipende da: nessuno; integra AP-REVIEW-01 senza accettazione implicita.
+  - Test: frontend 164 test/build PASS; backend suite/build/vet su DB dedicato PASS; up/down e gerarchia reale PostgreSQL PASS, tutti exit 0. Test PDF contenuto/paginazione PASS, render visivo non eseguito.
+  - Docs: [piano](plans/COMPANY-UX-02.md), [dominio](../domains/reporting_and_assets.md), [QA](../05-qa/COMPANY_WORKFLOW_QA.md).
+  - DoD: (1) mirati PASS; (2) collaudo browser desktop/mobile e PDF renderizzato; (3) suite/build/vet e migrazioni up/down PASS; (4) Doc Sync e self-review.
+  - Limite residuo: browser e renderer PDF indisponibili; nessun PASS visuale dichiarato. Schema/dati applicativi invariati; migrazioni provate solo su test DB. Accettazione PO distinta da prova visuale autonoma.
+
+### AP-REVIEW-01 · Revisione cyber e usabilità Attack Path
+
+- [x] AP-REVIEW-01 · Correttezza del modello, scope, grafo e guida integrata
+  - Accettazione PO: 2026-10-17, “Approvo tutto”; pubblicazione esplicita su main, limite browser accettato.
+  - File: domain/service/handler Attack Path e test, repository target/finding (ordine paginazione), types/page e `frontend/src/components/graph/`.
+  - Dipende da: nessuno; checkpoint `b16264b` pubblicato prima dell'intervento su richiesta PO.
+  - Test: regressione backend suite/build/vet e frontend 156 test/build PASS exit 0; test rosso→verde su cammini/esposizione/protocolli; snapshot locale 17 target/20 finding senza CVE, servizio validato a soglie 0/7/9. Nessuna mutazione DB.
+  - Docs: [piano](plans/AP-REVIEW-01.md), [dominio](../domains/attack_path.md), [report QA](../05-qa/ATTACK_PATH_REVIEW.md).
+  - DoD: (1) test mirati PASS; (2) prova browser desktop/mobile con screenshot; (3) suite/build/vet PASS; (4) Doc Sync e self-review.
+  - Limite residuo: browser runtime indisponibile (inventario vuoto, iab/Chrome non disponibili); nessuna validazione visuale autonoma o exploit/reachability reale dichiarata. Accettazione PO con limiti espliciti, non certificazione di sicurezza.
+
 ### Milestone 3 · Active Defense & SOAR Light (Epic 28 - In Partenza)
 
 - [ ] E28-S1-T1 · Backend Chokepoint Auto-Remediation Service & SSH Firewall Rule Applicator
@@ -57,7 +98,7 @@ Le attività concluse e la proposta Epic 27.1 superata sono archiviate nel [CHAN
   - DoD: Generazione accurata di regole virtual patch per le principali CVE di rete e web con download/copia immediata.
 
 - [ ] E28-S1-T4 · Multi-Channel Alerting Hub Backend (Slack, Teams, Telegram, Webhook REST, SMTP)
-  - File: `backend/internal/domain/alert.go`, `backend/internal/service/alert_service.go`, `backend/internal/delivery/alert_handler.go`, migrazione SQL `000008`
+  - File: `backend/internal/domain/alert.go`, `backend/internal/service/alert_service.go`, `backend/internal/delivery/alert_handler.go`, prossima migrazione SQL libera da `000010`
   - Dipende da: nessuno
   - Test: test unitari Go su dispatcher notifiche e HMAC signing per webhooks
   - Docs: `docs/domains/active_defense_and_soar.md`
@@ -95,6 +136,7 @@ Registro formale del debito tecnico e delle ottimizzazioni architetturali (regol
 
 | ID | Priorità | Componente / Percorso | Descrizione & Impatto | Piano di Rientro |
 |---|---|---|---|---|
+| `TECH-DEBT-08` | Media | Attack Path service, scope UI | Analisi euristica senza routing/ACL/identità/prerequisiti; cap globale prima dello scope, osservazioni storiche e letture non transazionali possono sottorappresentare un'azienda. | Mantenere avvisi; futuro contratto di evidenze di raggiungibilità e scope backend prima del cap, snapshot coerente e ciclo di vita finding. Validare in laboratorio autorizzato prima di dichiarare lateral movement reale. |
 | `TECH-DEBT-06` | Alta | `backend/internal/service/ssh_service.go` | Host-key SSH non verificata (`InsecureIgnoreHostKey`); il fingerprint esistente riguarda la chiave client. Possibile impersonificazione del server, anche sul nuovo percorso remediation. | Progettare registrazione e pinning host-key con contratto dedicato, migrazione up/down e test mismatch/rotazione prima dell'uso operativo. |
 | `TECH-DEBT-07` | Alta | `backend/internal/service/firewall_service.go`, `ssh_service.go` | Watchdog preesistente: chiamate remote senza deadline di esecuzione, possibile mutazione tardiva dopo scadenza e timer solo locali fra istanze; nessuna prova Linux reale in questa sessione. | Rendere la transazione snapshot/watchdog/applicazione protetta sull'host, verificare kill e ripristino sotto disconnessione/timeout; laboratorio Linux e test concorrenti multiistanza prima di chiudere E28-S1-T1. |
 | `TECH-DEBT-05` | Alta | `backend/internal/delivery/http/handler/scan_handler.go`, scheduler, audit | FR-01.3 incompleto: consenso solo UI, non attestato immutabilmente né imposto dall'API; classificazione impatto euristica. | Definire contratto di attestazione per scope/configurazione, validazione server e registrazione audit; coprire API diretta e pianificazioni con test. Nessuna attestazione di conformità finché il gap resta. |

@@ -1,205 +1,79 @@
-# Dominio: Attack Path Mapping & Threat Chaining (Milestone 2)
+# Dominio: Attack Path Mapping & Threat Chaining
 
-> **Dominio:** Analisi Topologica delle Minacce, Correlazione Lateral Movement, Visual Graph Explorer & Ottimizzazione Remediation  
-> **File di Riferimento:** `backend/internal/domain/attack_path.go`, `backend/internal/service/attack_path_service.go`, `backend/internal/delivery/http/handler/attack_path_handler.go`, `frontend/src/types/attackPath.ts`, `frontend/src/api/attackPath.ts`, `frontend/src/pages/AttackPath.tsx`, `frontend/src/components/graph/AttackPathGraph.tsx`
+> Ultimo allineamento: 2026-10-17 · working tree · AP-REVIEW-01.
+> Fonti: `backend/internal/domain/attack_path.go`, servizio e handler omonimi; `frontend/src/types/attackPath.ts`, API, pagina e componenti in `components/graph/`.
+> [Piano e finding](../04-development/plans/AP-REVIEW-01.md); [report QA](../05-qa/ATTACK_PATH_REVIEW.md).
 
----
+## Scopo e limite di validazione
 
-## 1. Visione e Modello Concettuale
+Analisi euristica per ordinare verifiche e individuare nodi comuni ai percorsi modellati. Non prova accessibilità da Internet, sfruttabilità, RCE, credenziali condivise o lateral movement reale. Un inventario SSH non descrive trust fra host. Il modello non contiene routing, ACL, identità/privilegi né vettori CVSS: non deve presentarli come conoscenze acquisite.
 
-L'**Attack Path Mapping** (`FR-14`, `UC-13`) supera la visualizzazione frammentata della singola vulnerabilità isolata trasformando i dati di scansione in un modello predittivo e orientato al business:
-- **Dal singolo finding alla catena di compromissione:** Un database interno isolato potrebbe non essere vulnerabile direttamente dall'esterno, ma diventa compromettibile se un server web frontale in DMZ presenta un'esecuzione remota di codice (RCE) e ha visibilità di rete o credenziali di accesso al database.
-- **Identificazione dei Chokepoint:** Invece di costringere il team di sicurezza a patchare centinaia di anomalie a basso impatto, l'algoritmo individua il "punto di strozzatura" (chokepoint) la cui rimozione neutralizza all'istante l'intero albero di attacco (massimo Return On Investment di sicurezza).
+[MITRE TA0008](https://attack.mitre.org/tactics/TA0008/) descrive il movimento e controllo di sistemi remoti; il modello attuale genera ipotesi, non verifica quelle capacità. [FIRST](https://www.first.org/cvss/user-guide.html) distingue severità CVSS e rischio.
 
----
+## Dati e copertura
 
-## 2. Modello Dati del Grafo (Graph Topology)
+- Lettura paginata per tenant: fino a 2.000 target e 10.000 finding, pagine 200/500. Ordinamenti repository con ID come spareggio stabile. Non è uno snapshot transazionale durante scansioni concorrenti.
+- Host da target IP/FQDN e finding. CIDR e range non sono espansi in host inesistenti: sono utili per lo scope dei finding già osservati.
+- Servizi distinti per host, porta e protocollo TCP/UDP. Finding chiusi/filtrati espliciti esclusi; stato assente significa osservazione storica senza conferma attuale.
+- Per endpoint si considera lo scan con osservazione più recente; duplicati CVE dello stesso scan sono accorpati. Una porta assente da una nuova scansione non cancella automaticamente osservazioni vecchie: occorre verificare età, profilo e copertura.
+- Metadati dei nodi CVE: CVE, host, metodo e confidenza del finding, scan ID e data. Nessun banner o segreto SSH caricato.
+- Al massimo 50 percorsi: prima le associazioni CVE ordinate per CVSS decrescente, poi le ipotesi laterali. Limite prima della proiezione aziendale. Grafo e score non rappresentano tutto il rischio quando troncati.
 
-### 2.1 Tipologia Nodi (`AttackNodeType`)
-- `ENTRYPOINT`: Il punto di partenza dell'attaccante (es. Internet pubblico o perimetro untrusted).
-- `SUBNET`: Segmento o rete locale di transito (es. `192.168.1.0/24`).
-- `HOST`: Macchina fisica o virtuale (IP, hostname, sistema operativo, ruolo).
-- `SERVICE`: Porta e protocollo in ascolto (es. HTTP 80, SSH 22, Postgres 5432).
-- `VULNERABILITY`: Finding o CVE correlata con CVSS v3.1 e vettore di attacco.
+## Semantica del grafo
 
-### 2.2 Tipologia Archi (`AttackEdgeType`)
-- `NETWORK_ACCESS`: Raggiungibilità di rete tra l'esterno e un host/servizio o tra subnet diverse.
-- `EXPLOITS`: Relazione tra un attaccante/servizio e una specifica vulnerabilità sfruttabile.
-- `PIVOTS_TO`: Capacità di eseguire lateral movement da un nodo compromesso verso la rete interna (tipicamente arco inferito con confidenza 85%).
-- `TRUSTED_RELATION`: Relazione fiduciaria o credenziali condivise (es. chiave SSH o accesso DB).
-- **Archi Inferiti (`SEC-P2-01`):** Gli archi generati euriticamente presentano `inferred: true`, `inference_basis` (es. `Stessa subnet IPv4 (/24) o host multi-homed`) e `confidence: float64` (0.0 - 1.0). Nel frontend SVG vengono renderizzati con tratto tratteggiato `strokeDasharray="6 4"` e badge `INFERRED xx%` con tooltip informativo.
+Tipi storici preservati: ENTRYPOINT, HOST, SERVICE, VULNERABILITY, SUBNET; archi NETWORK_ACCESS, EXPLOITS, PIVOTS_TO, TRUSTED_RELATION. SUBNET e TRUSTED_RELATION non vengono inventati da questo generatore.
 
-### 2.3 Formula di Cumulative Path Risk Score Probabilistica (`domain.CalculateCumulativeRisk`, `SEC-P2-02`)
-Ogni percorso $P = (N_0, N_1, \dots, N_k)$ riceve un punteggio di rischio aggregato (0.0 - 100.0) basato sulla teoria dell'affidabilità probabilistica:
+- Radice con ID storico `entry-internet`, etichetta **Origine di analisi (accesso ipotetico)**. Non implica Internet.
+- Radice → host: ipotesi di accesso da verificare, `inferred=true`.
+- Host → servizio: associazione nei finding, non prova della raggiungibilità da altre macchine.
+- Servizio → CVE: correlazione del finding, `inferred=true`, non esecuzione di un exploit.
+- CVE con CVSS ≥ 7 → altro host nella stessa /24 IPv4 convenzionale: ipotesi laterale debole. Non assume la maschera reale, RCE o permessi. Nessun arco arbitrario fra subnet diverse o derivato dall'inventario SSH. FQDN/IPv6 non danno inferenze di vicinanza.
+- Nessuna percentuale di confidenza di rete calibrata disponibile: il campo storico rimane compatibile, ma la UI non mostra percentuali arbitrarie.
 
-$$p_i = \min(0.99, \, \frac{\text{CVSS}_i}{10.0})$$
+Ogni percorso contiene nodi esistenti ed esattamente un arco orientato per ogni coppia consecutiva: `len(edge_ids) = len(node_ids)-1 = hop_count`. I passaggi sono relazioni logiche, non hop di routing. La validazione del dominio controlla adiacenza e ID degli archi.
 
-$$P_{\text{combined}} = 1.0 - \prod_{i \in \text{Vulns}} (1.0 - p_i)$$
+## Indice euristico e chokepoint
 
-$$\text{EffectiveHops} = \max(1.0, \, \text{HopCount})$$
+Il campo API storico `cumulative_risk` resta un indice 0–100 per compatibilità. Non è probabilità, EPSS, rischio economico o un CVSS composto ufficiale. Formula legacy effettiva:
 
-$$\text{HopFactor} = 1.0 + \frac{0.5}{\sqrt{\text{EffectiveHops}}}$$
+- Per ciascuna vulnerabilità con CVSS positivo: `w = min(0.95, max(0.05, CVSS/10 × 0.85))`.
+- Base: `100 × (1 - product(1-w))`; senza vulnerabilità, base 15.
+- Moltiplicatore: `1 + 0.5/sqrt(max(1, passaggi))`.
+- Minimo 85 con CVSS ≥ 9; altrimenti minimo 65 con CVSS ≥ 7; massimo 100, una cifra decimale.
+- Severità dell'indice: CRITICAL ≥ 75, HIGH ≥ 55, MEDIUM ≥ 35, LOW altrimenti. Non confondere con severità CVSS dei nodi (9/7/4).
 
-$$\text{RiskScore}(P) = \min(100.0, \, P_{\text{combined}} \times 100.0 \times \text{HopFactor})$$
+Chokepoint: conteggio dei percorsi contenenti ciascun nodo intermedio e somma dei loro indici, con ordine deterministico per indice, conteggio e ID. La somma può superare 100; non è una riduzione di rischio misurata. Più chokepoint possono coprire gli stessi percorsi: non sommare fra nodi. Raccomandazioni da valutare per impatto operativo, non garanzia di neutralizzazione.
 
-- Se il percorso non contiene vulnerabilità esplicite (cammino puramente topologico), viene assunto $P_{\text{combined}} = 0.20$.
-- **Critical Vulnerability Safeguard:** Se il cammino include almeno una vulnerabilità critica ($\text{CVSS} \ge 9.0$), il rischio ha un pavimento minimo garantito di **85.0**.
-- **Bound Computazionale:** L'esplorazione DFS è limitata a una profondità massima di 6 nodi e a un tetto di 50 percorsi totali per prevenire l'esplosione combinatoria in reti dense (`maxPaths = 50`).
-- **Classificazione Severità Cammino:**
-  - `CRITICAL`: $\text{RiskScore} \ge 75.0$
-  - `HIGH`: $55.0 \le \text{RiskScore} < 75.0$
-  - `MEDIUM`: $35.0 \le \text{RiskScore} < 55.0$
-  - `LOW`: $\text{RiskScore} < 35.0$
+## Contratto API
 
-### 2.4 Allineamento Rigoroso Severità Nodi con Standard CVSS (`AttackSeverityFromCVSS`, `SEC-P2-01`)
-- `CRITICAL`: $\text{CVSS} \ge 9.0$
-- `HIGH`: $7.0 \le \text{CVSS} < 9.0$
-- `MEDIUM`: $4.0 \le \text{CVSS} < 7.0$
-- `LOW`: $\text{CVSS} < 4.0$
+`GET /api/v1/attack-paths/graph?min_cvss=7`: autenticazione JWT e scope tenant. `min_cvss` finito in [0,10], altrimenti 400; assente=0. Filtra i nodi CVE e i relativi percorsi, mantiene il contesto host/servizi. Errori: 401 senza tenant, 500 su errore di generazione. `GET /chokepoints` rigenera lo stesso modello con soglia 0.
 
----
-
-## 3. Algoritmo di Individuazione dei Chokepoint (`domain.CalculateChokepoints`)
-
-Un **Chokepoint** è un nodo intermedio $N$ la cui eliminazione interrompe il massimo numero di percorsi di attacco:
-1. Analisi di tutti i cammini aciclici validi con almeno 3 nodi (escludendo il primo entrypoint e l'asset target finale).
-2. Per ciascun vertice intermedio (vulnerabilità, host ponte o porta esposta), calcolo di:
-   - $\text{MitigatedPaths}(N)$: conteggio dei percorsi unici interrotti.
-   - $\text{MitigatedRisk}(N)$: somma cumulativa dei punteggi di rischio dei cammini neutralizzati.
-3. Assegnazione di una prescrizione di remediation automatica contestualizzata per tipo di nodo (patch per CVE, isolamento/regole firewall per host, chiusura porta o whitelist per servizi).
-4. Ordinamento decrescente per `MitigatedRisk` e prioritizzazione per le prime raccomandazioni.
-
----
-
-## 4. Frontend Interactive Visual Graph Explorer (`AttackPathGraph.tsx`, `AttackPath.tsx`)
-
-### 4.1 Layout Topologico a Livelli (SVG Canvas)
-- **Motore di Distribuzione Spaziale:**
-  - Colonna 0 ($X=0$): Nodi `ENTRYPOINT` (Internet).
-  - Colonna 1 ($X=270$): Nodi `HOST` edge perimetrali e nodi `SUBNET`.
-  - Colonna 2 ($X=540$): Nodi `SERVICE` e porte aperte.
-  - Colonna 3 ($X=810$): Nodi `VULNERABILITY` (CVE critiche/alte).
-  - Colonna 4 ($X=1080$): Target interni ad alto impatto (DB, Host interni pivotati).
-- **Controlli Canvas:** Zoom In, Zoom Out, Reset (scala 1:1), e Pan bidirezionale con drag-and-drop.
-
-### 4.2 Interattività e Highlighting Dinamico
-- **Selezione Cammino:** Cliccando su un percorso nel pannello laterale, la catena di nodi e archi corrispondente viene illuminata con bordo colorato ed effetto pulsante (`animate-pulse`), mentre i nodi estranei vengono attenuati (opacità ridotta a 0.25).
-- **Visualizzazione Chokepoint (Bullseye Animation):** I nodi identificati come chokepoint mostrano una doppia aura concentrica e l'icona fuoco/radio animata per attrarre l'attenzione visiva del SecOps.
-- **Pannello a Schede Laterale:**
-  - **Scheda "Percorsi":** Elenco dei percorsi con severity badge, hop count, cumulative risk score e target finale.
-  - **Scheda "Chokepoints":** Classifica dei colli di bottiglia con contatore percorsi interrotti, rischio mitigato e prescrizione di remediation copiabile con 1-click.
-  - **Scheda "Dettaglio Nodo":** Ispezione tecnica puntuale del vertice cliccato (IP, porta, protocollo, severità, CVSS, CVE ID e metadati).
-- **Filtro CVSS Reattivo:** Dropdown per visualizzare nodi con soglia minima (Tutte, $\ge 4.0$, $\ge 7.0$, $\ge 9.0$).
-- **Performance & Code Splitting:** Caricamento con `React.lazy` e chunk Vite isolato da soli 28 kB.
-
----
-
-## 5. Specifiche Contratti API REST (`/api/v1/attack-paths`)
-
-### 5.1 Generazione Grafo Topologico
-- `GET /api/v1/attack-paths/graph?min_cvss=5.0`
-- **Risposta (JSON):**
+Payload esistente preservato; aggiunta `analysis`:
 ```json
 {
-  "success": true,
-  "data": {
-    "tenant_id": "00000000-0000-0000-0000-000000000001",
-    "generated_at": "2026-10-10T15:00:00Z",
-    "nodes": [
-      {
-        "id": "entry-internet",
-        "type": "ENTRYPOINT",
-        "label": "Internet Perimeter",
-        "severity": "CRITICAL"
-      },
-      {
-        "id": "host-192-168-1-10",
-        "type": "HOST",
-        "label": "srv-web-dmz (192.168.1.10)",
-        "ip": "192.168.1.10",
-        "severity": "CRITICAL"
-      },
-      {
-        "id": "vuln-cve-2021-41773",
-        "type": "VULNERABILITY",
-        "label": "Apache RCE (CVE-2021-41773)",
-        "cvss": 7.5,
-        "severity": "CRITICAL"
-      },
-      {
-        "id": "host-10-0-0-50",
-        "type": "HOST",
-        "label": "srv-db-internal (10.0.0.50)",
-        "ip": "10.0.0.50",
-        "severity": "HIGH"
-      }
-    ],
-    "edges": [
-      {
-        "id": "e1",
-        "source": "entry-internet",
-        "target": "host-192-168-1-10",
-        "type": "NETWORK_ACCESS",
-        "label": "Public HTTP 80",
-        "weight": 1.0
-      },
-      {
-        "id": "e2",
-        "source": "host-192-168-1-10",
-        "target": "vuln-cve-2021-41773",
-        "type": "EXPLOITS",
-        "label": "RCE Exploit",
-        "weight": 2.0
-      },
-      {
-        "id": "e3",
-        "source": "host-192-168-1-10",
-        "target": "host-10-0-0-50",
-        "type": "PIVOTS_TO",
-        "label": "Internal DB Access",
-        "weight": 1.5
-      }
-    ],
-    "paths": [
-      {
-        "id": "path-1",
-        "name": "External RCE to Internal Database Pivot",
-        "node_ids": ["entry-internet", "host-192-168-1-10", "vuln-cve-2021-41773", "host-10-0-0-50"],
-        "edge_ids": ["e1", "e2", "e3"],
-        "cumulative_risk": 86.4,
-        "severity": "CRITICAL",
-        "hop_count": 3,
-        "target_asset": "srv-db-internal (10.0.0.50)"
-      }
-    ],
-    "chokepoints": [
-      {
-        "node_id": "host-192-168-1-10",
-        "label": "srv-web-dmz (192.168.1.10)",
-        "mitigated_paths": 1,
-        "mitigated_risk": 86.4,
-        "remediation": "Isolare l'host 'srv-web-dmz (192.168.1.10)' o restringere le regole firewall per bloccare il lateral movement verso la rete interna."
-      }
-    ],
-    "summary": {
-      "total_nodes": 4,
-      "total_edges": 3,
-      "total_paths": 1,
-      "critical_paths": 1,
-      "highest_risk_score": 86.4,
-      "top_chokepoint": "srv-web-dmz (192.168.1.10)"
-    }
-  }
+  "model": "heuristic-review-v2",
+  "warnings": ["Accesso e sfruttabilità da verificare"],
+  "paths_truncated": false,
+  "inventory_truncated": false,
+  "target_count": 17,
+  "finding_count": 20,
+  "max_paths": 50
 }
 ```
 
-### 5.2 Elenco Chokepoint Prioritari
-- `GET /api/v1/attack-paths/chokepoints`
-- Restituisce la slice ordinata dei nodi la cui remediation azzera il massimo volume di rischio mitigato per il tenant.
+ID nodi generati includono protocollo e componenti codificate; sono identificatori dello snapshot, non riferimenti persistenti. Dopo rigenerazione la selezione viene riallineata. La remediation [Active Defense](active_defense_and_soar.md) rigenera il modello e rivalida il chokepoint SERVICE; non modifica finding o risultati delle scansioni. Il gate Linux/SSH rimane aperto.
 
-## 6. Ultimo allineamento
-- 2026-10-17 · working tree · Preview e applicazione definite nel [dominio Active Defense](active_defense_and_soar.md). Grafo rigenerato senza filtro CVSS, richiesta presenza come chokepoint SERVICE corrente. La mitigazione non modifica il grafo né marca i finding risolti.
-- 2026-10-10 (Epic 26 SEC-P2 Attack Path Refinement: coerenza CVSS, archi inferiti, rischio probabilistico $1 - \prod(1 - p_i)$ e bound a 50 percorsi)
+## UI e scope
+
+COMPANY-UX-02 · 2026-10-17: filtro CVSS rimosso dalla pagina, richiesta graph senza soglia; parametro backend preservato. Selettore “Intera azienda / Reparto” usa valori target del reparto per grafo/KPI/chokepoint, senza fallback quando vuoto. Intera azienda permette ipotesi fra reparti; singolo reparto esclude catene esterne al reparto. Azienda obbligatoria tramite guard route. Guida aggiornata; layout effect allinea selezione senza sovrascrivere click successivi al caricamento.
+
+Proiezione aziendale locale di nodi, archi, percorsi, KPI e chokepoint; nessun fallback globale su scope vuoto. Un percorso con qualsiasi nodo fuori scope viene escluso. Scope IP/FQDN/IPv6 letterali, CIDR IPv4 e range IPv4 (estesi o ultimo ottetto); niente risoluzione implicita DNS. Non è un confine autorizzativo aziendale: API autorizzata per tenant.
+
+Vista 2D percorso: sequenza sinistra→destra, scorrimento orizzontale per conservare leggibilità. Mappa completa: BFS con vertici visitati una volta, terminante anche su cicli. Pan con Pointer Events, zoom, reset, selezione mouse/tastiera, legenda osservato/ipotesi e tooltip motivazione. Gli archi evidenziati sono quelli in `edge_ids`, non ogni arco fra due nodi selezionati.
+
+Guida contestuale in `AttackPathGuide.tsx`, fuori da `docs/` che rimane documentazione agentica. Selezione non invia richieste; filtro/aggiornamento sì, con risposte obsolete scartate e rimozione dati precedenti su errore.
+
+3D non aggiunto: decisione di leggibilità della sequenza, non risultato di un confronto utenti o benchmark visuale. Verifica browser e responsive reale ancora aperta per indisponibilità del runtime.
 
 
 

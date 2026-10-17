@@ -1,5 +1,11 @@
 # Dominio: Remote SSH Host & iptables/nftables Firewall Manager
 
+## COMPANY-UX-02 · Clienti autonomi · 2026-10-17 · working tree
+
+SSH/Firewall indipendente dalle aziende: route `/ssh-servers` e tool dashboard accessibili anche globalmente, senza CompanyContext nella pagina. Server con `client_name` autonomo opzionale, max 160 caratteri, trim service, default DB vuoto. Non è una FK o autorizzazione cliente; isolamento tenant/serverID invariato. Filtro/raggruppamento e ricerca interni, valore vuoto “Senza cliente”.
+
+API create accetta stringa `client_name`; update omesso conserva, stringa vuota azzera. Risposte includono il campo, credenziali cifrate/mascherate invariate. Migrazione `000008_ssh_client_labels` up/down; down perde le sole etichette, da esportare prima del rollback operativo. Persistenza/compatibilità provate su DB dedicato, nessuna connessione SSH cliente eseguita. Gate Linux e hardening E28-S1-T1 separati e aperti.
+
 > **Dominio:** Amministrazione Remota Sicura, Firewall Rules Engine & Terminale Web  
 > **File di Riferimento:** `backend/internal/domain/ssh_server.go`, `backend/internal/domain/firewall.go`, `backend/internal/service/ssh_service.go`, `backend/internal/service/firewall_service.go`, `backend/internal/delivery/http/handler/ssh_firewall_handler.go`, `backend/internal/delivery/ws/ssh_terminal_ws.go`, `frontend/src/pages/SSHServers.tsx`, `frontend/src/components/FirewallManager.tsx`, `frontend/src/components/WebTerminalModal.tsx`
 

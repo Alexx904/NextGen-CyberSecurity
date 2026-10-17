@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"math"
 	"net/http"
 	"strconv"
 
@@ -32,9 +33,12 @@ func (h *AttackPathHandler) GetGraph(w http.ResponseWriter, r *http.Request) {
 
 	minCVSS := 0.0
 	if minCVSSStr := r.URL.Query().Get("min_cvss"); minCVSSStr != "" {
-		if val, err := strconv.ParseFloat(minCVSSStr, 64); err == nil && val >= 0.0 {
-			minCVSS = val
+		val, err := strconv.ParseFloat(minCVSSStr, 64)
+		if err != nil || math.IsNaN(val) || math.IsInf(val, 0) || val < 0 || val > 10 {
+			response.Error(w, http.StatusBadRequest, "VALIDATION_ERROR", "min_cvss deve essere un numero fra 0 e 10")
+			return
 		}
+		minCVSS = val
 	}
 
 	graph, err := h.attackPathService.GenerateAttackGraph(r.Context(), tenantID, minCVSS)
@@ -66,4 +70,3 @@ func (h *AttackPathHandler) GetChokepoints(w http.ResponseWriter, r *http.Reques
 
 	response.JSON(w, http.StatusOK, chokepoints)
 }
-

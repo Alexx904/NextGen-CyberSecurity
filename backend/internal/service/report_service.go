@@ -199,20 +199,7 @@ func (s *reportService) GenerateCompanyPDFReport(ctx context.Context, tenantID, 
 		return nil, "", err
 	}
 
-	// 3. Recupero tutti i target/IP associati all'azienda
-	targets, _, err := s.targetRepo.List(ctx, tenantID, domain.TargetFilter{
-		GroupID: &groupID,
-		Limit:   1000,
-	})
-	if err != nil {
-		return nil, "", err
-	}
-
-	// 4. Recupero report items / scansioni storiche per l'azienda
-	reportItems, _, err := s.reportRepo.List(ctx, tenantID, domain.ReportFilter{
-		GroupID: &groupID,
-		Limit:   1000,
-	})
+	targets, reportItems, err := s.loadReportScope(ctx, tenantID, groupID)
 	if err != nil {
 		return nil, "", err
 	}
@@ -230,13 +217,13 @@ func (s *reportService) GenerateCompanyPDFReport(ctx context.Context, tenantID, 
 			continue
 		}
 
-		itemFindings, _, err := s.findingRepo.List(ctx, tenantID, domain.FindingFilter{
-			ScanID: &item.ScanID,
-			Limit:  1000,
-		})
-		if err == nil {
+		itemFindings, err := s.loadReportFindings(ctx, tenantID, item.ScanID)
+		if err != nil {
+			return nil, "", err
+		}
+		{
 			for _, f := range itemFindings {
-				key := fmt.Sprintf("%s:%d:%s", f.HostIP, f.Port, getFindingDedupKey(f))
+				key := fmt.Sprintf("%s:%s:%d:%s:%s", item.TargetID, f.HostIP, f.Port, f.Protocol, getFindingDedupKey(f))
 				if !seenFinding[key] {
 					seenFinding[key] = true
 					allFindings = append(allFindings, f)
@@ -348,6 +335,12 @@ func (s *reportService) GenerateCompanyPDFReport(ctx context.Context, tenantID, 
 		Template:    template,
 		GeneratedAt: now,
 	}
+	sections, _, grouped, err := s.departmentInventory(ctx, tenantID, group, targets, reportItems, allFindings)
+	if err != nil {
+		return nil, "", err
+	}
+	reportData.Departments = sections
+	reportData.GroupFindingsByDepartment = grouped
 
 	pdfBytes, err := s.pdfGenerator.Generate(reportData)
 	if err != nil {
@@ -373,10 +366,7 @@ func (s *reportService) GenerateCompanyCSVReport(ctx context.Context, tenantID, 
 		return nil, "", err
 	}
 
-	reportItems, _, err := s.reportRepo.List(ctx, tenantID, domain.ReportFilter{
-		GroupID: &groupID,
-		Limit:   1000,
-	})
+	targets, reportItems, err := s.loadReportScope(ctx, tenantID, groupID)
 	if err != nil {
 		return nil, "", err
 	}
@@ -388,13 +378,13 @@ func (s *reportService) GenerateCompanyCSVReport(ctx context.Context, tenantID, 
 		if item.Status != domain.ScanStatusCompleted {
 			continue
 		}
-		itemFindings, _, err := s.findingRepo.List(ctx, tenantID, domain.FindingFilter{
-			ScanID: &item.ScanID,
-			Limit:  1000,
-		})
-		if err == nil {
+		itemFindings, err := s.loadReportFindings(ctx, tenantID, item.ScanID)
+		if err != nil {
+			return nil, "", err
+		}
+		{
 			for _, f := range itemFindings {
-				key := fmt.Sprintf("%s:%d:%s", f.HostIP, f.Port, getFindingDedupKey(f))
+				key := fmt.Sprintf("%s:%s:%d:%s:%s", item.TargetID, f.HostIP, f.Port, f.Protocol, getFindingDedupKey(f))
 				if !seenFinding[key] {
 					seenFinding[key] = true
 					allFindings = append(allFindings, f)
@@ -403,7 +393,11 @@ func (s *reportService) GenerateCompanyCSVReport(ctx context.Context, tenantID, 
 		}
 	}
 
-	csvBytes, err := report.GenerateCSV(allFindings)
+	_, scanDepartments, _, err := s.departmentInventory(ctx, tenantID, group, targets, reportItems, allFindings)
+	if err != nil {
+		return nil, "", err
+	}
+	csvBytes, err := report.GenerateDepartmentCSV(allFindings, scanDepartments)
 	if err != nil {
 		return nil, "", fmt.Errorf("generazione del report CSV aziendale fallita: %w", err)
 	}
@@ -440,4 +434,3 @@ func getFindingDedupKey(f *domain.Finding) string {
 	}
 	return f.Protocol
 }
-
