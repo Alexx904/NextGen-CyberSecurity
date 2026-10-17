@@ -48,6 +48,10 @@ Verifica pre-push del 2026-10-15: `go test ./...`, `go build ./...`, `go vet ./.
 
 ## In corso
 
+**DOCKER-CI-01 · pubblicazione richiesta 2026-10-17:** PO «effettua il push» autorizza commit e push delle nove modifiche Docker/Actions accettate su origin/main. Applicato commit.md, fetch origin PASS e divergenza iniziale 0/0; nessuna modifica estranea. Evidenze build/smoke/archivio/Compose precedenti riutilizzate perché sorgenti, dipendenze e configurazione invariati; soli Markdown aggiornati dopo i controlli. Messaggio commit: `ci(docker): package verified images as workflow artifacts`. La richiesta autorizza l'esecuzione CI conseguente al push, nessun deploy o pubblicazione registry. Esito push da verificare al termine; questa nota registra l'autorizzazione e la preparazione.
+
+**DOCKER-CI-01 · 2026-10-17:** PO «ok procedi» sulla proposta Docker/Actions. Applicati feature/orchestration, working tree iniziale pulita su main; mantenuto main secondo preferenza PO già registrata, nessun branch/commit/push. Estesa CI con avvio manuale e job immagini Linux amd64 subordinato ai tre job esistenti; pacchetto artifact 7 giorni con archivio, checksum/revisione e Compose. Aggiunti override immagini e dockerignore; frontend npm ci. Build backend/frontend, smoke Nmap/Nginx senza rete, save/load GZip e Compose config PASS exit 0; dettagli e durate in [CI](06-devops/CI_CD_PIPELINE.md#docker-ci-01--pacchetto-scaricabile). Doc Sync e self-review completati. Nessun deploy, DB o target toccato. Prima esecuzione Actions/upload non effettuata; suite applicative restano gate remoto, non rieseguite localmente per sorgenti invariati. Avvisi npm registrati come TECH-DEBT-09.
+
 **SSH-TOOLS-01 · accettazione autorevole 2026-10-17:** PO «Ok perfetto è funzionante» conferma il flusso SSH/terminale/iptables dopo la diagnosi del 502. Task `[x]`, rimosso dalle attese di accettazione. Le richieste di output Debian/refresh sotto sono storiche e non più pendenti; non si deduce quale intervento abbia risolto l'errore né si inventano prove autonome sul target. Assunzione operativa sui prerequisiti predisposti dal PO accettata nel flusso funzionante. SSH-HARDEN-01/TECH-DEBT-07 e prove watchdog/rollback restano separati. Solo registrazione documentale, nessun codice o comando remoto, commit/push/deploy; test applicativi non rieseguiti.
 
 **SSH-TOOLS-01 · feedback successivo 2026-10-17:** PO chiede se iptables debba essere sul server e riporta ancora «Request failed with status code 502svg». Confermato requisito del pacchetto sul Debian remoto e privilegi root/sudo. Ricognizione read-only locale: bundle attivo SSHServers-BeM5cCm3.js coincide con build verificata; stringa FIREWALL_PRIVILEGES_REQUIRED presente nel binario /app/server; richiesta senza credenziali al proxy `/api/v1/ssh/servers` restituisce 401 JSON atteso, exit 0 curl. Immagini container diverse dagli ultimi tag disponibili, ma questo NON prova assenza del fix (presenza verificata direttamente). Nessuna diagnosi definitiva di pacchetto assente, sudo o cache: proposti Ctrl+F5 e, nella sessione Debian del PO, `dpkg-query -W iptables` / `sudo -n /usr/sbin/iptables -L -n -v --line-numbers`. Nessuna lettura credenziali, connessione remota, installazione, modifica codice o deploy; task riaperto `[ ]`. Test applicativi invariati, non rieseguiti; verifiche documentali a parte.
@@ -78,6 +82,8 @@ Evidenze correnti dalla root con `scripts/verify.ps1 -Profile Final -Scope All`:
 - Checkpoint `b16264b`: 23 file remediation/firewall, test/DTO e documenti/archivio task pubblicati prima della revisione AP. Dopo rifiuto iniziale dell'auto-review, PO conferma contenuto e repository/branch esplicitamente. Gate Linux di E28-S1-T1 invariato; commit non equivale ad accettazione funzionale.
 
 ## Accettati recentemente dal PO (`[x]`)
+
+- **DOCKER-CI-01 · 2026-10-17:** PO «OK» accetta il pacchetto Docker/Actions e le assunzioni consegnate: Linux amd64, artifact per 7 giorni, PostgreSQL separato, nessun registry/deploy. Task `[x]`, attesa rimossa. Build e controlli locali PASS già documentati; prima esecuzione Actions/upload ancora da verificare. Applicato feedback.md ramo accettazione; solo aggiornamenti Markdown, sorgenti e configurazioni invariati, nessuna suite applicativa ripetuta. Nessun commit/push/deploy autorizzato o eseguito in questo turno.
 
 - **REMOVE-01 · 2026-10-17:** il PO richiede il push totale su main dopo la conferma della rimozione. Verificati assenza dei file e dei collegamenti operativi della feature e allineamento HEAD/origin/main (0/0 dopo fetch). Inclusione delle modifiche SSH/firewall presenti esplicitamente autorizzata da «push totale». Evidenze applicative del turno precedente riutilizzate: sorgenti, test e configurazioni invariati; nessuna suite ripetuta dopo soli Markdown. Nessun deploy o pulizia dati applicativi.
 
@@ -128,6 +134,8 @@ Evidenze correnti dalla root con `scripts/verify.ps1 -Profile Final -Scope All`:
 
 ## In attesa di accettazione utente
 
+DOCKER-CI-01 accettato dal PO il 2026-10-17, «OK»; nessuna attesa di accettazione relativa a questo incremento. Prima esecuzione remota ancora da verificare dopo pubblicazione autorizzata; istruzioni in [Deployment](06-devops/DEPLOYMENT.md#docker-ci-01--caricamento-artifact).
+
 Nessuna attesa relativa alla feature rimossa; restano validi i gate SSH/Linux descritti nelle rispettive sezioni.
 
 SSH-HARDEN-01: primo incremento TECH-DEBT-06/07 implementato e verificato automaticamente; task `[ ]` per collaudo visuale non eseguito, nessuna dichiarazione di gate Verified. Pin SHA256 host separato dal fingerprint client, connessioni prive di fiducia bloccate, deadline handshake 10s e comandi/test 30s con cancellazione. PostgreSQL isolato e migrazione up/down/up PASS. Browser runtime vuoto, iab indisponibile; nessun collaudo Linux remoto. Piano/evidenze in [SSH-HARDEN-01](04-development/plans/SSH-HARDEN-01.md). Nessun commit/push/deploy; modifiche Discovery preesistenti preservate. TECH-DEBT-07 ed E28-S1-T1 restano aperti.
@@ -158,6 +166,8 @@ senza attribuire automaticamente questa causa al server reale.
 - Nessun blocco sulla consegna scanner: il PO ha eseguito i test delle scansioni e confermato il corretto funzionamento il 2026-10-16. Verifica browser autonoma e benchmark ETA non effettuati dall'agente; debito TECH-DEBT-05 sul consenso API mantenuto.
 
 ## Assunzioni confermate
+
+- DOCKER-CI-01 (2026-10-17): artifact per 7 giorni, Linux amd64 su Docker Desktop Windows in modalità Linux, PostgreSQL scaricato separatamente, nessun registry/deploy; accettate con «OK». Nessun eseguibile Windows incluso.
 
 - **DISCOVERY-01 (2026-10-17):** accettata la scelta conservativa di non recuperare identità storiche senza MAC corrente verificabile. Limiti OUI, hostname di presentazione e assenza di benchmark/LAN reale dichiarati nella consegna preservati. Suite backend/vet/build PASS precedenti restano valide: solo documentazione modificata dopo il gate.
 

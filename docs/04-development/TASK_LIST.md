@@ -22,6 +22,15 @@
 
 ## 🚀 Coda di Sviluppo Attiva (Priorità validate dal PO)
 
+- [x] DOCKER-CI-01 · Immagini Docker scaricabili da GitHub Actions
+  - Accettazione PO: 2026-10-17, «OK». Prima esecuzione GitHub ancora da verificare; nessuna autorizzazione implicita a commit/push/deploy.
+  - File: .github/workflows/ci.yml, compose.images.yml, backend/.dockerignore, frontend/.dockerignore, frontend/Dockerfile.
+  - Dipende da: nessuno; riusa i tre job CI esistenti come gate.
+  - Test: build immagini, Nmap/Nginx isolati, archivio load e Compose config; docs/diff. Prima esecuzione remota non eseguita.
+  - Evidenze: entrambe le build, Nmap --version, nginx -t, docker save/load compresso, Compose config e docs/diff PASS exit 0; dettaglio in CI_CD_PIPELINE. Nessuna suite applicativa locale rieseguita: sorgenti invariati, controlli applicativi conservati nel workflow.
+  - Docs: CI_CD_PIPELINE, DEPLOYMENT e PROJECT_STATE; nessuna modifica ai domini/API/DB.
+  - DoD: (1) verifiche locali PASS; (2) limiti CI remota dichiarati; (3) build immagini PASS; (4) Doc Sync e self-review.
+
 - [x] SSH-TOOLS-01 · Terminale WebSocket e lettura iptables
   - Accettazione PO: 2026-10-17, «Ok perfetto è funzionante» dopo la diagnosi del 502. Nessuna chiusura implicita del gate watchdog/Linux.
   - File: frontend/nginx.conf, frontend/vite.config.ts, FirewallManager e test; backend domain/service/handler firewall e test.
@@ -174,6 +183,10 @@ Le attività concluse e la proposta Epic 27.1 superata sono archiviate nel [CHAN
 ---
 
 ## 🛠️ Tech Debt & Refactoring Backlog
+
+DOCKER-CI-01: `npm ci` nella build segnala 16 vulnerabilità (7 moderate, 6 high, 3 critical). Il conteggio è output npm, non una verifica di sfruttabilità; nessun aggiornamento automatico applicato.
+
+- [ ] TECH-DEBT-09 · Alta · Dipendenze frontend: analizzare advisory e distinguere dipendenze runtime/build, aggiornare in incremento dedicato con test/build e verifica compatibilità. Impatto: vulnerabilità segnalate dal resolver npm durante la build Docker; dettaglio advisory ancora da valutare.
 
 Registro formale del debito tecnico e delle ottimizzazioni architetturali (regola ADR-10):
 

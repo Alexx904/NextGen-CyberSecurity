@@ -1,0 +1,6 @@
+# Use with docker-compose.yml and --no-build after loading the CI archive.
+services:
+  backend:
+    image: nextgen-backend:ci
+  frontend:
+    image: nextgen-frontend:ci

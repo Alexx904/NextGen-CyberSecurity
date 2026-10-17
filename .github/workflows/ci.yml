@@ -1,6 +1,7 @@
 name: CI Pipeline
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -114,4 +115,44 @@ jobs:
 
       - name: Type-Check & Build Frontend
         run: npm run build
+
+  docker:
+    name: Docker Images (Linux amd64)
+    needs: [backend, frontend, integration]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build Backend Image
+        run: docker build --platform linux/amd64 --label "org.opencontainers.image.revision=$GITHUB_SHA" --tag nextgen-backend:ci ./backend
+
+      - name: Build Frontend Image
+        run: docker build --platform linux/amd64 --label "org.opencontainers.image.revision=$GITHUB_SHA" --tag nextgen-frontend:ci ./frontend
+
+      - name: Check Image Prerequisites
+        run: |
+          docker run --rm --network none --entrypoint nmap nextgen-backend:ci --version
+          docker run --rm --network none --add-host backend:127.0.0.1 nextgen-frontend:ci nginx -t
+
+      - name: Package Images and Compose Files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p docker-artifact
+          docker save nextgen-backend:ci nextgen-frontend:ci | gzip > docker-artifact/nextgen-images.tar.gz
+          cp docker-compose.yml compose.images.yml docker-artifact/
+          printf '%s\n' "$GITHUB_SHA" > docker-artifact/REVISION.txt
+          cd docker-artifact
+          sha256sum nextgen-images.tar.gz > SHA256SUMS
+
+      - name: Upload Docker Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextgen-docker-linux-amd64-${{ github.sha }}
+          path: docker-artifact/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
 

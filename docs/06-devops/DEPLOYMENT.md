@@ -1,5 +1,19 @@
 # Deployment
 
+## DOCKER-CI-01 · Caricamento artifact
+
+Ultimo allineamento: 2026-10-17 · working tree. Contratto operativo del pacchetto definito nella [pipeline CI](CI_CD_PIPELINE.md#docker-ci-01--pacchetto-scaricabile). Dopo una CI riuscita, scaricare ed estrarre l'artifact `nextgen-docker-linux-amd64-<sha>` dalla pagina Actions. Su Windows è richiesto Docker Desktop con container Linux, architettura amd64. Dalla cartella estratta:
+
+```powershell
+Get-FileHash .\nextgen-images.tar.gz -Algorithm SHA256
+# Confrontare il valore con SHA256SUMS prima di caricare.
+docker load --input nextgen-images.tar.gz
+docker compose -f docker-compose.yml -f compose.images.yml up -d --no-build
+docker compose -f docker-compose.yml -f compose.images.yml ps
+```
+
+UI su `http://localhost:3000`. PostgreSQL viene scaricato se assente; database e runtime non sono inclusi nell'artifact. La directory di estrazione determina il progetto Compose e quindi il volume predefinito: per aggiornare un'installazione esistente mantenere directory/nome progetto e configurazione originali. Non avviare un secondo stack sulle stesse porte. I manifest conservano i default di sviluppo e i requisiti di segreti/backup descritti sotto; non sono una configurazione di produzione. Nessun volume viene eliminato dalla procedura. La prima esecuzione Actions resta da verificare dopo push autorizzato.
+
 ## COMPANY-UX-02 · Upgrade/rollback · 2026-10-17
 
 Backend e frontend aggiornati insieme. Migrazioni 000008 (etichette clienti SSH) e 000009 (guard gerarchia) applicate prima dell'uso della nuova API; avvio server esegue il migrator esistente. Nessun deploy applicativo eseguito in questa sessione. `docker compose up --build` è un'istruzione per la prova del PO, non un'azione già effettuata.
