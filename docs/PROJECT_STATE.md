@@ -5,7 +5,7 @@
 
 **Ultimo aggiornamento:** 2026-10-17
 **Modalità progetto:** esistente (onboarded formalmente sul branch chore/agent-onboarding)
-**Fase:** PO approva tutte le modifiche e autorizza pubblicazione diretta su main (2026-10-17). TEST-OPT-01, COMPANY-UX-02, COMPANY-PDF-03 e AP-REVIEW-01 accettati con limiti visuali espliciti. E28-S1-T1 e debiti SSH/Linux restano aperti. Preparazione commit/push, nessun deploy.
+**Fase:** Tutte le modifiche approvate pubblicate su origin/main il 2026-10-17, commit applicativo `26cf93d`. Copia locale su main, nessun nuovo branch o force push. TEST-OPT-01, COMPANY-UX-02, COMPANY-PDF-03 e AP-REVIEW-01 accettati con limiti visuali espliciti. E28-S1-T1 e debiti SSH/Linux restano aperti; nessun deploy.
 
 ## Project Profile
 
@@ -157,13 +157,13 @@ Nessuno: tutti gli incrementi consegnati sono accettati dal PO il 2026-10-17. Ev
 
 ## Prossimi passi
 
-1. Pubblicare le modifiche approvate su main con aggiornamento normale della cronologia e verificare allineamento remoto/working tree. Nessun nuovo branch; nessun deploy. Accettazione PO già acquisita, limiti visuali residui registrati.
+1. Modifiche approvate pubblicate su main con fast-forward e push riuscito (`26cf93d`); registro documentale di consegna aggiornato. Accettazione PO acquisita, limiti visuali residui registrati. Nessun nuovo branch o deploy.
 2. E28-S1-T1 resta separato: hardening SSH/watchdog TECH-DEBT-06/07 e prova Linux quando disponibile.
 3. Proseguire Epic 28 secondo dipendenze e priorità PO; nessun push/merge/deploy implicito della revisione AP.
 
 ## Log sessioni (ultime 5, la più recente in alto)
 
-- 2026-10-17 · COMPANY-PDF-03: raggruppamento CVE nei PDF intera azienda con reparti, schede Tecnico complete e Executive top cinque per reparto; riepilogo consolidato. Attribuzione gruppo/scan/target, fallback espliciti e sezioni vuote. Test mirati e gate finale backend suite/vet/build PASS exit 0, documenti/diff PASS. Self-review/Doc Sync; gate visuale renderer aperto `[!]`. Nessun DB/frontend/dipendenza/commit/push/deploy; modifiche preesistenti preservate.
+- 2026-10-17 · PO approva tutto e richiede push su main. Accettati TEST-OPT-01/COMPANY-UX-02/COMPANY-PDF-03/AP-REVIEW-01 con limiti visuali documentati. Fonti applicative/test/config invariati dalle evidenze PASS: riuso proporzionato, controlli documentali e staging rieseguiti PASS. Controllo file sensibili/firme: unico header chiave è placeholder UI, nessun corpo chiave o token rilevato. Commit `26cf93d` (91 file), main aggiornato fast-forward e push origin/main riuscito, nessun force push/nuovo branch/deploy. E28-S1-T1/Linux e TECH-DEBT-06/07 restano aperti. COMPANY-PDF-03 include CVE per reparto, Tecnico completo ed Executive top cinque locali.
 
 - 2026-10-17 · TEST-OPT-01: autorizzata ottimizzazione del testing, implementati gate per lato e riuso evidenze, runner misurato e tag integration con TEST_DB_* sicure, CI PostgreSQL effimero. Backend suite/build/vet e DB reali PASS, configurazione 12 casi PASS, smoke frontend 30 test PASS; negativi DB/config e runner FAIL attesi verificati. Container solo test arrestato/rimosso. Doc Sync e self-review; `[~]` in attesa PO. Nessuna dipendenza, modifica applicativa, commit/push/deploy; CI remota non eseguita. Modifiche preesistenti preservate.
 
