@@ -1,5 +1,7 @@
 # Dominio: Asset Tree Management & Centralized Reports Hub
 
+Ultimo allineamento: 2026-10-17 · working tree. Rimossa la voce di navigazione e la route `/pentest` per richiesta del PO; la riprogettazione è da definire. Le route aziendali e gli strumenti SSH restano invariati.
+
 > **Dominio:** Organizzazione Gerarchica Asset, Workstation Multi-Company Workflow e Generazione Report White-Label
 > **File di Riferimento:** `backend/internal/domain/target.go`, `backend/internal/domain/report.go`, `backend/internal/service/target_group_service.go`, `backend/internal/service/report_service.go`, `backend/pkg/report/pdf_generator.go`, `backend/pkg/report/csv_generator.go`, `frontend/src/components/TreeExplorer.tsx`, `frontend/src/pages/Targets.tsx`, `frontend/src/pages/Reports.tsx`
 

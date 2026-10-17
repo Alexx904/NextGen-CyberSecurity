@@ -345,6 +345,31 @@ func TestFirewallService_GetStatus(t *testing.T) {
 	}
 }
 
+func TestFirewallStatusUnattendedAccess(t *testing.T) {
+	for _, tc := range []struct {
+		name, stderr, expected string
+		code                   int
+	}{
+		{"password required", "sudo: a password is required", "privilegi", 1},
+		{"not allowed", "alex is not in the sudoers file", "privilegi", 1},
+		{"missing iptables", "", "iptables", 127},
+		{"missing sudo", "", "privilegi", 126},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			executor := &mockSSHExecutor{executeFunc: func(_ context.Context, _, _ uuid.UUID, cmd string) (string, string, int, error) {
+				if !strings.Contains(cmd, "sudo -n iptables") || !strings.Contains(cmd, "id -u") || !strings.Contains(cmd, "/usr/sbin") {
+					t.Error("firewall status does not support root/PATH/noninteractive sudo")
+				}
+				return "", tc.stderr, tc.code, errors.New("exit status")
+			}}
+			_, err := service.NewFirewallService(executor, newMockBackupRepo()).GetStatus(context.Background(), uuid.New(), uuid.New())
+			if err == nil || !strings.Contains(err.Error(), tc.expected) {
+				t.Fatalf("missing actionable diagnostic: %v", err)
+			}
+		})
+	}
+}
+
 func TestFirewallService_AddRule_WithSafetyTimer_And_Confirm(t *testing.T) {
 	executor := &mockSSHExecutor{
 		executeFunc: func(ctx context.Context, tenantID, serverID uuid.UUID, cmd string) (string, string, int, error) {

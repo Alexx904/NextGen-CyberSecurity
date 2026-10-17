@@ -9,6 +9,10 @@
 
 ## Accettazione e pubblicazione su main · 2026-10-17
 
+### Ritiro della feature e aggiornamenti SSH
+
+Il PO richiede la rimozione completa della sezione Penetration Test e, dopo verifica, il push totale su main. Rimossi 53 file locali dedicati (codice, test, migrazioni sorgente, documenti e piani), route, navigazione, azione Findings e task collegati; nessun dato applicativo eliminato. La feature non era ancora tracciata nel precedente main: il commit conserva la baseline priva del modulo e registra il ritiro. Inclusi gli aggiornamenti SSH/firewall presenti: negoziazione host con più chiavi e pin esatto, proxy WebSocket e diagnostica iptables non interattiva. Backend test/vet/build, 167 test frontend/build, PostgreSQL dedicato e controlli documentali PASS exit 0; evidenze in [PROJECT_STATE](docs/PROJECT_STATE.md#evidenze-della-rimozione-autorizzata-alla-pubblicazione). Nessun collaudo visuale o deploy. La riprogettazione resta da definire; i gate watchdog/Linux restano aperti.
+
 Il PO approva esplicitamente tutte le modifiche presenti e richiede commit/push su `origin/main`, senza nuovi branch. Accettati TEST-OPT-01, COMPANY-UX-02, COMPANY-PDF-03 e AP-REVIEW-01, incluse le assunzioni documentate. Test automatici, build/vet e integrazioni PostgreSQL di test PASS come dettagliato nei rispettivi report QA. Verifiche visuali browser/PDF non eseguite dall'agente: limite dichiarato e accettato dal PO, senza convertirlo in un PASS tecnico. E28-S1-T1 rimane incompleto per prova Linux e hardening TECH-DEBT-06/07; approvazione della pubblicazione non equivale al completamento del lavoro pianificato. Nessun deploy autorizzato o eseguito.
 
 ## Archivio task accettati e proposta superata · 2026-10-16

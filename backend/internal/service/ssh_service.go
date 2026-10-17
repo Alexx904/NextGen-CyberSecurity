@@ -368,38 +368,89 @@ func (s *sshService) getSSHClientForServer(ctx context.Context, server *domain.S
 	}
 
 	clientConfig := &ssh.ClientConfig{
-		User: server.Username,
-		Auth: authMethods,
-		HostKeyCallback: func(_ string, _ net.Addr, key ssh.PublicKey) error {
-			if ssh.FingerprintSHA256(key) != server.HostKeyFingerprint {
-				return errors.New("chiave host SSH diversa dal fingerprint autorizzato")
-			}
-			return nil
-		},
+		User:    server.Username,
+		Auth:    authMethods,
 		Timeout: 10 * time.Second,
 	}
 
 	addr := net.JoinHostPort(server.Host, strconv.Itoa(server.Port))
 	handshakeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	conn, err := (&net.Dialer{}).DialContext(handshakeCtx, "tcp", addr)
+	// Match the defaults in x/crypto/ssh v0.27.0. Remove a rejected key family
+	// (including all RSA signature variants) before opening another connection.
+	algorithms := []string{
+		ssh.CertAlgoRSASHA256v01, ssh.CertAlgoRSASHA512v01,
+		ssh.CertAlgoRSAv01, ssh.CertAlgoDSAv01, ssh.CertAlgoECDSA256v01,
+		ssh.CertAlgoECDSA384v01, ssh.CertAlgoECDSA521v01, ssh.CertAlgoED25519v01,
+		ssh.KeyAlgoECDSA256, ssh.KeyAlgoECDSA384, ssh.KeyAlgoECDSA521,
+		ssh.KeyAlgoRSASHA256, ssh.KeyAlgoRSASHA512,
+		ssh.KeyAlgoRSA, ssh.KeyAlgoDSA, ssh.KeyAlgoED25519,
+	}
+	var observed []string
+	for len(algorithms) > 0 {
+		var rejectedType string
+		clientConfig.HostKeyAlgorithms = algorithms
+		clientConfig.HostKeyCallback = func(_ string, _ net.Addr, key ssh.PublicKey) error {
+			fingerprint := ssh.FingerprintSHA256(key)
+			if fingerprint == server.HostKeyFingerprint {
+				return nil
+			}
+			rejectedType = key.Type()
+			observed = append(observed, key.Type()+" "+fingerprint)
+			return errors.New("chiave host SSH diversa dal fingerprint autorizzato")
+		}
+		client, err := dialPinnedSSHClient(handshakeCtx, addr, clientConfig)
+		if err == nil {
+			return client, nil
+		}
+		if handshakeCtx.Err() != nil {
+			return nil, handshakeCtx.Err()
+		}
+		if rejectedType == "" {
+			if len(observed) == 0 {
+				return nil, err
+			}
+			return nil, fmt.Errorf("%w; chiave host SSH diversa dal fingerprint autorizzato: atteso %s; osservate %s. Verificare il pin tramite un canale fidato", err, server.HostKeyFingerprint, strings.Join(observed, ", "))
+		}
+		remaining := make([]string, 0, len(algorithms))
+		for _, algorithm := range algorithms {
+			keyType := algorithm
+			switch algorithm {
+			case ssh.KeyAlgoRSASHA256, ssh.KeyAlgoRSASHA512:
+				keyType = ssh.KeyAlgoRSA
+			case ssh.CertAlgoRSASHA256v01, ssh.CertAlgoRSASHA512v01:
+				keyType = ssh.CertAlgoRSAv01
+			}
+			if keyType != rejectedType {
+				remaining = append(remaining, algorithm)
+			}
+		}
+		algorithms = remaining
+	}
+	return nil, fmt.Errorf("chiave host SSH diversa dal fingerprint autorizzato: atteso %s; osservate %s. Verificare il pin tramite un canale fidato", server.HostKeyFingerprint, strings.Join(observed, ", "))
+}
+
+// All attempts share the caller's handshake deadline; credentials are sent only
+// after HostKeyCallback accepts the exact authorized fingerprint.
+func dialPinnedSSHClient(ctx context.Context, addr string, clientConfig *ssh.ClientConfig) (*ssh.Client, error) {
+	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("ssh dial %s fallito: %w", addr, err)
 	}
-	deadline, _ := handshakeCtx.Deadline()
+	deadline, _ := ctx.Deadline()
 	if err := conn.SetDeadline(deadline); err != nil {
 		_ = conn.Close()
 		return nil, err
 	}
 	closed := make(chan struct{})
-	stop := context.AfterFunc(handshakeCtx, func() { _ = conn.Close(); close(closed) })
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close(); close(closed) })
 	c, channels, requests, err := ssh.NewClientConn(conn, addr, clientConfig)
 	if !stop() {
 		<-closed
 	}
-	if handshakeCtx.Err() != nil {
+	if ctx.Err() != nil {
 		_ = conn.Close()
-		return nil, handshakeCtx.Err()
+		return nil, ctx.Err()
 	}
 	if err != nil {
 		_ = conn.Close()

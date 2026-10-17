@@ -2,17 +2,157 @@ package service_test
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/rsa"
 	"errors"
 	"net"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/ssh"
 	"nextgen-cybersec/internal/domain"
 	"nextgen-cybersec/internal/service"
 )
+
+func TestSSHMultipleHostKeys(t *testing.T) {
+	_, edKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ecKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var authentications atomic.Int32
+	var denyAuthentication atomic.Bool
+	config := &ssh.ServerConfig{PasswordCallback: func(_ ssh.ConnMetadata, _ []byte) (*ssh.Permissions, error) {
+		authentications.Add(1)
+		if denyAuthentication.Load() {
+			return nil, errors.New("authentication denied")
+		}
+		return nil, nil
+	}}
+	var signers []ssh.Signer
+	for _, key := range []any{edKey, rsaKey, ecKey} {
+		signer, err := ssh.NewSignerFromKey(key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		signers = append(signers, signer)
+		config.AddHostKey(signer)
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer conn.Close()
+				client, channels, requests, err := ssh.NewServerConn(conn, config)
+				if err != nil {
+					return
+				}
+				defer client.Close()
+				go ssh.DiscardRequests(requests)
+				for channel := range channels {
+					_ = channel.Reject(ssh.Prohibited, "no sessions")
+				}
+			}()
+		}
+	}()
+	host, portText, _ := net.SplitHostPort(listener.Addr().String())
+	port, _ := strconv.Atoi(portText)
+	repo := newMockSSHServerRepo()
+	svc := service.NewSSHService(repo, strings.Repeat("t", 32))
+	tenant := uuid.New()
+	for _, signer := range signers {
+		t.Run(signer.PublicKey().Type(), func(t *testing.T) {
+			server, err := svc.CreateServer(context.Background(), tenant, service.CreateSSHServerRequest{
+				Name: signer.PublicKey().Type(), Host: host, Port: port, Username: "user",
+				AuthType: domain.SSHAuthTypePassword, RawSecret: "synthetic", HostKeyFingerprint: ssh.FingerprintSHA256(signer.PublicKey()),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			before := authentications.Load()
+			client, err := svc.GetRawSSHClient(context.Background(), tenant, server.ID)
+			if err != nil {
+				t.Fatalf("authorized host key rejected: %v", err)
+			}
+			client.Close()
+			if authentications.Load() != before+1 {
+				t.Fatal("credentials sent on mismatched host key")
+			}
+		})
+	}
+	t.Run("authentication failure is not retried", func(t *testing.T) {
+		denyAuthentication.Store(true)
+		defer denyAuthentication.Store(false)
+		server, err := svc.CreateServer(context.Background(), tenant, service.CreateSSHServerRequest{
+			Name: "denied", Host: host, Port: port, Username: "user", AuthType: domain.SSHAuthTypePassword,
+			RawSecret: "synthetic", HostKeyFingerprint: ssh.FingerprintSHA256(signers[0].PublicKey()),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		before := authentications.Load()
+		client, err := svc.GetRawSSHClient(context.Background(), tenant, server.ID)
+		if client != nil {
+			client.Close()
+			t.Fatal("authentication failure accepted")
+		}
+		if err == nil || !strings.Contains(err.Error(), "unable to authenticate") {
+			t.Fatalf("authentication error lost: %v", err)
+		}
+		if authentications.Load() != before+1 {
+			t.Fatal("authentication failure retried")
+		}
+	})
+	t.Run("unknown pin", func(t *testing.T) {
+		pin := "SHA256:" + strings.Repeat("A", 43)
+		server, err := svc.CreateServer(context.Background(), tenant, service.CreateSSHServerRequest{
+			Name: "unknown", Host: host, Port: port, Username: "user", AuthType: domain.SSHAuthTypePassword,
+			RawSecret: "synthetic", HostKeyFingerprint: pin,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		before := authentications.Load()
+		client, err := svc.GetRawSSHClient(context.Background(), tenant, server.ID)
+		if client != nil {
+			client.Close()
+			t.Fatal("unknown host accepted")
+		}
+		if err == nil || !strings.Contains(err.Error(), pin) {
+			t.Fatalf("expected pin missing from diagnostic: %v", err)
+		}
+		for _, signer := range signers {
+			if !strings.Contains(err.Error(), ssh.FingerprintSHA256(signer.PublicKey())) {
+				t.Fatalf("observed key missing: %v", err)
+			}
+		}
+		if authentications.Load() != before {
+			t.Fatal("credentials sent to untrusted host")
+		}
+	})
+}
 
 func TestSSHHostIdentityBeforeAuthentication(t *testing.T) {
 	host, port, pin, cleanup := startTestSSHServer(t, "user", "synthetic-password")

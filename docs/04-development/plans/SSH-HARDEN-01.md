@@ -4,6 +4,41 @@ Ultimo allineamento: 2026-10-17 · working tree.
 
 ## Scope and contract
 
+### Follow-up SSH-CONNECT-02 · 2026-10-17
+
+PO reports a host-key mismatch from `/ssh-servers`, while Windows OpenSSH to
+`alex@192.168.1.18` succeeds. This supersedes the previous TCP-timeout symptom;
+it does not prove which key is stored or offered by the real target. No target
+credentials, known_hosts files or application database were read.
+
+Reproduced locally: Go's current host-key preference selects ECDSA on a server
+offering ECDSA/RSA/Ed25519, rejecting valid pins for its other keys. Fix: remove
+each rejected key family (including RSA signature aliases) and reconnect with
+the remaining algorithms. Every callback checks the original exact pin before
+authentication. A single shared 10s context bounds all attempts. Transport and
+authentication failures are not retried. Defaults mirror the pinned x/crypto
+v0.27.0 dependency; review this list when upgrading it. No dependency change,
+API/schema/UI change, automatic enrollment, or pin rotation is introduced.
+
+Evidence from root unless stated otherwise:
+
+- Baseline `scripts/verify.ps1 -Profile Quick -Scope Backend -BackendPackages ./internal/service`: PASS exit 0, 16.489s.
+- Red from backend: `go test ./internal/service -run '^TestSSHMultipleHostKeys$' -count=1`: FAIL exit 1, 2.464s wall; Ed25519/RSA valid pins rejected and diagnostic incomplete.
+- Green from backend: `go test ./internal/service -run '^TestSSH(MultipleHostKeys|HostIdentityBeforeAuthentication|HandshakeCancellation|CommandCancellation)$' -count=1`: PASS exit 0, 3.887s wall, 2.124s package.
+- Final `scripts/verify.ps1 -Profile Final -Scope Backend`: PASS exit 0; backend `go test ./...` 17.840s, `go vet ./...` 0.871s, `go build ./...` 1.470s; docs 0.671s, diff 0.055s.
+- Report: `.agent/artifacts/testing/20261017-163723-b83c9a1f.json`; GOCACHE in ignored `.agent/artifacts/go-cache`.
+
+Final suite includes multi-key success for each family, unknown pin rejection
+with all observed fingerprints, no password sent to mismatched keys, and one
+authentication attempt on a trusted key when login fails. Existing cancellation
+tests pass. Self hostile review covered finite family removal, RSA aliases,
+unchanged trust, shared deadlines, connection closure, tenant isolation and
+preservation of unrelated changes. No independent review claimed.
+Frontend/DB integration N/A: no frontend/repository/schema changes. No visual
+claim, target connection or deployment. To activate in the local Docker app:
+`docker compose up -d --build --no-deps backend`, then test the server card.
+Real Debian outcome and correctness of its saved pin remain unverified.
+
 First increment of TECH-DEBT-06/07; existing discovery changes are outside scope.
 Add `host_key_fingerprint` (canonical OpenSSH SHA256, empty for legacy inventory)
 to SSHServer, create/update DTOs, public responses and the registration form.

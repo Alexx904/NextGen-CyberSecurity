@@ -41,6 +41,21 @@ Un rollback del binario non ripristina automaticamente lo schema. Il piano di ri
 
 ## SSH-HARDEN-01 · Nota operativa · 2026-10-17 · working tree
 
+SSH-TOOLS-01: la configurazione frontend inoltra `/ws/` con HTTP/1.1 e header
+Upgrade/Connection; timeout proxy di lettura/scrittura 3600s. Vite ha `ws: true`
+sullo stesso percorso. Richiesto rebuild frontend per aggiornare Nginx, oltre
+al backend per la diagnostica firewall:
+`docker compose up -d --build --no-deps backend frontend`. Comando di attivazione
+per il PO, non eseguito durante il fix.
+
+La lettura firewall richiede iptables installato e privilegi effettivi root
+oppure sudo non interattivo autorizzato al comando di lettura. Il servizio usa
+PATH con sbin e `sudo -n`, senza riusare password SSH per sudo. Una sessione SSH
+riuscita non dimostra questi privilegi. Su Debian verificare nella sessione del
+PO `command -v iptables` e `sudo -n iptables -L -n -v --line-numbers` (sola
+lettura). Nessuna installazione o modifica sudoers automatica. Mutazioni e
+watchdog mantengono i prerequisiti precedenti e il gate Linux aperto.
+
 La migrazione 000010 aggiunge `ssh_servers.host_key_fingerprint` vuoto per
 l'inventario esistente. Prima delle connessioni occorre configurare il pin SHA256
 della chiave del server tramite un canale fidato. Non copiare il fingerprint

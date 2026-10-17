@@ -1,6 +1,28 @@
 # Dominio: Remote SSH Host & iptables/nftables Firewall Manager
 
+## SSH-TOOLS-01 · Proxy terminale e prerequisiti firewall · 2026-10-17 · working tree
+
+Accettato dal PO il 2026-10-17 con «Ok perfetto è funzionante», dopo il feedback
+sul 502. Esito operativo riferito dal PO; nessuna prova watchdog/rollback o
+configurazione sudoers specifica dedotta dall'accettazione.
+
+Nginx e Vite inoltrano `/ws/` al backend con upgrade WebSocket. La lettura
+iptables usa PATH comprendente sbin, locale C e accesso diretto per root oppure
+`sudo -n` per altri utenti: nessun prompt password su una sessione senza PTY.
+Prerequisiti mancanti e privilegi insufficienti mantengono HTTP 502 con codici
+`FIREWALL_UNAVAILABLE` / `FIREWALL_PRIVILEGES_REQUIRED` e messaggi operativi
+sanificati. Il frontend mostra il messaggio API anche quando HTTP non è 2xx.
+Nessuna concessione automatica di privilegi, installazione remota o modifica
+alle regole/watchdog. SSH-CONNECT-02 accettato dal PO: la connessione funziona.
+
 ## SSH-HARDEN-01 · Identità host e deadline · 2026-10-17 · working tree
+
+SSH-CONNECT-02: con più chiavi host, un mismatch esclude la famiglia appena
+osservata e ritenta la negoziazione su una nuova connessione, entro lo stesso
+budget handshake di 10s. Ogni tentativo richiede il pin esatto prima del login;
+nessuna fiducia automatica o modifica del pin. I retry si limitano ai mismatch,
+non agli errori di rete/autenticazione. Se nessuna chiave coincide, il messaggio
+indica fingerprint atteso e chiavi osservate, da verificare su canale fidato.
 
 `host_key_fingerprint` separato da `public_key_fingerprint` (chiave client).
 Create accetta stringa SHA256 OpenSSH canonica o vuota; update omesso conserva,

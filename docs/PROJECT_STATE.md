@@ -1,13 +1,13 @@
 # PROJECT STATE
 
+**Ultimo aggiornamento:** 2026-10-17
+**Modalità progetto:** esistente (onboarded formalmente).
+
 > Memoria viva dell'agente. Letta a inizio sessione, aggiornata a fine di ogni turno.
 > Non cancellare sezioni: se vuote, scrivi "nessuno".
 
-**Ultimo aggiornamento:** 2026-10-17
-**Modalità progetto:** esistente (onboarded formalmente sul branch chore/agent-onboarding)
-**Fase:** Tutte le modifiche approvate pubblicate su origin/main il 2026-10-17, commit applicativo `26cf93d`. Copia locale su main, nessun nuovo branch o force push. TEST-OPT-01, COMPANY-UX-02, COMPANY-PDF-03 e AP-REVIEW-01 accettati con limiti visuali espliciti. E28-S1-T1 e debiti SSH/Linux restano aperti; nessun deploy.
-
 ## Project Profile
+
 
 ```
 Nome progetto:           NextGen-CyberSecurity Platform
@@ -36,7 +36,6 @@ Ultima ricognizione `/status` (2026-10-16): branch `feat/nmap-scan-workflow-revi
 
 Verifica pre-push del 2026-10-15: `go test ./...`, `go build ./...`, `go vet ./...` PASS; frontend `npm.cmd test` PASS (18 file, 107 test), `npm.cmd run build` PASS (12,41 s). Verifica documentale PASS (24 documenti, 53 Markdown, 101 link/ancore). Controllo whitespace esteso al diff da `origin/main` PASS dopo normalizzazione. Comandi applicativi eseguiti con permessi estesi dopo blocchi locali della sandbox; nessuna modifica di logica applicativa introdotta nella preparazione.
 
-
 | Data | Comando | Esito | Fallimenti preesistenti noti |
 |---|---|---|---|
 | 2026-10-15 17:13 | `go vet ./...` (backend) | PASS (exit code 0) | Nessuno. 0 warning, static analysis perfetta. |
@@ -45,7 +44,17 @@ Verifica pre-push del 2026-10-15: `go test ./...`, `go build ./...`, `go vet ./.
 | 2026-10-15 17:13 | `npm run build` (frontend tsc + Vite) | PASS (exit code 0, 7.25s) | Nessuno. Compilazione TypeScript e bundle Vite ottimizzato, 0 errori. |
 | 2026-10-15 17:12 | `npm test` (frontend Vitest) | PASS (exit code 0, 18 file, 107 test) | Nessuno. Tutti i 107 test passano al 100% con 0 fallimenti. |
 
+**Fase:** rimozione della feature verificata; PO richiede commit e push totale su main. Riprogettazione da definire; nessun deploy.
+
 ## In corso
+
+**SSH-TOOLS-01 · accettazione autorevole 2026-10-17:** PO «Ok perfetto è funzionante» conferma il flusso SSH/terminale/iptables dopo la diagnosi del 502. Task `[x]`, rimosso dalle attese di accettazione. Le richieste di output Debian/refresh sotto sono storiche e non più pendenti; non si deduce quale intervento abbia risolto l'errore né si inventano prove autonome sul target. Assunzione operativa sui prerequisiti predisposti dal PO accettata nel flusso funzionante. SSH-HARDEN-01/TECH-DEBT-07 e prove watchdog/rollback restano separati. Solo registrazione documentale, nessun codice o comando remoto, commit/push/deploy; test applicativi non rieseguiti.
+
+**SSH-TOOLS-01 · feedback successivo 2026-10-17:** PO chiede se iptables debba essere sul server e riporta ancora «Request failed with status code 502svg». Confermato requisito del pacchetto sul Debian remoto e privilegi root/sudo. Ricognizione read-only locale: bundle attivo SSHServers-BeM5cCm3.js coincide con build verificata; stringa FIREWALL_PRIVILEGES_REQUIRED presente nel binario /app/server; richiesta senza credenziali al proxy `/api/v1/ssh/servers` restituisce 401 JSON atteso, exit 0 curl. Immagini container diverse dagli ultimi tag disponibili, ma questo NON prova assenza del fix (presenza verificata direttamente). Nessuna diagnosi definitiva di pacchetto assente, sudo o cache: proposti Ctrl+F5 e, nella sessione Debian del PO, `dpkg-query -W iptables` / `sudo -n /usr/sbin/iptables -L -n -v --line-numbers`. Nessuna lettura credenziali, connessione remota, installazione, modifica codice o deploy; task riaperto `[ ]`. Test applicativi invariati, non rieseguiti; verifiche documentali a parte.
+
+**SSH-TOOLS-01 · 2026-10-17 (aggiornamento autorevole):** PO «funziona la connessione» accetta SSH-CONNECT-02; terminale KO con errore WebSocket e iptables KO con HTTP 502. Corretti proxy `/ws/` mancanti in Nginx/Vite e lettura firewall root/PATH/sudo non interattivo; nuovi errori API sanificati e frontend mostra messaggio API. [QA](05-qa/SSH_TOOLS_QA.md): riproduzioni rosse→verdi, proxy echo bidirezionale Vite/Nginx PASS, gate Final All PASS exit 0 con 175 test UI. Nessuna nuova dipendenza, modifica DB, accesso target, lettura credenziali, concessione privilegi o deploy; modifiche preesistenti preservate. Assunzione reversibile: eventuali privilegi sudo sul Debian sono predisposti dall'amministratore, non concessi dall'app; stato effettivo ancora ignoto.
+
+Evidenze correnti dalla root con `scripts/verify.ps1 -Profile Final -Scope All`: backend `go test ./...` PASS exit 0 (23,983s), `go vet ./...` PASS exit 0 (3,918s), `go build ./...` PASS exit 0 (1,493s); frontend inizialmente FAIL exit 1 per esbuild sandbox. Report `.agent/artifacts/testing/20261017-153007-31f2fb13.json`. Da backend `go test -tags=integration -count=1 ./internal/repository/postgres` FAIL exit 1 (4,984s wall), configurazione TEST_DB_HOST assente; nessuno skip o PASS DB dedotto.
 
 **Aggiornamento autorevole 2026-10-17:** “Ok puoi pushare tutto sul main (non voglio vedere branch) Approvo tutto.” Tutte le modifiche presenti, incluse quelle preesistenti, sono autorizzate per commit e push su `https://github.com/Alexx904/NextGen-CyberSecurity.git`, destinazione `main`. Nessun nuovo branch o force push. I resoconti sotto sono evidenze storiche degli incrementi; gli stati precedenti `[!]`/`[~]` sono superati dall'accettazione PO per i quattro task consegnati. Rischio comunicato una volta: prove visuali non effettuate e laboratorio SSH assente. L'accettazione con questi limiti non dichiara PASS visuale né chiude lavoro non implementato. Test applicativi invariati rispetto alle ultime evidenze, riutilizzati secondo AGENTS sez. 8; controlli documentali/staging rieseguiti.
 
@@ -58,7 +67,6 @@ Verifica pre-push del 2026-10-15: `go test ./...`, `go build ./...`, `go vet ./.
 - Verifiche: frontend 26 file/164 test e build PASS; backend suite/build/vet PASS con DB_NAME esplicito di test. Integrazione repository SSH/etichette, migrazioni/idempotenza, down/up e trigger PostgreSQL PASS exit 0. Database dedicato creato e mantenuto: nextgen_company_ux02_test_20261017. Database applicativo solo letto (0 sotto-reparti), nessuna modifica dati/schema o connessione SSH remota.
 - Limiti: computer-use senza app/browser e renderer PDF assente; PDF verificato in memoria per contenuto/paginazione, non visualmente. Task [!] per gate UI/PDF. Assunzioni dichiarate: clienti SSH non sono nuove ACL; dossier aziendali multipagina ammessi per inventario; reparto AP mostra solo catene interne, vista azienda include ipotesi tra reparti. Nessuna dipendenza, push, commit o deploy.
 
-
 - **AP-REVIEW-01:** richiesta PO di validazione cyber, funzionamento, miglioramento grafico e guida per `/attack-path`. Confermati dati presenti/scenari sintetici e 3D solo se utile. Corretti cammini disconnessi, falsa esposizione Internet, pivot/trust arbitrari, collisione TCP/UDP, scope globale di fallback, layout non terminante su cicli e fetch su selezione. UI 2D percorso/completa, inferenze esplicite, indice euristico, provenienza e guida integrata. [Report QA](05-qa/ATTACK_PATH_REVIEW.md), [piano](04-development/plans/AP-REVIEW-01.md).
 - **Verifica AP 2026-10-17:** test backend mirati rosso→verde, `go test ./...`, `go build ./...`, `go vet ./...` PASS exit 0; frontend `npm.cmd test` PASS (23 file, 156 test) e build PASS exit 0. Snapshot locale in sola lettura: 11 tenant, 17 target, 20 finding, nessuna CVE. Servizio aggiornato validato su snapshot per tenant a soglie 0/7/9. Nessun exploit, scansione o cambiamento DB. Browser assenti nel runtime (iab/Chrome indisponibili): niente screenshot né PASS visuale, task `[!]`.
 - **Assunzioni AP:** strumento di triage euristico, nessuna certificazione di reachability/compromissione; /24 convenzionale non maschera dimostrata. 2D scelto per sequenza senza occlusioni, non sulla base di user testing. Dati storici e cap dichiarati; approfondimenti in TECH-DEBT-08. Guida nel prodotto, `docs/` solo agenti. Nessuna dipendenza o migrazione.
@@ -70,6 +78,12 @@ Verifica pre-push del 2026-10-15: `go test ./...`, `go build ./...`, `go vet ./.
 - Checkpoint `b16264b`: 23 file remediation/firewall, test/DTO e documenti/archivio task pubblicati prima della revisione AP. Dopo rifiuto iniziale dell'auto-review, PO conferma contenuto e repository/branch esplicitamente. Gate Linux di E28-S1-T1 invariato; commit non equivale ad accettazione funzionale.
 
 ## Accettati recentemente dal PO (`[x]`)
+
+- **REMOVE-01 · 2026-10-17:** il PO richiede il push totale su main dopo la conferma della rimozione. Verificati assenza dei file e dei collegamenti operativi della feature e allineamento HEAD/origin/main (0/0 dopo fetch). Inclusione delle modifiche SSH/firewall presenti esplicitamente autorizzata da «push totale». Evidenze applicative del turno precedente riutilizzate: sorgenti, test e configurazioni invariati; nessuna suite ripetuta dopo soli Markdown. Nessun deploy o pulizia dati applicativi.
+
+- **SSH-TOOLS-01 · 2026-10-17:** PO «Ok perfetto è funzionante». Accettati proxy terminale e lettura/diagnostica iptables. Evidenze tecniche nel [QA SSH](05-qa/SSH_TOOLS_QA.md): gate All PASS, 175 test frontend, proxy Vite/Nginx bidirezionale. Esito reale confermato dal PO, non da una sessione agente. Nessun nuovo dettaglio sullo stato pacchetto/sudoers o test watchdog dedotto; nessun commit/push/deploy autorizzato implicitamente.
+
+- **SSH-CONNECT-02 · 2026-10-17:** PO conferma connessione funzionante. Accettato il fix di negoziazione multi-key, senza estendere l'accettazione a terminale/iptables o SSH-HARDEN-01. Evidenze backend e limiti storici nel [piano SSH](04-development/plans/SSH-HARDEN-01.md). Nessun commit/push/deploy autorizzato dal feedback.
 
 - **TEST-OPT-01, COMPANY-UX-02, COMPANY-PDF-03, AP-REVIEW-01:** accettazione esplicita globale del PO il 2026-10-17 e richiesta di pubblicare tutto su main. Assunzioni confermate, inclusi Executive sintetico con cinque priorità per reparto, SSH indipendente con clienti autonomi e Attack Path euristico 2D. Limiti visuali dichiarati accettati per la consegna; nessuna prova visuale autonoma o attestazione di lateral movement reale dedotta. Rischi SSH/Linux e task futuri mantengono i loro stati tecnici.
 
@@ -100,7 +114,21 @@ Verifica pre-push del 2026-10-15: `go test ./...`, `go build ./...`, `go vet ./.
 - **FEAT-REPORT-PDF-UX-01 · Perfezionamento Grafico, Tipografico & Coerenza Dati dei Report PDF A4 (FR-18, UC-17)**:
   - Validato e accettato dal PO in data 2026-10-10.
 
+## Evidenze della rimozione autorizzata alla pubblicazione
+
+**REMOVE-01 · Ritiro Penetration Test · 2026-10-17 · working tree.** Su richiesta esplicita del PO rimossi pagina, componenti, API/tipi, handler/service/domain/repository, esecutore e 53 file dedicati, incluse migrazioni sorgente 000011/000012, documenti, piani e ADR della feature. Eliminati task e vecchie attese/decisioni della feature; riprogettazione da definire, nessun requisito precedente assunto valido. Sidebar e azione Findings rimosse. Preservate modifiche SSH/firewall e roadmap restante. Self-review in prima persona, nessun commit/push/deploy.
+
+- Prova PO: avviare la versione ricompilata; sidebar senza voce dedicata e Findings senza «Esegui test». Verifica visuale browser non eseguita.
+- Backend dalla root: `scripts/verify.ps1 -Profile Final -Scope All`, cache artifacts dedicata; `go test ./...` 29,737s, `go vet ./...` 3,654s, `go build ./...` 1,790s PASS exit 0. Report `.agent/artifacts/testing/20261017-185904-cf2452f2.json`; runner complessivo exit 1 per esbuild bloccato dalla sandbox, non per test backend falliti.
+- Frontend dalla root: `scripts/verify.ps1 -Profile Final -Scope Frontend` con escalation: 167 test/28 file 4,980s, build/typecheck 10,724s, docs 0,626s e diff 0,063s PASS exit 0. Report `.agent/artifacts/testing/20261017-185958-07928d7e.json`.
+- PostgreSQL da `backend`: `go test -tags=integration -count=1 ./internal/repository/postgres`, PASS exit 0, 5,551s wall / 4,657s test. Include migrazioni e round-trip SSH down/up. Configurazione TEST_DB_* esplicita su container dedicato `nextgen-removal-test-20261017`, loopback 55441, DB `nextgen_removal_test`; nessun database applicativo toccato. Prima invocazione non partita per path GOCACHE errato, corretta prima della verifica. Preparazione Docker separata dalle durate dei test.
+- Doc Sync: ripuliti indice docs; PRD/requisiti/use case/user story; UX/UI; HLD, DOMAIN_MAP, indice ADR e contratti API/schema; TASK_LIST, DEPLOYMENT e questo stato. Aggiornati domini reporting_and_assets e vulnerability_intelligence per navigazione e azione Findings. Nessun link a documenti eliminati.
+- Assunzione: ritiro dal repository e dalla build corrente; nessuna cancellazione dei dati persistiti nei database esistenti, nessuna modifica a credenziali/runtime o container applicativi. Il migratore preesistente riallinea il marker se superiore alla versione sorgente 10, senza eliminare tabelle residue. Non introdotto cleanup distruttivo. Categorie storiche Nmap e note metodologiche generali preservate.
+- Limiti: nessun collaudo visuale, nessun deploy; un servizio già avviato continua a usare la build precedente fino al riavvio/aggiornamento gestito dal PO. Il PO ha autorizzato esplicitamente commit e push nel turno successivo alla consegna.
+
 ## In attesa di accettazione utente
+
+Nessuna attesa relativa alla feature rimossa; restano validi i gate SSH/Linux descritti nelle rispettive sezioni.
 
 SSH-HARDEN-01: primo incremento TECH-DEBT-06/07 implementato e verificato automaticamente; task `[ ]` per collaudo visuale non eseguito, nessuna dichiarazione di gate Verified. Pin SHA256 host separato dal fingerprint client, connessioni prive di fiducia bloccate, deadline handshake 10s e comandi/test 30s con cancellazione. PostgreSQL isolato e migrazione up/down/up PASS. Browser runtime vuoto, iab indisponibile; nessun collaudo Linux remoto. Piano/evidenze in [SSH-HARDEN-01](04-development/plans/SSH-HARDEN-01.md). Nessun commit/push/deploy; modifiche Discovery preesistenti preservate. TECH-DEBT-07 ed E28-S1-T1 restano aperti.
 
@@ -108,10 +136,20 @@ DISCOVERY-01 accettato dal PO il 2026-10-17 con “OK”; evidenze e limiti nell
 
 ## Bloccati / Domande aperte per l'utente
 
+SSH-CONNECT-01/02: il PO conferma ora che la connessione funziona; la richiesta
+di confronto TCP precedente sotto è storica e non va ripetuta. Nuova prova
+richiesta solo per terminale e firewall dopo attivazione SSH-TOOLS-01.
+
+Aggiornamento SSH 2026-10-17: il nuovo errore handshake riferito dal PO supera
+il sintomo timeout di SSH-CONNECT-01 descritto sotto. Nessun nuovo probe TCP
+eseguito: SSH-CONNECT-02 corregge il difetto multi-key riprodotto localmente,
+senza attribuire automaticamente questa causa al server reale.
+
+- **SSH-CONNECT-01 · 2026-10-17:** check `/ssh-servers` su richiesta PO, errore `ssh dial 192.168.1.18:22 ... i/o timeout`. Service usa TCP dal backend prima del controllo host key; nessuna evidenza che il fingerprint fornito sia la causa. Fuori sandbox: TcpClient Windows timeout a 5s e 12s, `nc -z -v -w 5` nel container backend timeout (route via 172.18.0.1, sorgente 172.18.0.3); Windows 192.168.1.8/24 Ethernet, ping restituisce host irraggiungibile e neighbor .18 Unreachable/MAC nullo. `ssh -G alex@192.168.1.18` conferma hostname e porta 22, nessun proxy riportato. PO riferisce invece accesso via CMD con quel comando: richiesti nuova sessione e Test-NetConnection contemporanei sul PC Docker. Diagnosi aperta, nessuna modifica codice/rete/firewall, credenziale letta o autenticazione remota. Prove iniziali in sandbox negate, non confuse con l'esito dei probe estesi. Nessuna suite applicativa necessaria per questa diagnosi senza cambi codice; nessun PASS connessione o causa definitiva.
+
 - SSH-HARDEN-01: inventario browser vuoto e apertura iab fallita; nessuna prova visuale/screenshot inventata. Assunzione esplicita: pin fornito dall'operatore tramite un canale indipendentemente fidato, inventario senza pin conservato ma non connettibile. La transazione watchdog sull'host e il relativo collaudo Linux sono ancora lavoro necessario per TECH-DEBT-07.
 
 - **Limite visuale COMPANY-UX-02 / COMPANY-PDF-03:** collaudo autonomo desktop/mobile e PDF non eseguito, browser e renderer non disponibili. Prove automatiche/DB concluse; il PO accetta gli incrementi con questo limite esplicito e autorizza pubblicazione. Nessun PDF autonomo consegnato come verificato visualmente, nessuna domanda funzionale pendente.
-
 
 - **Limite visuale AP-REVIEW-01 accettato dal PO:** inventario browser vuoto, verifica grafica autonoma e screenshot non eseguiti; DOM e interazioni coperte da test. I dati locali privi di CVE non permettono validazione reale di catene di exploit; scenari sintetici coprono il modello. Nessun blocco alla pubblicazione richiesta.
 
@@ -138,14 +176,12 @@ DISCOVERY-01 accettato dal PO il 2026-10-17 con “OK”; evidenze e limiti nell
 
 - **ADR-18 (2026-10-17):** dashboard unica, guard aziendale con eccezione tool SSH, clienti SSH autonomi, gerarchia due livelli nelle nuove scritture, report/IP per reparto e selettore reparto AP senza soglia UI.
 
-
 - **ADR-17 (2026-10-17):** Attack Path come analisi euristica verificabile con evidenze/ipotesi distinte, percorsi su archi reali del modello, score non probabilistico, scope aziendale completo e guida UI 2D. Nessuna inferenza di trust dall'inventario SSH. Gate visuale separato.
 
 - **ADR-15 (2026-10-16):** telemetria XML Nmap, snapshot attivi e lettura batch per monitor lotto; API additive, nessuna migrazione DB, ETA esplicitamente euristica. Durate indicative richieste dal PO dopo la precedente rimozione delle stime promozionali.
 
-- **ADR-14 (2026-10-15):** profili espliciti + editor Nmap entro allowlist, API/DB compatibili, matching argomenti/timeout e classificazione server dei custom. Nessuna promessa di penetration test/conformità; Discovery rispetta l'opzione porte.
-
 - **ADR-13 (2026-10-15):** Documentazione `docs/` riservata agli agenti; rimossi manuale e screenshot, evidenze temporanee fuori da `docs/`, controllo strutturale automatizzato.
+- **ADR-14 (2026-10-15):** profili espliciti + editor Nmap entro allowlist, API/DB compatibili, matching argomenti/timeout e classificazione server dei custom. Discovery rispetta l'opzione porte; limiti dei controlli documentati nel dominio scanner.
 - **ADR-12 (2026-10-15):** Documentazione per fasi SDLC, ruoli con input/output e handoff, gate per feature, fonti canoniche distinte e migrazione senza duplicare i documenti storici. Dettagli in `docs/03-architecture/ADR/README.md`.
 
 - **ADR-11 (2026-10-15):** `AGENTS.md` è l'entry point nativo Codex; `.agent/workflows/` è una libreria di playbook indicizzata, non un registro di slash command. Introdotti bootstrap evidence-first, tutela delle modifiche preesistenti, fallback per browser/subagent e permessi espliciti per commit, push, merge, tag e deploy.
@@ -173,12 +209,14 @@ DISCOVERY-01 accettato dal PO il 2026-10-17 con “OK”; evidenze e limiti nell
 
 ## Log sessioni (ultime 5, la più recente in alto)
 
+- 2026-10-17 · Pubblicazione richiesta dal PO: feedback/accettazione e commit.md, ricontrollo rimozione e fetch origin PASS, main inizialmente allineato. Push totale autorizzato include SSH/firewall preesistenti; gate applicativi precedenti validi perché input invariati, documenti/staging ricontrollati. Nessun deploy, force push o modifica ai database applicativi. Esito remoto da confermare con il comando push e il confronto finale dei riferimenti.
+
+- 2026-10-17 · REMOVE-01: feedback/modifica → feature/orchestration; rimozione integrale richiesta dal PO, 53 file dedicati eliminati, documenti/task/riferimenti condivisi ripuliti. Working tree preesistente SSH preservata. Backend suite/vet/build, frontend 167 test/build, PostgreSQL dedicato e docs/diff PASS exit 0 per i rispettivi comandi; blocco esbuild sandbox risolto con escalation. Self-review e Doc Sync, nessun target/DB applicativo/deploy/commit/push. Riprogettazione da definire; consegna in attesa del PO.
+
+- 2026-10-17 · SSH-TOOLS-01: feedback/accettazione «Ok perfetto è funzionante». Task `[x]`, stato/QA/dominio allineati e attesa rimossa. Risoluzione confermata dal PO, causa operativa precisa non dedotta. Solo Markdown, suite applicative non rieseguite; gate watchdog/Linux separati preservati, nessun commit/push/deploy.
+
+- 2026-10-17 · SSH-TOOLS-01: feedback/correzione e accettazione connessione. Proxy WS mancanti trovati, lettura firewall non interattiva e messaggi API corretti. Red/green service/UI, proxy reale echo Vite/Nginx, gate All PASS exit 0 con 175 test UI. Self-review e Doc Sync; nessun DB/target modificato, privilegio concesso, nuova dipendenza o deploy. Prova Debian al PO; blocchi sandbox Vite/Docker risolti con escalation, nessun rifiuto auto-review. Primo riferimento immagine smoke obsoleto e argomento runner Quick non valido corretti, senza attribuirli ai test applicativi.
+
 - 2026-10-17 · PO “Procedi” sul rientro debiti: feedback→feature/orchestration, incremento SSH-HARDEN-01 (TECH-DEBT-06 e deadline di 07). Discovery preesistente preservata, nessun branch/commit/push/deploy. Test pin assente rosso→verde; pinning, rotazione/reset, deadline/cancellazione, migrazione 000010 e modale. Gate finale All+Integration PASS exit 0: backend suite 21,260s/vet 0,796s/build 1,353s; frontend 166 test 10,865s/build 14,767s; DB 4,905s incluso up/down/up. Docker solo test dedicato; nessuna migrazione applicativa. Vite inizialmente bloccato dalla sandbox, riuscito con escalation; evento submit esplicito nel test DOM dopo controllo validità. Self-review e Doc Sync; browser vuoto/iab assente: task `[ ]`, nessun PASS visuale o Linux. TECH-DEBT-07 richiede ancora transazione remota/coordinamento e collaudo; altri debiti non modificati.
 
 - 2026-10-17 · DISCOVERY-01: feedback/modifica e orchestration, working tree iniziale pulita. Riprodotti MAC invalidi e falsi vendor software, corretti e verificati con gate finale backend PASS; test cache cambio MAC, /31-/32 e HTTP locali PASS. GOCACHE locale negli artifacts per limite cache di sistema. Doc Sync e self-review; limiti OUI/hostname/ARP e pool HTTP futuro documentati, nessuna scansione cliente o modifica remota.
-
-- 2026-10-17 · PO approva tutto e richiede push su main. Accettati TEST-OPT-01/COMPANY-UX-02/COMPANY-PDF-03/AP-REVIEW-01 con limiti visuali documentati. Fonti applicative/test/config invariati dalle evidenze PASS: riuso proporzionato, controlli documentali e staging rieseguiti PASS. Controllo file sensibili/firme: unico header chiave è placeholder UI, nessun corpo chiave o token rilevato. Commit `26cf93d` (91 file), main aggiornato fast-forward e push origin/main riuscito, nessun force push/nuovo branch/deploy. E28-S1-T1/Linux e TECH-DEBT-06/07 restano aperti. COMPANY-PDF-03 include CVE per reparto, Tecnico completo ed Executive top cinque locali.
-
-- 2026-10-17 · TEST-OPT-01: autorizzata ottimizzazione del testing, implementati gate per lato e riuso evidenze, runner misurato e tag integration con TEST_DB_* sicure, CI PostgreSQL effimero. Backend suite/build/vet e DB reali PASS, configurazione 12 casi PASS, smoke frontend 30 test PASS; negativi DB/config e runner FAIL attesi verificati. Container solo test arrestato/rimosso. Doc Sync e self-review; `[~]` in attesa PO. Nessuna dipendenza, modifica applicativa, commit/push/deploy; CI remota non eseguita. Modifiche preesistenti preservate.
-
-- 2026-10-17 · COMPANY-UX-02: integrata richiesta dashboard/aziende/reparti/report/AP e precisazione SSH indipendente con clienti autonomi confermata. UI/service/DB e DTO aggiornati; test gerarchia rosso→verde, frontend 164 test/build e Go suite/build/vet PASS. Up/down e trigger verificati su DB test separato, dati applicativi invariati. PDF contenuto/paginazione PASS, gate browser/render aperti [!]. Nessuna nuova dipendenza, commit/push/deploy; AP precedente preservato e non accettato.

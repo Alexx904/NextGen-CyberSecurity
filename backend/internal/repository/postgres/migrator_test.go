@@ -12,7 +12,7 @@ func TestGetMaxSourceVersion(t *testing.T) {
 		t.Fatalf("GetMaxSourceVersion ha restituito un errore imprevisto: %v", err)
 	}
 
-	// Latest source includes the independent SSH host identity pin.
+	// Latest source includes SSH host key pinning.
 	if maxVer != 10 {
 		t.Errorf("Attesa versione massima 10, ottenuta %d", maxVer)
 	}

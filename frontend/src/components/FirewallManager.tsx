@@ -24,6 +24,11 @@ interface FirewallManagerProps {
   onClose: () => void;
 }
 
+function firewallErrorMessage(error: unknown, fallback: string): string {
+  const err = error as { response?: { data?: { error?: { message?: string } } }; message?: string } | null;
+  return err?.response?.data?.error?.message || err?.message || fallback;
+}
+
 export const FirewallManager: React.FC<FirewallManagerProps> = ({
   server,
   onClose,
@@ -64,8 +69,8 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
       } else {
         setCountdown(0);
       }
-    } catch (err: any) {
-      setError(err.message || 'Impossibile caricare le regole firewall dal server remoto');
+    } catch (err: unknown) {
+      setError(firewallErrorMessage(err, 'Impossibile caricare le regole firewall dal server remoto'));
     } finally {
       setLoading(false);
     }
@@ -100,8 +105,8 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
     try {
       await sshApi.confirmFirewall(server.id);
       await fetchStatus();
-    } catch (err: any) {
-      setError(err.message || 'Errore durante la conferma della configurazione firewall');
+    } catch (err: unknown) {
+      setError(firewallErrorMessage(err, 'Errore durante la conferma della configurazione firewall'));
     } finally {
       setActionLoading(false);
     }
@@ -116,8 +121,8 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
     try {
       await sshApi.rollbackFirewall(server.id);
       await fetchStatus();
-    } catch (err: any) {
-      setError(err.message || 'Errore durante il rollback del firewall');
+    } catch (err: unknown) {
+      setError(firewallErrorMessage(err, 'Errore durante il rollback del firewall'));
     } finally {
       setActionLoading(false);
     }
@@ -135,8 +140,8 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
       if (updated.active_safety_timer) {
         setCountdown(updated.safety_timeout_seconds || 60);
       }
-    } catch (err: any) {
-      setError(err.message || 'Errore durante l\'eliminazione della regola firewall');
+    } catch (err: unknown) {
+      setError(firewallErrorMessage(err, 'Errore durante l\'eliminazione della regola firewall'));
     } finally {
       setActionLoading(false);
     }
@@ -170,8 +175,8 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
       // Reset campi
       setNewPort('');
       setNewComment('');
-    } catch (err: any) {
-      setError(err.message || 'Errore durante l\'inserimento della regola firewall');
+    } catch (err: unknown) {
+      setError(firewallErrorMessage(err, 'Errore durante l\'inserimento della regola firewall'));
     } finally {
       setActionLoading(false);
     }

@@ -1,0 +1,19 @@
+import { render, screen } from '@testing-library/react';
+import { expect, it, vi } from 'vitest';
+import { FirewallManager } from './FirewallManager';
+import { sshApi } from '../api/ssh';
+import type { SSHServerItem } from '../types/ssh';
+
+vi.mock('../api/ssh', () => ({ sshApi: { getFirewallStatus: vi.fn() } }));
+
+it('shows the actionable API error for a firewall HTTP 502', async () => {
+  const message = 'Accesso firewall negato: configurare sudo non interattivo.';
+  vi.mocked(sshApi.getFirewallStatus).mockRejectedValue({
+    message: 'Request failed with status code 502',
+    response: { data: { error: { message } } },
+  });
+  const server: SSHServerItem = { id: 'server', tenant_id: 'tenant', name: 'Debian', host: '192.0.2.1', port: 22, username: 'alex', auth_type: 'PASSWORD', status: 'ONLINE', created_at: '', updated_at: '' };
+  render(<FirewallManager server={server} onClose={vi.fn()} />);
+  expect(await screen.findByText(message)).toBeDefined();
+  expect(screen.queryByText('Request failed with status code 502')).toBeNull();
+});

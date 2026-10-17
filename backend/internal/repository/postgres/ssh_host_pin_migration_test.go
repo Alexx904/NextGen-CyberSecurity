@@ -47,7 +47,7 @@ func TestSSHHostPinMigrationRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer migrator.Close()
-	if err := migrator.Steps(-1); err != nil {
+	if err := migrator.Migrate(9); err != nil {
 		t.Fatal(err)
 	}
 	var exists bool
@@ -61,7 +61,11 @@ func TestSSHHostPinMigrationRoundTrip(t *testing.T) {
 	if secret != "synthetic-ciphertext" || client != "Client label" || clientFP != "client-fingerprint" {
 		t.Fatal("down damaged inventory/client identity")
 	}
-	if err := migrator.Steps(1); err != nil {
+	maxVersion, err := postgres.GetMaxSourceVersion()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := migrator.Migrate(maxVersion); err != nil {
 		t.Fatal(err)
 	}
 	var restored string

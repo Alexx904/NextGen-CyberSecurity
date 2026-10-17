@@ -23,13 +23,13 @@ import (
 )
 
 type mockSSHServiceForHandler struct {
-	executeCommandFunc func(ctx context.Context, tenantID, serverID uuid.UUID, cmd string) (string, string, int, error)
-	createServerFunc   func(ctx context.Context, tenantID uuid.UUID, req service.CreateSSHServerRequest) (*domain.SSHServer, error)
-	getServerFunc      func(ctx context.Context, tenantID, serverID uuid.UUID) (*domain.SSHServer, error)
-	listServersFunc    func(ctx context.Context, tenantID uuid.UUID) ([]*domain.SSHServer, error)
-	updateServerFunc   func(ctx context.Context, tenantID, serverID uuid.UUID, req service.UpdateSSHServerRequest) (*domain.SSHServer, error)
-	deleteServerFunc   func(ctx context.Context, tenantID, serverID uuid.UUID) error
-	testConnectionFunc func(ctx context.Context, tenantID, serverID uuid.UUID) (*service.SSHConnectionTestResult, error)
+	executeCommandFunc  func(ctx context.Context, tenantID, serverID uuid.UUID, cmd string) (string, string, int, error)
+	createServerFunc    func(ctx context.Context, tenantID uuid.UUID, req service.CreateSSHServerRequest) (*domain.SSHServer, error)
+	getServerFunc       func(ctx context.Context, tenantID, serverID uuid.UUID) (*domain.SSHServer, error)
+	listServersFunc     func(ctx context.Context, tenantID uuid.UUID) ([]*domain.SSHServer, error)
+	updateServerFunc    func(ctx context.Context, tenantID, serverID uuid.UUID, req service.UpdateSSHServerRequest) (*domain.SSHServer, error)
+	deleteServerFunc    func(ctx context.Context, tenantID, serverID uuid.UUID) error
+	testConnectionFunc  func(ctx context.Context, tenantID, serverID uuid.UUID) (*service.SSHConnectionTestResult, error)
 	getRawSSHClientFunc func(ctx context.Context, tenantID, serverID uuid.UUID) (*ssh.Client, error)
 }
 
@@ -374,6 +374,26 @@ func TestSSHFirewallHandler_ServerCRUD(t *testing.T) {
 func TestSSHFirewallHandler_FirewallOperations(t *testing.T) {
 	tenantID := uuid.New()
 	serverID := uuid.New()
+	for _, tc := range []struct {
+		name, code string
+		err        error
+	}{
+		{"missing iptables", "FIREWALL_UNAVAILABLE", domain.ErrFirewallUnavailable},
+		{"insufficient privileges", "FIREWALL_PRIVILEGES_REQUIRED", domain.ErrFirewallPrivilegesRequired},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fw := &mockFirewallServiceForHandler{getStatusFunc: func(context.Context, uuid.UUID, uuid.UUID) (*domain.FirewallStatus, error) { return nil, tc.err }}
+			h := handler.NewSSHFirewallHandler(&mockSSHServiceForHandler{}, fw)
+			r := chi.NewRouter()
+			r.Get("/api/v1/ssh/servers/{id}/firewall", h.GetFirewallStatus)
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/ssh/servers/"+serverID.String()+"/firewall", nil)
+			rr := httptest.NewRecorder()
+			r.ServeHTTP(rr, req.WithContext(setupSSHContext(tenantID)))
+			if rr.Code != http.StatusBadGateway || !bytes.Contains(rr.Body.Bytes(), []byte(tc.code)) || !bytes.Contains(rr.Body.Bytes(), []byte(tc.err.Error())) {
+				t.Fatalf("actionable firewall error missing: %d %s", rr.Code, rr.Body.String())
+			}
+		})
+	}
 
 	t.Run("GetFirewallStatus_Success", func(t *testing.T) {
 		mockFW := &mockFirewallServiceForHandler{
@@ -537,4 +557,3 @@ func TestSSHFirewallHandler_FirewallOperations(t *testing.T) {
 		}
 	})
 }
-

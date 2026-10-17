@@ -34,6 +34,16 @@ Tutte le API rispondono sotto `/api/v1` con payload standard `{ "success": true,
 
 ## Autorità del contratto
 
+### SSH-TOOLS-01 · 2026-10-17 · working tree
+
+`GET /api/v1/ssh/servers/{id}/firewall`: isolamento tenant e RBAC SecOps/admin
+invariati. Errori 502 additivi `FIREWALL_UNAVAILABLE` (iptables non disponibile)
+e `FIREWALL_PRIVILEGES_REQUIRED` (root/sudo non interattivo necessari), con
+messaggi sanificati; altri errori SSH conservano `SSH_EXECUTION_FAILED`.
+Nessuno stderr remoto arbitrario incluso nei nuovi messaggi. Nginx e Vite
+inoltrano `/ws/` con upgrade al backend, preservando path/query e controlli
+del ticket monouso; nessun cambiamento al protocollo terminale o ai permessi.
+
 ### COMPANY-UX-02 · 2026-10-17 · working tree
 
 - `POST/PUT /target-groups`: padre deve essere un'azienda radice; nodo con figli non può diventare reparto; violazioni restituiscono errore validazione anche se intercettate dal trigger DB. Contratto tenant invariato.

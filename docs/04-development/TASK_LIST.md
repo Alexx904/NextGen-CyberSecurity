@@ -22,6 +22,31 @@
 
 ## 🚀 Coda di Sviluppo Attiva (Priorità validate dal PO)
 
+- [x] SSH-TOOLS-01 · Terminale WebSocket e lettura iptables
+  - Accettazione PO: 2026-10-17, «Ok perfetto è funzionante» dopo la diagnosi del 502. Nessuna chiusura implicita del gate watchdog/Linux.
+  - File: frontend/nginx.conf, frontend/vite.config.ts, FirewallManager e test; backend domain/service/handler firewall e test.
+  - Dipende da: SSH-CONNECT-02, accettato dal PO per la connessione.
+  - Test: proxy WebSocket isolato, sudo non interattivo/root, errori prerequisiti/privilegi, visualizzazione API; gate finale All senza DB (nessun repository/schema modificato).
+  - Docs: dominio SSH, API_SPEC, DOMAIN_MAP, DEPLOYMENT, [QA](../05-qa/SSH_TOOLS_QA.md) e PROJECT_STATE.
+  - Evidenze: proxy Vite/Nginx bidirezionale PASS; gate Final All suite backend/vet/build, 175 test frontend/build e documenti/diff PASS exit 0. Nessun DB o target modificato.
+  - Feedback successivo: PO riferisce ancora 502 generico. Check runtime 2026-10-17: bundle SSHServers-BeM5cCm3.js servito, diagnostica FIREWALL_PRIVILEGES_REQUIRED presente nel binario, proxy API → 401 JSON senza autenticazione (atteso). Causa target e cache browser non provate; richiesti verifica pacchetto/lettura sudo sul Debian e refresh forzato. Nessun nuovo fix o PASS reale dichiarato.
+  - DoD: riproduzione rossa→verde, gate finale, Doc Sync e self-review; prova Debian reale al PO.
+
+- [x] SSH-CONNECT-02 · Negoziazione host con più chiavi e pin SHA256
+  - File: backend/internal/service/ssh_service.go, ssh_hardening_test.go.
+  - Dipende da: nessuno.
+  - Test: loopback multi-key Ed25519/RSA rosso→verde, ECDSA e pin sconosciuto senza autenticazione PASS; errore login non ritentato e cancellazione PASS. Gate Final Backend: suite 17,840s/vet 0,871s/build 1,470s, documenti/diff PASS exit 0.
+  - Docs: ssh_and_firewall, piano SSH-HARDEN-01, PROJECT_STATE.
+  - DoD: riproduzione rossa→verde, regressione backend, Doc Sync e self-review; connessione Debian reale da confermare dal PO.
+
+- [!] SSH-CONNECT-01 · Diagnosi timeout TCP server 192.168.1.18:22
+  - Scope: `/ssh-servers` non collega; PO riferisce accesso da CMD con `ssh alex@192.168.1.18` e fingerprint già fornito.
+  - File: nessuna modifica applicativa; analizzati service SSH, handler, client frontend e rete Docker.
+  - Dipende da: confronto contemporaneo dal CMD del PO sul PC Docker.
+  - Test: TCP Windows timeout dopo 5s e 12s; `docker exec nextgen-backend sh -c 'nc -z -v -w 5 192.168.1.18 22'` timeout; ping host irraggiungibile, neighbor Ethernet Unreachable/MAC nullo. `ssh -G` conferma hostname/porta, nessun proxy riportato.
+  - Docs: PROJECT_STATE; contratto SSH esistente invariato.
+  - DoD: raggiungibilità dal backend e test connessione applicativo da verificare dopo riconciliazione delle evidenze; nessun fix o PASS funzionale dichiarato.
+
 - [ ] SSH-HARDEN-01 · Pinning host SSH e deadline connessioni/comandi
   - Scope PO: avvio TECH-DEBT-06/07, 2026-10-17 “Procedi”; primo incremento implementato, nessuna chiusura implicita del watchdog o degli altri debiti.
   - File: domain/service SSH, repository/handler, migrazione 000010 up/down, tipi e modale SSH e test.

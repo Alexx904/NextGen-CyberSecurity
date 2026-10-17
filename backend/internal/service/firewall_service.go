@@ -52,9 +52,20 @@ func NewFirewallService(executor SSHExecutor, backupRepo domain.FirewallBackupRe
 
 // GetStatus recupera le catene attive e lo stato dell'anti-lockout timer
 func (s *firewallService) GetStatus(ctx context.Context, tenantID, serverID uuid.UUID) (*domain.FirewallStatus, error) {
-	cmd := "sudo iptables -L -n -v --line-numbers"
+	// SSH exec has no interactive TTY. Never wait for a sudo password prompt.
+	cmd := `export LC_ALL=C; export PATH=/usr/sbin:/sbin:/usr/bin:/bin:$PATH; if ! command -v iptables >/dev/null 2>&1; then exit 127; fi; if [ "$(id -u)" -eq 0 ]; then iptables -L -n -v --line-numbers; elif ! command -v sudo >/dev/null 2>&1; then exit 126; else sudo -n iptables -L -n -v --line-numbers; fi`
 	stdout, stderr, exitCode, err := s.executor.ExecuteCommand(ctx, tenantID, serverID, cmd)
 	if err != nil || exitCode != 0 {
+		if exitCode == 127 {
+			return nil, domain.ErrFirewallUnavailable
+		}
+		diagnostic := strings.ToLower(stderr)
+		if exitCode == 126 || strings.Contains(diagnostic, "a password is required") ||
+			strings.Contains(diagnostic, "not in the sudoers") || strings.Contains(diagnostic, "not allowed to execute") ||
+			strings.Contains(diagnostic, "must have a tty") || strings.Contains(diagnostic, "must be root") ||
+			strings.Contains(diagnostic, "permission denied") {
+			return nil, domain.ErrFirewallPrivilegesRequired
+		}
 		return nil, fmt.Errorf("%w: recupero stato firewall fallito (exit %d): %s %v", domain.ErrSSHExecutionFailed, exitCode, stderr, err)
 	}
 

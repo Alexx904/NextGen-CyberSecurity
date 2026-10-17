@@ -18,6 +18,11 @@ Per garantire modularità ed efficienza di contesto, i dettagli tecnici e i cont
 
 ### Mappa documenti Full-Stack (Glob -> Dominio -> Documento)
 
+SSH-TOOLS-01 (2026-10-17, working tree): `frontend/nginx.conf`,
+`frontend/vite.config.ts`, `frontend/src/components/FirewallManager*`,
+`backend/internal/delivery/http/handler/ssh_firewall_handler*` e i nuovi errori
+firewall in `backend/internal/domain/errors.go` → [dominio SSH](../domains/ssh_and_firewall.md).
+
 Estensione E28-S1-T1 (2026-10-17, working tree): `backend/internal/domain/defense*`,
 `backend/internal/delivery/http/handler/defense*` e `frontend/src/types/defense.ts`
 appartengono al dominio [Active Defense](../domains/active_defense_and_soar.md).

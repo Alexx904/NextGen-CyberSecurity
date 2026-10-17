@@ -297,6 +297,14 @@ func (h *SSHFirewallHandler) GetFirewallStatus(w http.ResponseWriter, r *http.Re
 
 	status, err := h.firewallService.GetStatus(r.Context(), tenantID, serverID)
 	if err != nil {
+		if errors.Is(err, domain.ErrFirewallUnavailable) {
+			response.Error(w, http.StatusBadGateway, "FIREWALL_UNAVAILABLE", domain.ErrFirewallUnavailable.Error())
+			return
+		}
+		if errors.Is(err, domain.ErrFirewallPrivilegesRequired) {
+			response.Error(w, http.StatusBadGateway, "FIREWALL_PRIVILEGES_REQUIRED", domain.ErrFirewallPrivilegesRequired.Error())
+			return
+		}
 		if errors.Is(err, domain.ErrSSHServerNotFound) || errors.Is(err, domain.ErrNotFound) {
 			response.Error(w, http.StatusNotFound, "NOT_FOUND", "Server SSH non trovato")
 			return
