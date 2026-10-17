@@ -28,24 +28,26 @@ type SSHConnectionTestResult struct {
 
 // CreateSSHServerRequest racchiude i parametri per registrare un nuovo server remoto
 type CreateSSHServerRequest struct {
-	ClientName string             `json:"client_name"`
-	Name       string             `json:"name"`
-	Host       string             `json:"host"`
-	Port       int                `json:"port"`
-	Username   string             `json:"username"`
-	AuthType   domain.SSHAuthType `json:"auth_type"`
-	RawSecret  string             `json:"raw_secret"`
+	HostKeyFingerprint string             `json:"host_key_fingerprint"`
+	ClientName         string             `json:"client_name"`
+	Name               string             `json:"name"`
+	Host               string             `json:"host"`
+	Port               int                `json:"port"`
+	Username           string             `json:"username"`
+	AuthType           domain.SSHAuthType `json:"auth_type"`
+	RawSecret          string             `json:"raw_secret"`
 }
 
 // UpdateSSHServerRequest racchiude i parametri per aggiornare un server remoto esistente
 type UpdateSSHServerRequest struct {
-	ClientName *string            `json:"client_name,omitempty"`
-	Name       string             `json:"name"`
-	Host       string             `json:"host"`
-	Port       int                `json:"port"`
-	Username   string             `json:"username"`
-	AuthType   domain.SSHAuthType `json:"auth_type"`
-	RawSecret  *string            `json:"raw_secret,omitempty"`
+	HostKeyFingerprint *string            `json:"host_key_fingerprint,omitempty"`
+	ClientName         *string            `json:"client_name,omitempty"`
+	Name               string             `json:"name"`
+	Host               string             `json:"host"`
+	Port               int                `json:"port"`
+	Username           string             `json:"username"`
+	AuthType           domain.SSHAuthType `json:"auth_type"`
+	RawSecret          *string            `json:"raw_secret,omitempty"`
 }
 
 // SSHExecutor definisce l'interfaccia per l'esecuzione di comandi remoti SSH
@@ -118,6 +120,7 @@ func (s *sshService) CreateServer(ctx context.Context, tenantID uuid.UUID, req C
 		AuthType:             req.AuthType,
 		EncryptedSecret:      encryptedSecret,
 		PublicKeyFingerprint: fingerprint,
+		HostKeyFingerprint:   strings.TrimSpace(req.HostKeyFingerprint),
 		Status:               domain.SSHServerStatusUnchecked,
 	}
 
@@ -150,6 +153,21 @@ func (s *sshService) UpdateServer(ctx context.Context, tenantID, serverID uuid.U
 	}
 
 	server.Name = strings.TrimSpace(req.Name)
+	endpointChanged := server.Host != strings.TrimSpace(req.Host) || (req.Port > 0 && req.Port != server.Port)
+	if req.HostKeyFingerprint != nil {
+		pin := strings.TrimSpace(*req.HostKeyFingerprint)
+		if pin != server.HostKeyFingerprint {
+			server.Status = domain.SSHServerStatusUnchecked
+			server.LastConnectedAt = nil
+		}
+		server.HostKeyFingerprint = pin
+	} else if endpointChanged {
+		server.HostKeyFingerprint = ""
+	}
+	if endpointChanged {
+		server.Status = domain.SSHServerStatusUnchecked
+		server.LastConnectedAt = nil
+	}
 	if req.ClientName != nil {
 		server.ClientName = strings.TrimSpace(*req.ClientName)
 	}
@@ -198,6 +216,8 @@ func (s *sshService) DeleteServer(ctx context.Context, tenantID, serverID uuid.U
 
 // TestConnection tenta la connessione SSH, misura la latenza e verifica i privilegi di esecuzione
 func (s *sshService) TestConnection(ctx context.Context, tenantID, serverID uuid.UUID) (*SSHConnectionTestResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
 	server, err := s.repo.GetByID(ctx, tenantID, serverID)
 	if err != nil {
 		return nil, err
@@ -214,6 +234,8 @@ func (s *sshService) TestConnection(ctx context.Context, tenantID, serverID uuid
 		}, nil
 	}
 	defer client.Close()
+	stop := context.AfterFunc(ctx, func() { _ = client.Close() })
+	defer stop()
 
 	latency := time.Since(start).Milliseconds()
 
@@ -263,6 +285,8 @@ func (s *sshService) TestConnection(ctx context.Context, tenantID, serverID uuid
 
 // ExecuteCommand esegue un comando remoto via SSH catturando stdout, stderr ed exit code
 func (s *sshService) ExecuteCommand(ctx context.Context, tenantID, serverID uuid.UUID, cmd string) (string, string, int, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
 	server, err := s.repo.GetByID(ctx, tenantID, serverID)
 	if err != nil {
 		return "", "", -1, err
@@ -273,6 +297,8 @@ func (s *sshService) ExecuteCommand(ctx context.Context, tenantID, serverID uuid
 		return "", "", -1, fmt.Errorf("connessione SSH fallita: %w", err)
 	}
 	defer client.Close()
+	stop := context.AfterFunc(ctx, func() { _ = client.Close() })
+	defer stop()
 
 	session, err := client.NewSession()
 	if err != nil {
@@ -285,6 +311,9 @@ func (s *sshService) ExecuteCommand(ctx context.Context, tenantID, serverID uuid
 	session.Stderr = &stderrBuf
 
 	err = session.Run(cmd)
+	if ctx.Err() != nil {
+		err = ctx.Err()
+	}
 	exitCode := 0
 	if err != nil {
 		var exitErr *ssh.ExitError
@@ -308,6 +337,12 @@ func (s *sshService) GetRawSSHClient(ctx context.Context, tenantID, serverID uui
 }
 
 func (s *sshService) getSSHClientForServer(ctx context.Context, server *domain.SSHServer) (*ssh.Client, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if !domain.ValidHostKeyFingerprint(server.HostKeyFingerprint) {
+		return nil, fmt.Errorf("%w: configurare il fingerprint SHA256 della chiave host tramite un canale fidato", domain.ErrValidation)
+	}
 	tenantKey, err := crypto.DeriveTenantKey(s.masterKey, server.TenantID)
 	if err != nil {
 		return nil, fmt.Errorf("derivazione tenant key fallita: %w", err)
@@ -333,19 +368,48 @@ func (s *sshService) getSSHClientForServer(ctx context.Context, server *domain.S
 	}
 
 	clientConfig := &ssh.ClientConfig{
-		User:            server.Username,
-		Auth:            authMethods,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         10 * time.Second,
+		User: server.Username,
+		Auth: authMethods,
+		HostKeyCallback: func(_ string, _ net.Addr, key ssh.PublicKey) error {
+			if ssh.FingerprintSHA256(key) != server.HostKeyFingerprint {
+				return errors.New("chiave host SSH diversa dal fingerprint autorizzato")
+			}
+			return nil
+		},
+		Timeout: 10 * time.Second,
 	}
 
 	addr := net.JoinHostPort(server.Host, strconv.Itoa(server.Port))
-	client, err := ssh.Dial("tcp", addr, clientConfig)
+	handshakeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	conn, err := (&net.Dialer{}).DialContext(handshakeCtx, "tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("ssh dial %s fallito: %w", addr, err)
 	}
-
-	return client, nil
+	deadline, _ := handshakeCtx.Deadline()
+	if err := conn.SetDeadline(deadline); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	closed := make(chan struct{})
+	stop := context.AfterFunc(handshakeCtx, func() { _ = conn.Close(); close(closed) })
+	c, channels, requests, err := ssh.NewClientConn(conn, addr, clientConfig)
+	if !stop() {
+		<-closed
+	}
+	if handshakeCtx.Err() != nil {
+		_ = conn.Close()
+		return nil, handshakeCtx.Err()
+	}
+	if err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("handshake SSH fallito: %w", err)
+	}
+	if err := conn.SetDeadline(time.Time{}); err != nil {
+		_ = c.Close()
+		return nil, err
+	}
+	return ssh.NewClient(c, channels, requests), nil
 }
 
 func extractPublicKeyFingerprint(privateKeyPEM []byte) (string, error) {

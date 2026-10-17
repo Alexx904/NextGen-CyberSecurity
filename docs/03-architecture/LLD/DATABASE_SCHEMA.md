@@ -69,6 +69,7 @@ erDiagram
         string auth_type "KEY o PASSWORD"
         text encrypted_secret "AES-256-GCM cipher"
         text public_key_fingerprint
+        text host_key_fingerprint "SHA256 server pin, empty = untrusted"
         string status "ONLINE, OFFLINE, UNCHECKED"
         timestamp last_connected_at
         timestamp created_at

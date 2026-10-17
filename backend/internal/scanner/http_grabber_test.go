@@ -47,3 +47,34 @@ func TestGrabHTTPInfo_UnreachableHost(t *testing.T) {
 	}
 }
 
+func TestGrabHTTPInfoDoesNotFollowRedirect(t *testing.T) {
+	var followed bool
+	destination := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		followed = true
+		_, _ = w.Write([]byte("<title>Wrong device</title>"))
+	}))
+	defer destination.Close()
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, destination.URL, http.StatusFound)
+	}))
+	defer source.Close()
+	host, rawPort, _ := net.SplitHostPort(source.Listener.Addr().String())
+	port, _ := strconv.Atoi(rawPort)
+	title, _ := GrabHTTPInfo(context.Background(), host, []int{port})
+	if followed || title != "" {
+		t.Fatalf("redirect followed or attributed: %q", title)
+	}
+}
+
+func TestGrabHTTPInfoMultilineTitle(t *testing.T) {
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("<title>Router\n &amp; Switch</title>"))
+	}))
+	defer source.Close()
+	host, rawPort, _ := net.SplitHostPort(source.Listener.Addr().String())
+	port, _ := strconv.Atoi(rawPort)
+	title, _ := GrabHTTPInfo(context.Background(), host, []int{port})
+	if title != "Router & Switch" {
+		t.Fatalf("title: %q", title)
+	}
+}

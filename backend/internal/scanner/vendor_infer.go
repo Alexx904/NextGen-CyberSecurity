@@ -32,8 +32,6 @@ func InferVendor(hint DeviceHint) string {
 		return "Apple"
 	case strings.Contains(combined, "samsung") || strings.Contains(combined, "tizen"):
 		return "Samsung"
-	case strings.Contains(combined, "microsoft") || strings.Contains(combined, "windows") || strings.Contains(combined, "msrpc"):
-		return "Microsoft"
 	case strings.Contains(combined, "cisco"):
 		return "Cisco Systems"
 	case strings.Contains(combined, "xiaomi") || strings.Contains(combined, "mi router"):
@@ -46,8 +44,12 @@ func InferVendor(hint DeviceHint) string {
 		return "Dell"
 	case strings.Contains(combined, "hp ") || strings.Contains(combined, "hewlett-packard") || strings.Contains(combined, "laserjet"):
 		return "HP"
-	case strings.Contains(combined, "canon") || strings.Contains(combined, "epson") || strings.Contains(combined, "brother"):
-		return "Printer Device"
+	case strings.Contains(combined, "canon"):
+		return "Canon"
+	case strings.Contains(combined, "epson"):
+		return "Epson"
+	case strings.Contains(combined, "brother"):
+		return "Brother"
 	case strings.Contains(combined, "synology") || strings.Contains(combined, "diskstation"):
 		return "Synology"
 	case strings.Contains(combined, "qnap"):
@@ -62,14 +64,6 @@ func InferVendor(hint DeviceHint) string {
 		return "MikroTik"
 	case strings.Contains(combined, "vmware"):
 		return "VMware"
-	case strings.Contains(combined, "dropbear") || strings.Contains(combined, "busybox") || strings.Contains(combined, "openwrt") || strings.Contains(combined, "dnsmasq"):
-		return "Linux Embedded / Router"
-	case strings.Contains(combined, "linux"):
-		return "Linux Device"
-	case strings.Contains(combined, "samba"):
-		return "Samba / Storage"
-	case strings.Contains(combined, "nginx") || strings.Contains(combined, "apache") || strings.Contains(combined, "lighttpd"):
-		return "Web Server Appliance"
 	default:
 		return "Unknown"
 	}
@@ -105,4 +99,3 @@ func CleanDeviceHostname(currentHostname, httpTitle, vendor string) string {
 
 	return ""
 }
-

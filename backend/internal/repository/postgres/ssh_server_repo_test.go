@@ -42,16 +42,17 @@ func TestSSHServerRepo_Integration(t *testing.T) {
 
 	serverID := uuid.New()
 	server := &domain.SSHServer{
-		ID:              serverID,
-		TenantID:        tenantID,
-		Name:            "Gateway DMZ 01",
-		ClientName:      "Cliente autonomo",
-		Host:            "10.0.0.1",
-		Port:            22,
-		Username:        "secops",
-		AuthType:        domain.SSHAuthTypeKey,
-		EncryptedSecret: "ciphertext-b64-mock-data",
-		Status:          domain.SSHServerStatusUnchecked,
+		ID:                 serverID,
+		TenantID:           tenantID,
+		Name:               "Gateway DMZ 01",
+		ClientName:         "Cliente autonomo",
+		HostKeyFingerprint: "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+		Host:               "10.0.0.1",
+		Port:               22,
+		Username:           "secops",
+		AuthType:           domain.SSHAuthTypeKey,
+		EncryptedSecret:    "ciphertext-b64-mock-data",
+		Status:             domain.SSHServerStatusUnchecked,
 	}
 
 	// 1. Create Server
@@ -71,6 +72,9 @@ func TestSSHServerRepo_Integration(t *testing.T) {
 		}
 		if fetched.ClientName != "Cliente autonomo" {
 			t.Fatal("client label not persisted")
+		}
+		if fetched.HostKeyFingerprint != server.HostKeyFingerprint {
+			t.Fatal("host pin not persisted")
 		}
 		if fetched.EncryptedSecret != server.EncryptedSecret {
 			t.Errorf("secret cifrato non corrisponde")
@@ -116,6 +120,9 @@ func TestSSHServerRepo_Integration(t *testing.T) {
 		if len(list) == 0 {
 			t.Fatalf("atteso almeno 1 server nella lista per tenant, ottenuti 0")
 		}
+		if list[0].HostKeyFingerprint != server.HostKeyFingerprint {
+			t.Fatal("host pin missing from list")
+		}
 	})
 
 	// 4. Update and UpdateStatus
@@ -123,6 +130,7 @@ func TestSSHServerRepo_Integration(t *testing.T) {
 		server.Host = "10.0.0.99"
 		server.Port = 2200
 		server.ClientName = "Cliente aggiornato"
+		server.HostKeyFingerprint = "SHA256:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA"
 		err := repo.Update(ctx, server)
 		if err != nil {
 			t.Fatalf("Update fallito: %v", err)
@@ -143,6 +151,9 @@ func TestSSHServerRepo_Integration(t *testing.T) {
 		}
 		if updated.ClientName != "Cliente aggiornato" {
 			t.Fatal("client label not updated")
+		}
+		if updated.HostKeyFingerprint != server.HostKeyFingerprint {
+			t.Fatal("rotated host pin not persisted")
 		}
 		if updated.Status != domain.SSHServerStatusOnline {
 			t.Errorf("status non aggiornato a ONLINE: %s", updated.Status)

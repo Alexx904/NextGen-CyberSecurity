@@ -67,6 +67,7 @@
 
 ### FR-11: Gestione Remota Server SSH, Firewall GUI (`iptables`/`nftables`) & Web Terminal
 - **FR-11.1 (Gestione Host SSH):** Anagrafica server remoti per tenant: nome mnemonico, IP/FQDN, porta SSH (default 22), utente.
+  - SSH-HARDEN-01 (2026-10-17, working tree): pin SHA256 della chiave host separato dalla chiave client, verificato su canale fidato e configurato esplicitamente. Pin assente/discordante blocca tutte le connessioni, inclusi terminale e remediation. Rotazione esplicita; cambio endpoint richiede nuova autorizzazione del pin. Nessun enrollment automatico al primo accesso. Handshake massimo 10s, comandi/test connessione massimo 30s con cancellazione; queste scadenze non garantiscono la terminazione del processo remoto.
 - **FR-11.2 (Autenticazione Sicura Flessibile):**
   - Supporto per autenticazione a **Chiave Privata** (upload file `.pem`/`.id_rsa` o testo con eventuale passphrase).
   - Supporto per autenticazione a **Password**, cifrata a riposo nel database PostgreSQL con algoritmo AES-256-GCM.

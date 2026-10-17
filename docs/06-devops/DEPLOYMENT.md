@@ -38,3 +38,15 @@ Definire destinazione, TLS/reverse proxy, gestione segreti, backup/ripristino pr
 Non usare `docker compose down -v` come normale stop: rimuove dati persistenti. Ogni deploy o azione su sistemi remoti richiede scope e autorizzazione del PO.
 
 Un rollback del binario non ripristina automaticamente lo schema. Il piano di rilascio deve distinguere ripristino del codice, migrazione down e recupero dati.
+
+## SSH-HARDEN-01 · Nota operativa · 2026-10-17 · working tree
+
+La migrazione 000010 aggiunge `ssh_servers.host_key_fingerprint` vuoto per
+l'inventario esistente. Prima delle connessioni occorre configurare il pin SHA256
+della chiave del server tramite un canale fidato. Non copiare il fingerprint
+della chiave client e non accettare automaticamente una chiave ricevuta in rete.
+Rotazioni richiedono verifica indipendente e aggiornamento esplicito. Down perde
+i pin host; salvare i pin autorizzati prima di un rollback operativo e riconfigurarli
+dopo il re-upgrade. Nessuna migrazione o deploy applicativo eseguito in questa
+sessione. Timeout locali non sostituiscono watchdog/transazione Linux remota;
+E28-S1-T1 e TECH-DEBT-07 restano aperti.

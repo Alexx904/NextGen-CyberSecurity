@@ -27,7 +27,7 @@ func TestInferVendor(t *testing.T) {
 				OSName:   "Windows 11",
 				Services: []string{"msrpc", "microsoft-ds", "netbios-ssn"},
 			},
-			expected: "Microsoft",
+			expected: "Unknown",
 		},
 		{
 			name: "Samsung TV or Phone",
@@ -56,11 +56,11 @@ func TestInferVendor(t *testing.T) {
 			hint: DeviceHint{
 				RawBanners: []string{"Dropbear sshd 2020.80", "BusyBox telnetd"},
 			},
-			expected: "Linux Embedded / Router",
+			expected: "Unknown",
 		},
 		{
-			name: "Empty / Unknown Hint",
-			hint: DeviceHint{},
+			name:     "Empty / Unknown Hint",
+			hint:     DeviceHint{},
 			expected: "Unknown",
 		},
 	}
@@ -97,4 +97,3 @@ func TestCleanDeviceHostname(t *testing.T) {
 		}
 	}
 }
-

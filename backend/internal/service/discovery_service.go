@@ -17,9 +17,10 @@ import (
 )
 
 type cachedHostInfo struct {
-	Hostname string
-	Vendor   string
-	MAC      string
+	ObservedAt time.Time
+	Hostname   string
+	Vendor     string
+	MAC        string
 }
 
 type discoveryService struct {
@@ -266,10 +267,10 @@ func (s *discoveryService) DiscoverSubnet(ctx context.Context, tenantID uuid.UUI
 		}
 
 		// Risoluzione MAC: controlla Nmap L2 o fallback su ARPCache
-		mac := currentHost.MAC
+		mac := scanner.NormalizeMAC(currentHost.MAC)
 		if mac == "" {
 			if cachedMAC := s.arpCache.Lookup(currentHost.IP); cachedMAC != "" {
-				mac = cachedMAC
+				mac = scanner.NormalizeMAC(cachedMAC)
 			}
 		}
 
@@ -294,6 +295,9 @@ func (s *discoveryService) DiscoverSubnet(ctx context.Context, tenantID uuid.UUI
 		// Ispezione porte Web per estrazione titolo HTML e server header
 		httpTitle, serverHeader := scanner.GrabHTTPInfo(ctx, currentHost.IP, openPorts)
 
+		if currentHost.PrimaryHostname == "" {
+			currentHost.PrimaryHostname = resolvedHostnames[currentHost.IP]
+		}
 		// Risoluzione Vendor:
 		// a) Da MAC Address tramite IEEE OUI Database
 		vendor := "Unknown"
@@ -304,6 +308,9 @@ func (s *discoveryService) DiscoverSubnet(ctx context.Context, tenantID uuid.UUI
 			}
 		}
 
+		if vendor == "Unknown" && currentHost.Vendor != "" {
+			vendor = currentHost.Vendor
+		}
 		// b) Fallback euristico se il MAC non è noto o non ha prodotto vendor
 		if vendor == "Unknown" || vendor == "" {
 			osName := ""
@@ -339,7 +346,7 @@ func (s *discoveryService) DiscoverSubnet(ctx context.Context, tenantID uuid.UUI
 		cached, hasCached := s.hostCache[hostKey]
 		s.mu.RUnlock()
 
-		if hasCached {
+		if hasCached && mac != "" && mac == cached.MAC && time.Since(cached.ObservedAt) < 15*time.Minute {
 			if (mac == "" || mac == "Unknown") && cached.MAC != "" {
 				mac = cached.MAC
 			}
@@ -355,6 +362,10 @@ func (s *discoveryService) DiscoverSubnet(ctx context.Context, tenantID uuid.UUI
 		if (hostname != "" && hostname != "Dispositivo LAN") || (vendor != "" && vendor != "Unknown") || mac != "" {
 			s.mu.Lock()
 			currentCache := s.hostCache[hostKey]
+			if currentCache.MAC != mac || time.Since(currentCache.ObservedAt) >= 15*time.Minute {
+				currentCache = cachedHostInfo{}
+			}
+			currentCache.ObservedAt = time.Now()
 			if hostname != "" && hostname != "Dispositivo LAN" {
 				currentCache.Hostname = hostname
 			}
@@ -467,6 +478,10 @@ func isNetworkOrBroadcast(ipStr string, cleanTarget string) bool {
 
 	_, ipNet, err := net.ParseCIDR(cleanTarget)
 	if err == nil && ipNet != nil && ipNet.IP.To4() != nil {
+		ones, _ := ipNet.Mask.Size()
+		if ones >= 31 {
+			return false
+		}
 		if ip.Equal(ipNet.IP) {
 			return true
 		}

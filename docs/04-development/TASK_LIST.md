@@ -22,7 +22,25 @@
 
 ## 🚀 Coda di Sviluppo Attiva (Priorità validate dal PO)
 
-Le attività concluse e la proposta Epic 27.1 superata sono archiviate nel [CHANGELOG](../../CHANGELOG.md), con ID, evidenze e stato di accettazione preservati. Nessuna attività in attesa di approvazione.
+- [ ] SSH-HARDEN-01 · Pinning host SSH e deadline connessioni/comandi
+  - Scope PO: avvio TECH-DEBT-06/07, 2026-10-17 “Procedi”; primo incremento implementato, nessuna chiusura implicita del watchdog o degli altri debiti.
+  - File: domain/service SSH, repository/handler, migrazione 000010 up/down, tipi e modale SSH e test.
+  - Dipende da: nessuno; modifiche DISCOVERY-01 preesistenti preservate.
+  - Test: pin assente rosso→verde; mismatch/pin fidato, rotazione/reset endpoint, cancellazione handshake/comando bloccato, persistenza/tenant e up/down/up PostgreSQL PASS. Gate finale backend suite/vet/build, frontend 166 test/build e DB PASS exit 0.
+  - Docs: [piano e QA](plans/SSH-HARDEN-01.md), ssh_and_firewall, REQUIREMENTS, UI_SPECIFICATIONS, DATABASE_SCHEMA, ADR-20, DEPLOYMENT, PROJECT_STATE.
+  - DoD: (1) mirati PASS; (2) PostgreSQL e rollback PASS, visuale NON ESEGUITO; (3) suite/build/vet PASS; (4) Doc Sync e self-review completati.
+  - Gate aperto: browser runtime vuoto e iab indisponibile, task non promosso a `[~]`. Nessun collaudo Linux/azione remota; TECH-DEBT-07 ed E28-S1-T1 restano aperti.
+
+- [x] DISCOVERY-01 · Precisione identità e probe HTTP Network Discovery
+  - Accettazione PO: 2026-10-17, “OK”; limiti dichiarati preservati, nessuna autorizzazione implicita a commit/push/deploy.
+  - File: backend/internal/scanner/{arp_cache,http_grabber,vendor_infer} e test, backend/internal/service/discovery_service.go e test.
+  - Dipende da: nessuno.
+  - Test: MAC invalidi/software rosso→verde; cache cambio MAC, /31-/32, HTTP redirect/titolo, suite backend/vet/build.
+  - Evidenze: backend `go test ./...` 29,632s, `go vet ./...` 3,237s, `go build ./...` 1,376s PASS exit 0; documenti/diff PASS. Nessun collaudo LAN reale; API/DB/UI invariati.
+  - Docs: [analisi](NETWORK_DISCOVERY_REVIEW.md), dominio scanning_and_discovery, PROJECT_STATE.
+  - DoD: test mirati e regressione PASS; limite LAN reale dichiarato; suite/build/vet PASS; Doc Sync e self-review.
+
+Le attività concluse e la proposta Epic 27.1 superata sono archiviate nel [CHANGELOG](../../CHANGELOG.md), con ID, evidenze e stato di accettazione preservati. SSH-HARDEN-01 resta al gate visuale, senza promozione a `[~]`.
 
 ### Sprint Archiviati (Accettati dal PO `[x]`)
 > *Nota di archiviazione:* Tutti i task completati e convalidati (TASK-01..60, `FEAT-IP-ORG-01..04`, `FEAT-SCAN-PROF-01..04`, `FEAT-WORKFLOW-CLEANUP-01..07`, `FEAT-CVE-ONLINE-01`, `FEAT-REPORT-PDF-UX-01`, `FEAT-M2-01..03`, `ONBOARD-01..05`, `SEC-P0-01..06`, `SEC-P1-01..06`, `SEC-P2-01..03`) sono stati formalmente archiviati nel [CHANGELOG.md](../../CHANGELOG.md) in conformità alle regole di token & backlog management di `AGENTS.md`.
@@ -137,8 +155,8 @@ Registro formale del debito tecnico e delle ottimizzazioni architetturali (regol
 | ID | Priorità | Componente / Percorso | Descrizione & Impatto | Piano di Rientro |
 |---|---|---|---|---|
 | `TECH-DEBT-08` | Media | Attack Path service, scope UI | Analisi euristica senza routing/ACL/identità/prerequisiti; cap globale prima dello scope, osservazioni storiche e letture non transazionali possono sottorappresentare un'azienda. | Mantenere avvisi; futuro contratto di evidenze di raggiungibilità e scope backend prima del cap, snapshot coerente e ciclo di vita finding. Validare in laboratorio autorizzato prima di dichiarare lateral movement reale. |
-| `TECH-DEBT-06` | Alta | `backend/internal/service/ssh_service.go` | Host-key SSH non verificata (`InsecureIgnoreHostKey`); il fingerprint esistente riguarda la chiave client. Possibile impersonificazione del server, anche sul nuovo percorso remediation. | Progettare registrazione e pinning host-key con contratto dedicato, migrazione up/down e test mismatch/rotazione prima dell'uso operativo. |
-| `TECH-DEBT-07` | Alta | `backend/internal/service/firewall_service.go`, `ssh_service.go` | Watchdog preesistente: chiamate remote senza deadline di esecuzione, possibile mutazione tardiva dopo scadenza e timer solo locali fra istanze; nessuna prova Linux reale in questa sessione. | Rendere la transazione snapshot/watchdog/applicazione protetta sull'host, verificare kill e ripristino sotto disconnessione/timeout; laboratorio Linux e test concorrenti multiistanza prima di chiudere E28-S1-T1. |
+| `TECH-DEBT-06` | Alta | `backend/internal/service/ssh_service.go` | SSH-HARDEN-01 implementa pin host SHA256 separato dalla chiave client: assente/mismatch bloccano connessioni. Migrazione 000010 e test rotazione/up/down/up PASS; gate visuale aperto. | Collaudare il form e verificare i pin legacy tramite canale fidato; chiusura formale dopo gate residuo e accettazione. |
+| `TECH-DEBT-07` | Alta | `backend/internal/service/firewall_service.go`, `ssh_service.go` | SSH-HARDEN-01 limita handshake a 10s e comandi/test a 30s con cancellazione. Restano possibile esecuzione remota tardiva, transazione snapshot/watchdog/applicazione separata e timer locali fra istanze; nessuna prova Linux reale. | Rendere la transazione protetta sull'host, verificare terminazione e ripristino sotto disconnessione/timeout; laboratorio Linux e test multiistanza prima di chiudere E28-S1-T1. Le deadline locali non chiudono il debito. |
 | `TECH-DEBT-05` | Alta | `backend/internal/delivery/http/handler/scan_handler.go`, scheduler, audit | FR-01.3 incompleto: consenso solo UI, non attestato immutabilmente né imposto dall'API; classificazione impatto euristica. | Definire contratto di attestazione per scope/configurazione, validazione server e registrazione audit; coprire API diretta e pianificazioni con test. Nessuna attestazione di conformità finché il gap resta. |
 | `TECH-DEBT-01` | Media | `frontend/src/` | Ottimizzazione manual chunks in `vite.config.ts` per separare librerie pesanti (`@xterm`, `recharts`, `lucide-react`) e ridurre il bundle iniziale sotto 500kB. | Refactoring bundle-splitting in Milestone 3 |
 | `TECH-DEBT-02` | Media | `backend/internal/repository/migrations` | Verifica sistematica e test automatico di rollback (`down.sql`) per tutte le migrazioni storiche da `000001` a `000007`. | Script CI dedicato `migrate -path ... down` in Docker test |

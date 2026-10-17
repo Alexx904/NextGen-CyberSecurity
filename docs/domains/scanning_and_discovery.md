@@ -69,6 +69,14 @@ La UI verifica opzioni effettive e metadati del profilo equivalente, richiede au
 
 ## 4. Network Discovery e sovrapposizione
 
+DISCOVERY-01 · 2026-10-17 · working tree: normalizzazione MAC unicast valida;
+cache identità riutilizzata soltanto con MAC corrente identico e TTL di 15 minuti.
+Il DNS fallback contribuisce agli indizi vendor; il vendor Nmap precede le euristiche.
+Software generico (Windows, Linux, nginx, Samba) non identifica il produttore hardware.
+Probe HTTP limitato a 2 secondi per host, senza redirect e con URL IPv6 corretto.
+Nessuna modifica API/DB o aumento dei probe Nmap; inferenze di marca restano euristiche,
+OUI identifica l'assegnatario dell'interfaccia, non necessariamente il produttore del dispositivo.
+
 - Stage 1: `-sn -PE -PS21,22,80,443,445,8080,8443,3389,53,8000 -PU53,137,161,5353 -T4`, con discovery host, DNS e arricchimento MAC/OUI/cache. `-sn` non effettua port scanning.
 - Stage 2: `-T4 -F -n` sugli host attivi, soltanto se `include_common_ports=true` e da 1 a 64 host, concorrenza massima 8. Da SCAN-UX-01 l'opzione è realmente rispettata: in precedenza era ignorata.
 - Esiste sovrapposizione tecnica fra Stage 2 e il profilo TCP 100; i flussi restano distinti: Discovery inventaria/importa asset, scansioni produce esecuzioni persistite, finding, storico e pianificazioni sugli asset censiti. I profili host-only sono tolti dalla modale, non dal contratto storico.
@@ -94,4 +102,4 @@ Analisi, piano, fonti ufficiali Nmap/NIST e limiti di validazione in [NMAP_SCAN_
 
 ## 8. Ultimo allineamento
 
-2026-10-16 · working tree · SCAN-UX-01 / SCAN-TIME-01. Verifica visuale non eseguita: inventario browser vuoto nel runtime; nessuna scansione di laboratorio eseguita.
+2026-10-17 · working tree · DISCOVERY-01 / SCAN-UX-01 / SCAN-TIME-01. Backend suite/vet/build PASS; [analisi discovery](../04-development/NETWORK_DISCOVERY_REVIEW.md). Nessuna scansione di laboratorio eseguita per DISCOVERY-01. Verifica visuale precedente non eseguita: inventario browser vuoto nel runtime.

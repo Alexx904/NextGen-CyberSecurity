@@ -211,7 +211,7 @@ func TestSSHService_UpdateServer_ReEncryption(t *testing.T) {
 }
 
 // startTestSSHServer avvia un server SSH di test in-process su porta casuale locale
-func startTestSSHServer(t *testing.T, expectedUser, expectedPassword string) (string, int, func()) {
+func startTestSSHServer(t *testing.T, expectedUser, expectedPassword string, onCommand ...func(string)) (string, int, string, func()) {
 	privKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("generazione host key RSA fallita: %v", err)
@@ -273,6 +273,14 @@ func startTestSSHServer(t *testing.T, expectedUser, expectedPassword string) (st
 								// payload ha 4 byte di lunghezza stringa seguiti dal comando
 								if len(req.Payload) >= 4 {
 									cmd := string(req.Payload[4:])
+									for _, notify := range onCommand {
+										notify(cmd)
+									}
+									if cmd == "stall" {
+										_ = req.Reply(true, nil)
+										_ = sshConn.Wait()
+										return
+									}
 									if strings.Contains(cmd, "uname") {
 										_, _ = ch.Write([]byte("Linux 6.6.0-custom-arch x86_64\n0\n"))
 										_ = req.Reply(true, nil)
@@ -307,7 +315,7 @@ func startTestSSHServer(t *testing.T, expectedUser, expectedPassword string) (st
 		_ = listener.Close()
 	}
 
-	return host, port, cleanup
+	return host, port, ssh.FingerprintSHA256(signer.PublicKey()), cleanup
 }
 
 func sendExitStatus(ch io.Writer, status uint32) {
@@ -326,7 +334,7 @@ func TestSSHService_TestConnectionAndExecute_Loopback(t *testing.T) {
 	username := "testadmin"
 	password := "TestPass123!"
 
-	host, port, cleanup := startTestSSHServer(t, username, password)
+	host, port, fingerprint, cleanup := startTestSSHServer(t, username, password)
 	defer cleanup()
 
 	repo := newMockSSHServerRepo()
@@ -345,6 +353,10 @@ func TestSSHService_TestConnectionAndExecute_Loopback(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("CreateServer fallito: %v", err)
+	}
+	server.HostKeyFingerprint = fingerprint
+	if err := repo.Update(context.Background(), server); err != nil {
+		t.Fatal(err)
 	}
 
 	// 2. Test Connection riuscito
@@ -391,6 +403,10 @@ func TestSSHService_TestConnectionAndExecute_Loopback(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("CreateServer wrong fallito: %v", err)
+	}
+	wrongServer.HostKeyFingerprint = fingerprint
+	if err := repo.Update(context.Background(), wrongServer); err != nil {
+		t.Fatal(err)
 	}
 
 	resWrong, err := svc.TestConnection(context.Background(), tenantID, wrongServer.ID)

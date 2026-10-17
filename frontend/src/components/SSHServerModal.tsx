@@ -25,6 +25,7 @@ export const SSHServerModal: React.FC<SSHServerModalProps> = ({
   const [username, setUsername] = useState('root');
   const [authType, setAuthType] = useState<SSHAuthType>('KEY');
   const [rawSecret, setRawSecret] = useState('');
+  const [hostKeyFingerprint, setHostKeyFingerprint] = useState('');
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +33,7 @@ export const SSHServerModal: React.FC<SSHServerModalProps> = ({
   useEffect(() => {
     if (server) {
       setName(server.name);
+      setHostKeyFingerprint(server.host_key_fingerprint || '');
       setClientName(server.client_name || '');
       setHost(server.host);
       setPort(server.port);
@@ -40,6 +42,7 @@ export const SSHServerModal: React.FC<SSHServerModalProps> = ({
       setRawSecret('');
     } else {
       setName('');
+      setHostKeyFingerprint('');
       setClientName('');
       setHost('');
       setPort(22);
@@ -82,6 +85,7 @@ export const SSHServerModal: React.FC<SSHServerModalProps> = ({
       if (isEditing && server) {
         await sshApi.updateServer(server.id, {
           client_name: clientName.trim(),
+          host_key_fingerprint: hostKeyFingerprint.trim(),
           name: name.trim(),
           host: host.trim(),
           port,
@@ -92,6 +96,7 @@ export const SSHServerModal: React.FC<SSHServerModalProps> = ({
       } else {
         await sshApi.createServer({
           client_name: clientName.trim(),
+          host_key_fingerprint: hostKeyFingerprint.trim(),
           name: name.trim(),
           host: host.trim(),
           port,
@@ -111,7 +116,7 @@ export const SSHServerModal: React.FC<SSHServerModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-[#0d121f] border border-cyber-border rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150">
+      <div className="bg-[#0d121f] border border-cyber-border rounded-2xl max-w-lg max-h-[90vh] overflow-y-auto w-full p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150">
         <div className="flex items-center justify-between border-b border-cyber-border pb-3">
           <div className="flex items-center space-x-2.5 text-white font-bold text-base">
             <Server className="w-5 h-5 text-cyan-400" />
@@ -127,6 +132,10 @@ export const SSHServerModal: React.FC<SSHServerModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <label className="block text-xs text-slate-300">Fingerprint SHA256 della chiave host
+            <input aria-label="Fingerprint chiave host SSH" value={hostKeyFingerprint} onChange={e => setHostKeyFingerprint(e.target.value)} placeholder="SHA256:…" pattern="SHA256:[A-Za-z0-9+/]{43}" className="mt-2 w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-white" />
+            <span className="block mt-1 text-slate-400">Verificalo tramite un canale fidato con l’amministratore. Senza fingerprint le connessioni sono bloccate. Per una rotazione, verifica e sostituisci il valore.</span>
+          </label>
           <label className="block text-xs text-slate-300">Cliente (inventario SSH indipendente)
             <input aria-label="Cliente SSH" maxLength={160} value={clientName} onChange={e => setClientName(e.target.value)} placeholder="Es. Cliente Alfa" className="mt-2 w-full rounded-lg bg-slate-900 border border-slate-700 p-2 text-white" />
           </label>
@@ -159,7 +168,7 @@ export const SSHServerModal: React.FC<SSHServerModalProps> = ({
               <input
                 type="text"
                 value={host}
-                onChange={(e) => setHost(e.target.value)}
+                onChange={(e) => { setHost(e.target.value); setHostKeyFingerprint(''); }}
                 placeholder="es. 192.168.1.100 o srv.local"
                 required
                 className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-xs text-white placeholder-slate-600 font-mono focus:outline-none focus:border-cyan-500"
@@ -172,7 +181,7 @@ export const SSHServerModal: React.FC<SSHServerModalProps> = ({
               <input
                 type="number"
                 value={port}
-                onChange={(e) => setPort(parseInt(e.target.value, 10) || 22)}
+                onChange={(e) => { setPort(parseInt(e.target.value, 10) || 22); setHostKeyFingerprint(''); }}
                 min={1}
                 max={65535}
                 required

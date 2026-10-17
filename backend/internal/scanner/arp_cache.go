@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"bufio"
+	"encoding/hex"
 	"encoding/json"
 	"net"
 	"os"
@@ -159,12 +160,19 @@ func NormalizeMAC(mac string) string {
 		if len(part) != 2 {
 			return ""
 		}
+		if _, err := hex.DecodeString(part); err != nil {
+			return ""
+		}
 		sb.WriteString(strings.ToUpper(part))
 		if i < 5 {
 			sb.WriteString(":")
 		}
 	}
 
-	return sb.String()
+	result := sb.String()
+	parsed, err := net.ParseMAC(result)
+	if err != nil || parsed[0]&1 != 0 || result == "00:00:00:00:00:00" {
+		return ""
+	}
+	return result
 }
-

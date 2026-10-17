@@ -102,9 +102,13 @@ Verifica pre-push del 2026-10-15: `go test ./...`, `go build ./...`, `go vet ./.
 
 ## In attesa di accettazione utente
 
-Nessuno: tutti gli incrementi consegnati sono accettati dal PO il 2026-10-17. Evidenze e limiti nei report QA; nessun PASS tecnico aggiuntivo attribuito all'approvazione.
+SSH-HARDEN-01: primo incremento TECH-DEBT-06/07 implementato e verificato automaticamente; task `[ ]` per collaudo visuale non eseguito, nessuna dichiarazione di gate Verified. Pin SHA256 host separato dal fingerprint client, connessioni prive di fiducia bloccate, deadline handshake 10s e comandi/test 30s con cancellazione. PostgreSQL isolato e migrazione up/down/up PASS. Browser runtime vuoto, iab indisponibile; nessun collaudo Linux remoto. Piano/evidenze in [SSH-HARDEN-01](04-development/plans/SSH-HARDEN-01.md). Nessun commit/push/deploy; modifiche Discovery preesistenti preservate. TECH-DEBT-07 ed E28-S1-T1 restano aperti.
+
+DISCOVERY-01 accettato dal PO il 2026-10-17 con “OK”; evidenze e limiti nell'[analisi](04-development/NETWORK_DISCOVERY_REVIEW.md). Nessuna prova LAN reale o benchmark aggiuntivo dedotto dall'accettazione.
 
 ## Bloccati / Domande aperte per l'utente
+
+- SSH-HARDEN-01: inventario browser vuoto e apertura iab fallita; nessuna prova visuale/screenshot inventata. Assunzione esplicita: pin fornito dall'operatore tramite un canale indipendentemente fidato, inventario senza pin conservato ma non connettibile. La transazione watchdog sull'host e il relativo collaudo Linux sono ancora lavoro necessario per TECH-DEBT-07.
 
 - **Limite visuale COMPANY-UX-02 / COMPANY-PDF-03:** collaudo autonomo desktop/mobile e PDF non eseguito, browser e renderer non disponibili. Prove automatiche/DB concluse; il PO accetta gli incrementi con questo limite esplicito e autorizza pubblicazione. Nessun PDF autonomo consegnato come verificato visualmente, nessuna domanda funzionale pendente.
 
@@ -117,6 +121,8 @@ Nessuno: tutti gli incrementi consegnati sono accettati dal PO il 2026-10-17. Ev
 
 ## Assunzioni confermate
 
+- **DISCOVERY-01 (2026-10-17):** accettata la scelta conservativa di non recuperare identità storiche senza MAC corrente verificabile. Limiti OUI, hostname di presentazione e assenza di benchmark/LAN reale dichiarati nella consegna preservati. Suite backend/vet/build PASS precedenti restano valide: solo documentazione modificata dopo il gate.
+
 - Struttura documentale SDLC v7.1 e orchestrazione per feature approvate dal Product Owner; anche la migrazione base Codex AGENT-CODEX-01 e la pulizia AGENT-CLEAN-03 sono approvate.
 - `docs/` contiene solo documentazione necessaria agli agenti; manuali utente, screenshot, allegati binari e archivi sono esclusi, come richiesto dal PO.
 - Storico consolidato nel [CHANGELOG.md](../CHANGELOG.md); stub e cartella legacy rimossi dopo la migrazione alle fonti canoniche.
@@ -125,6 +131,8 @@ Nessuno: tutti gli incrementi consegnati sono accettati dal PO il 2026-10-17. Ev
 - Roadmap di hardening sicurezza (Epiche SEC-P0, SEC-P1, SEC-P2) implementata al 100%.
 
 ## Decisioni recenti (ultime 10, dettagli negli ADR)
+
+- **ADR-20 (2026-10-17):** pin host SHA256 esplicito e distinto dalla chiave client, fail closed per legacy senza pin/mismatch, rotazione e reset endpoint; deadline SSH con cancellazione. Migrazione 000010 up/down preserva inventario e perde solo i pin. Nessuna garanzia di terminazione remota dedotta dal timeout locale.
 
 - **ADR-19 (2026-10-17):** test mirati per iterazione, un gate finale condiviso per lato coinvolto, riuso di sole evidenze valide, misure per comando. PostgreSQL esplicito con TEST_DB_* senza fallback applicativo, host locale e DB dedicato; indisponibilità = FAIL. CI con job DB isolato. Decisione richiesta dal PO, non deroga estemporanea.
 
@@ -157,19 +165,20 @@ Nessuno: tutti gli incrementi consegnati sono accettati dal PO il 2026-10-17. Ev
 
 ## Prossimi passi
 
+0. SSH-HARDEN-01 implementato con verifiche automatiche PASS; completare collaudo visuale, quindi accettazione distinta. Proseguire TECH-DEBT-07 con transazione sull'host e test Linux/multiistanza; successivamente TECH-DEBT-05. Nessuna chiusura globale del registro debiti.
+
 1. Modifiche approvate pubblicate su main con fast-forward e push riuscito (`26cf93d`); registro documentale di consegna aggiornato. Accettazione PO acquisita, limiti visuali residui registrati. Nessun nuovo branch o deploy.
 2. E28-S1-T1 resta separato: hardening SSH/watchdog TECH-DEBT-06/07 e prova Linux quando disponibile.
 3. Proseguire Epic 28 secondo dipendenze e priorità PO; nessun push/merge/deploy implicito della revisione AP.
 
 ## Log sessioni (ultime 5, la più recente in alto)
 
+- 2026-10-17 · PO “Procedi” sul rientro debiti: feedback→feature/orchestration, incremento SSH-HARDEN-01 (TECH-DEBT-06 e deadline di 07). Discovery preesistente preservata, nessun branch/commit/push/deploy. Test pin assente rosso→verde; pinning, rotazione/reset, deadline/cancellazione, migrazione 000010 e modale. Gate finale All+Integration PASS exit 0: backend suite 21,260s/vet 0,796s/build 1,353s; frontend 166 test 10,865s/build 14,767s; DB 4,905s incluso up/down/up. Docker solo test dedicato; nessuna migrazione applicativa. Vite inizialmente bloccato dalla sandbox, riuscito con escalation; evento submit esplicito nel test DOM dopo controllo validità. Self-review e Doc Sync; browser vuoto/iab assente: task `[ ]`, nessun PASS visuale o Linux. TECH-DEBT-07 richiede ancora transazione remota/coordinamento e collaudo; altri debiti non modificati.
+
+- 2026-10-17 · DISCOVERY-01: feedback/modifica e orchestration, working tree iniziale pulita. Riprodotti MAC invalidi e falsi vendor software, corretti e verificati con gate finale backend PASS; test cache cambio MAC, /31-/32 e HTTP locali PASS. GOCACHE locale negli artifacts per limite cache di sistema. Doc Sync e self-review; limiti OUI/hostname/ARP e pool HTTP futuro documentati, nessuna scansione cliente o modifica remota.
+
 - 2026-10-17 · PO approva tutto e richiede push su main. Accettati TEST-OPT-01/COMPANY-UX-02/COMPANY-PDF-03/AP-REVIEW-01 con limiti visuali documentati. Fonti applicative/test/config invariati dalle evidenze PASS: riuso proporzionato, controlli documentali e staging rieseguiti PASS. Controllo file sensibili/firme: unico header chiave è placeholder UI, nessun corpo chiave o token rilevato. Commit `26cf93d` (91 file), main aggiornato fast-forward e push origin/main riuscito, nessun force push/nuovo branch/deploy. E28-S1-T1/Linux e TECH-DEBT-06/07 restano aperti. COMPANY-PDF-03 include CVE per reparto, Tecnico completo ed Executive top cinque locali.
 
 - 2026-10-17 · TEST-OPT-01: autorizzata ottimizzazione del testing, implementati gate per lato e riuso evidenze, runner misurato e tag integration con TEST_DB_* sicure, CI PostgreSQL effimero. Backend suite/build/vet e DB reali PASS, configurazione 12 casi PASS, smoke frontend 30 test PASS; negativi DB/config e runner FAIL attesi verificati. Container solo test arrestato/rimosso. Doc Sync e self-review; `[~]` in attesa PO. Nessuna dipendenza, modifica applicativa, commit/push/deploy; CI remota non eseguita. Modifiche preesistenti preservate.
 
 - 2026-10-17 · COMPANY-UX-02: integrata richiesta dashboard/aziende/reparti/report/AP e precisazione SSH indipendente con clienti autonomi confermata. UI/service/DB e DTO aggiornati; test gerarchia rosso→verde, frontend 164 test/build e Go suite/build/vet PASS. Up/down e trigger verificati su DB test separato, dati applicativi invariati. PDF contenuto/paginazione PASS, gate browser/render aperti [!]. Nessuna nuova dipendenza, commit/push/deploy; AP precedente preservato e non accettato.
-
-
-- 2026-10-17 · Checkpoint `b16264b` pubblicato dopo conferma esplicita del payload/destinazione richiesta da auto-review. Revisione AP-REVIEW-01: difetti backend riprodotti rosso→verde, correzioni modello/scope/layout e guida integrata. Suite Go/build/vet, frontend 156 test/build PASS exit 0; snapshot locale read-only 17 target/20 finding/0 CVE validato per tenant. Nessuna prova visuale per browser indisponibile, task `[!]`; revisione non committata/pushata. Self-review e Doc Sync, nessuna dipendenza/migrazione o modifica DB.
-
-- 2026-10-17 · Avviato E28-S1-T1 con feature.md/orchestration.md. PO sceglie blocco porta sul server chokepoint, isolamento separato. Backend/DTO/test e fix watchdog implementati; suite backend/build/vet e frontend 145 test/build PASS exit 0. Test PID rosso→verde; race non eseguibile senza CGO. Self-review e documenti allineati; task `[ ]` per gate Linux/hardening SSH residuo. Nessuna azione remota, commit o push; modifiche precedenti preservate.

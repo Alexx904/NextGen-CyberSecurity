@@ -1,5 +1,13 @@
 # UI Specifications
 
+SSH-HARDEN-01 · 2026-10-17 · working tree: modale SSH con campo opzionale
+"Fingerprint SHA256 della chiave host", distinto dalle credenziali client.
+Spiegazione inline: canale fidato obbligatorio per verificarlo; senza pin le
+connessioni sono bloccate. Legacy modificabile e registrazione inventario senza
+pin consentita. Cambio host/porta svuota il campo; rotazione tramite sostituzione
+esplicita. Form scorrevole entro 90vh. Test DOM coprono enrollment/reset; prova
+visuale autonoma non eseguita (browser runtime indisponibile).
+
 > Responsabile: UI/UX Designer. Baseline ricavata da `frontend/tailwind.config.js`, `src/App.tsx` e documentazione dei domini; non costituisce un nuovo audit UI.
 
 ## Sistema visivo esistente

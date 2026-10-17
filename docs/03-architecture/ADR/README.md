@@ -4,6 +4,14 @@
 
 ## 7. Architecture Decision Records (ADR)
 
+### ADR-20 · Pinning esplicito dell'identità host SSH (2026-10-17)
+
+- Contesto: il fingerprint storico identifica la chiave client; il trasporto ignorava la host key. Timeout del solo dial non limita handshake e comandi.
+- Decisione: `host_key_fingerprint` distinto, SHA256 canonico OpenSSH, configurato tramite un canale fidato. Connessioni senza pin o con mismatch rifiutate prima dell'autenticazione; nessun TOFU o apprendimento automatico. Rotazione via update SecOps/admin esistente; endpoint modificato senza pin esplicito perde fiducia. Reset status e last_connected_at quando cambia la fiducia.
+- Compatibilità: migrazione 000010 up/down additiva; inventario legacy preservato ma connessioni bloccate fino a enrollment. Down perde i soli pin; re-upgrade richiede riconfigurazione. Non migrare fingerprint client in pin host.
+- Deadline: handshake massimo 10s, comandi/test connessione massimo 30s con budget precedente del chiamante rispettato; cancellazione chiude la connessione dedicata. Terminale interattivo non limitato a 10s dopo handshake.
+- Conseguenze: nessuna garanzia dedotta sulla terminazione del processo remoto. TECH-DEBT-07, transazione sull'host, coordinamento multiistanza e gate Linux E28 restano aperti. Piano [SSH-HARDEN-01](../../04-development/plans/SSH-HARDEN-01.md).
+
 <a id="adr-19"></a>
 
 ### ADR-19 · Verifica proporzionata e PostgreSQL obbligatorio esplicito (2026-10-17)

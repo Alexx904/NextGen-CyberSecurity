@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"encoding/base64"
 	"strings"
 	"time"
 
@@ -57,6 +58,7 @@ type SSHServer struct {
 	AuthType             SSHAuthType     `json:"auth_type" db:"auth_type"`
 	EncryptedSecret      string          `json:"-" db:"encrypted_secret"` // Mascherato da qualsiasi output JSON per sicurezza
 	PublicKeyFingerprint *string         `json:"public_key_fingerprint,omitempty" db:"public_key_fingerprint"`
+	HostKeyFingerprint   string          `json:"host_key_fingerprint" db:"host_key_fingerprint"`
 	Status               SSHServerStatus `json:"status" db:"status"`
 	LastConnectedAt      *time.Time      `json:"last_connected_at,omitempty" db:"last_connected_at"`
 	CreatedAt            time.Time       `json:"created_at" db:"created_at"`
@@ -65,6 +67,9 @@ type SSHServer struct {
 
 // Validate esegue la validazione dei campi obbligatori e dei vincoli logici dell'entità
 func (s *SSHServer) Validate() error {
+	if s.HostKeyFingerprint != "" && !ValidHostKeyFingerprint(s.HostKeyFingerprint) {
+		return ErrValidation
+	}
 	if len([]rune(s.ClientName)) > 160 {
 		return ErrValidation
 	}
@@ -95,6 +100,16 @@ func (s *SSHServer) Validate() error {
 		return ErrValidation
 	}
 	return nil
+}
+
+// ValidHostKeyFingerprint accepts only canonical OpenSSH SHA256 fingerprints.
+func ValidHostKeyFingerprint(value string) bool {
+	if !strings.HasPrefix(value, "SHA256:") {
+		return false
+	}
+	encoded := strings.TrimPrefix(value, "SHA256:")
+	digest, err := base64.RawStdEncoding.DecodeString(encoded)
+	return err == nil && len(digest) == 32 && base64.RawStdEncoding.EncodeToString(digest) == encoded
 }
 
 // FirewallBackup rappresenta uno snapshot persistito delle regole iptables di un server

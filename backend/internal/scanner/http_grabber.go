@@ -4,20 +4,25 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"html"
 	"io"
+	"net"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
 
-var titleRegex = regexp.MustCompile(`(?i)<title[^>]*>(.*?)</title>`)
+var titleRegex = regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
 
 // GrabHTTPInfo tenta di connettersi alle porte web aperte di un host per estrarne il titolo HTML e l'header Server
 func GrabHTTPInfo(ctx context.Context, ip string, openPorts []int) (title string, serverHeader string) {
 	if ip == "" || len(openPorts) == 0 {
 		return "", ""
 	}
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
 
 	// Identifica porte web candidate
 	webPorts := make([]int, 0, 4)
@@ -42,9 +47,11 @@ func GrabHTTPInfo(ctx context.Context, ip string, openPorts []int) (title string
 		IdleConnTimeout: 1 * time.Second,
 	}
 	client := &http.Client{
-		Transport: tr,
-		Timeout:   600 * time.Millisecond, // Timeout rapido per non rallentare la scansione
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
+		Transport:     tr,
+		Timeout:       600 * time.Millisecond, // Timeout rapido per non rallentare la scansione
 	}
+	defer tr.CloseIdleConnections()
 
 	for _, port := range webPorts {
 		schemes := []string{"http"}
@@ -55,7 +62,7 @@ func GrabHTTPInfo(ctx context.Context, ip string, openPorts []int) (title string
 		}
 
 		for _, scheme := range schemes {
-			url := fmt.Sprintf("%s://%s:%d/", scheme, ip, port)
+			url := fmt.Sprintf("%s://%s/", scheme, net.JoinHostPort(ip, strconv.Itoa(port)))
 			req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 			if err != nil {
 				continue
@@ -78,7 +85,7 @@ func GrabHTTPInfo(ctx context.Context, ip string, openPorts []int) (title string
 
 			matches := titleRegex.FindSubmatch(bodyBytes)
 			if len(matches) > 1 {
-				extracted := strings.TrimSpace(string(matches[1]))
+				extracted := strings.TrimSpace(html.UnescapeString(string(matches[1])))
 				// Pulisci entità HTML basilari o newline
 				extracted = strings.ReplaceAll(extracted, "\n", " ")
 				extracted = strings.ReplaceAll(extracted, "\r", "")
@@ -96,4 +103,3 @@ func GrabHTTPInfo(ctx context.Context, ip string, openPorts []int) (title string
 
 	return "", serverHeader
 }
-

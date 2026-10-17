@@ -2,6 +2,7 @@ export type SSHAuthType = 'KEY' | 'PASSWORD';
 export type SSHServerStatus = 'ONLINE' | 'OFFLINE' | 'UNCHECKED';
 
 export interface SSHServerItem {
+  host_key_fingerprint?: string;
   client_name?: string;
   id: string;
   tenant_id: string;
@@ -18,6 +19,7 @@ export interface SSHServerItem {
 }
 
 export interface CreateSSHServerPayload {
+  host_key_fingerprint?: string;
   client_name?: string;
   name: string;
   host: string;
@@ -28,6 +30,7 @@ export interface CreateSSHServerPayload {
 }
 
 export interface UpdateSSHServerPayload {
+  host_key_fingerprint?: string;
   client_name?: string;
   name: string;
   host: string;

@@ -19,6 +19,7 @@ import (
 
 // SSHServerResponse modella la rappresentazione JSON pubblica di un server SSH (secret sempre omesso)
 type SSHServerResponse struct {
+	HostKeyFingerprint   string     `json:"host_key_fingerprint"`
 	ID                   string     `json:"id"`
 	TenantID             string     `json:"tenant_id"`
 	Name                 string     `json:"name"`
@@ -61,6 +62,7 @@ type RollbackFirewallRequest struct {
 
 func toSSHServerResponse(s *domain.SSHServer) SSHServerResponse {
 	return SSHServerResponse{
+		HostKeyFingerprint:   s.HostKeyFingerprint,
 		ID:                   s.ID.String(),
 		TenantID:             s.TenantID.String(),
 		Name:                 s.Name,
@@ -536,4 +538,3 @@ func (h *SSHFirewallHandler) RollbackFirewall(w http.ResponseWriter, r *http.Req
 		"message": "Rollback regole firewall completato con successo allo snapshot precedente",
 	})
 }
-

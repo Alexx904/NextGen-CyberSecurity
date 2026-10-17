@@ -1,5 +1,29 @@
 # Dominio: Remote SSH Host & iptables/nftables Firewall Manager
 
+## SSH-HARDEN-01 · Identità host e deadline · 2026-10-17 · working tree
+
+`host_key_fingerprint` separato da `public_key_fingerprint` (chiave client).
+Create accetta stringa SHA256 OpenSSH canonica o vuota; update omesso conserva,
+vuoto azzera. Un cambio host/porta senza pin esplicito azzera la fiducia; il form
+azzera il campo quando l'endpoint viene modificato. Cambio endpoint/pin resetta
+status e last_connected_at. Pin assente o discordante blocca handshake prima
+dell'autenticazione per test connessione, comandi e terminale. Nessun TOFU:
+l'operatore verifica il fingerprint con l'amministratore tramite canale fidato.
+La rotazione richiede sostituzione esplicita del pin tramite update autorizzato.
+
+Dial/handshake: massimo 10s, con cancellazione e deadline del chiamante.
+Comandi/test connessione: budget totale 30s, anche se il peer non completa exec
+o apertura sessione. La chiusura della connessione interrompe le attese locali;
+non dimostra la terminazione del processo remoto. Il terminale mantiene la sua
+durata interattiva dopo l'handshake. API additive, migrazione 000010 up/down:
+legacy rimane inventariato ma non connettibile; down perde solo i pin host.
+Re-upgrade richiede nuova configurazione, mai riuso del fingerprint client.
+
+TECH-DEBT-07 resta aperto: la transazione remota snapshot/watchdog/applicazione,
+il coordinamento fra istanze e il collaudo Linux timeout/disconnessione/rollback
+non sono risolti dalle sole deadline. E28-S1-T1 non promosso per questo incremento.
+Piano e verifiche: [SSH-HARDEN-01](../04-development/plans/SSH-HARDEN-01.md).
+
 ## COMPANY-UX-02 · Clienti autonomi · 2026-10-17 · working tree
 
 SSH/Firewall indipendente dalle aziende: route `/ssh-servers` e tool dashboard accessibili anche globalmente, senza CompanyContext nella pagina. Server con `client_name` autonomo opzionale, max 160 caratteri, trim service, default DB vuoto. Non è una FK o autorizzazione cliente; isolamento tenant/serverID invariato. Filtro/raggruppamento e ricerca interni, valore vuoto “Senza cliente”.
@@ -16,7 +40,7 @@ API create accetta stringa `client_name`; update omesso conserva, stringa vuota 
 ### 1.1 Modello di Sicurezza (`NFR-SEC-06`)
 - Le credenziali dei server remoti (password di login o passphrase/chiavi private SSH) non sono mai salvate in chiaro.
 - Vengono cifrate autenticate a riposo con algoritmo **AES-256-GCM** tramite `backend/pkg/crypto/aes_gcm.go`.
-- Il client SSH Go (`golang.org/x/crypto/ssh`) stabilisce connessioni conformi RFC 4251 con timeout di inattività, controllo fingerprint di host key e gestione privilegi (sudoers per regole iptables).
+- Il client SSH Go (`golang.org/x/crypto/ssh`) verifica il pin SHA256 della host key; handshake e comandi hanno deadline esplicite. Le deadline non sono timeout di inattività del terminale né garanzie di terminazione remota. Privilegi sudoers per iptables da verificare in laboratorio.
 
 ---
 
@@ -89,6 +113,6 @@ API create accetta stringa `client_name`; update omesso conserva, stringa vuota 
 - WS test: `backend/internal/delivery/ws/ssh_terminal_ws_test.go`
 
 ## 11. Ultimo allineamento
-- 2026-10-17 · working tree · E28-S1-T1: mutazioni serializzate per server con lock a dimensione fissa; PID watchdog >1 obbligatorio; conferma fallita conserva il timer; rollback verifica tenant/server del backup e ripristina prima di fermare il watchdog. La precedente descrizione di verifica fingerprint non rappresenta il codice attuale (`InsecureIgnoreHostKey`): vedere Tech Debt e piano E28-S1-T1.
+- 2026-10-17 · working tree · SSH-HARDEN-01: pinning host distinto dalla chiave client e deadline SSH; vedere contratto in apertura. E28-S1-T1: lock locali, validazione PID e protezione timer precedenti preservati; garanzie Linux/multiistanza restano da verificare.
 - 2026-10-10 (Epic 24 SEC-P0: Hardening watchdog firewall nohup e stream-ticket WebSocket integrati e verificati al 100%)
 
