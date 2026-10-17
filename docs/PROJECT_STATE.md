@@ -44,7 +44,7 @@ Verifica pre-push del 2026-10-15: `go test ./...`, `go build ./...`, `go vet ./.
 | 2026-10-15 17:13 | `npm run build` (frontend tsc + Vite) | PASS (exit code 0, 7.25s) | Nessuno. Compilazione TypeScript e bundle Vite ottimizzato, 0 errori. |
 | 2026-10-15 17:12 | `npm test` (frontend Vitest) | PASS (exit code 0, 18 file, 107 test) | Nessuno. Tutti i 107 test passano al 100% con 0 fallimenti. |
 
-**Fase:** rimozione della feature verificata; PO richiede commit e push totale su main. Riprogettazione da definire; nessun deploy.
+**Fase:** rimozione della feature verificata e pubblicata su origin/main con le modifiche SSH/firewall, commit `4f9ea78` (25 file), push PASS exit 0. Riprogettazione da definire; nessun deploy.
 
 ## In corso
 
@@ -209,7 +209,7 @@ senza attribuire automaticamente questa causa al server reale.
 
 ## Log sessioni (ultime 5, la più recente in alto)
 
-- 2026-10-17 · Pubblicazione richiesta dal PO: feedback/accettazione e commit.md, ricontrollo rimozione e fetch origin PASS, main inizialmente allineato. Push totale autorizzato include SSH/firewall preesistenti; gate applicativi precedenti validi perché input invariati, documenti/staging ricontrollati. Nessun deploy, force push o modifica ai database applicativi. Esito remoto da confermare con il comando push e il confronto finale dei riferimenti.
+- 2026-10-17 · Pubblicazione richiesta dal PO: feedback/accettazione e commit.md, ricontrollo rimozione e fetch origin PASS, main inizialmente allineato. Push totale autorizzato include SSH/firewall preesistenti; gate applicativi precedenti validi perché input invariati, documenti/staging ricontrollati. Commit `4f9ea78`, 25 file; `git push origin main` PASS exit 0, remoto aggiornato da `3af97df` a `4f9ea78`. Staging senza file sensibili o firme credenziali. Nessun deploy, force push o modifica ai database applicativi. Questa nota successiva registra l'esito reale della pubblicazione.
 
 - 2026-10-17 · REMOVE-01: feedback/modifica → feature/orchestration; rimozione integrale richiesta dal PO, 53 file dedicati eliminati, documenti/task/riferimenti condivisi ripuliti. Working tree preesistente SSH preservata. Backend suite/vet/build, frontend 167 test/build, PostgreSQL dedicato e docs/diff PASS exit 0 per i rispettivi comandi; blocco esbuild sandbox risolto con escalation. Self-review e Doc Sync, nessun target/DB applicativo/deploy/commit/push. Riprogettazione da definire; consegna in attesa del PO.
 
