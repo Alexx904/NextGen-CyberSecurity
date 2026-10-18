@@ -48,6 +48,8 @@ Verifica pre-push del 2026-10-15: `go test ./...`, `go build ./...`, `go vet ./.
 
 ## In corso
 
+**CI-CONTEXT-01 · 2026-10-18:** PO segnala workflow non valido al run 39113975631: `job` non ammesso nell'env del job. Riproduzione locale actionlint v1.7.7 exit 1 conferma contesto e indice numerico; spostata TEST_DB_PORT nell'env dello step integration con chiave stringa '5432'. Porta dinamica, TEST_DB_* restanti, healthcheck e dipendenze job invariati. Solo workflow e documenti; nessun codice/schema/DB/servizio modificato. Tool temporaneo in cache artifacts, nessuna dipendenza aggiunta ai manifest. Primo download bloccato dalla sandbox, ripetuto con escalation autorizzata. Validazione finale in corso; nessun PASS remoto dichiarato.
+
 **README-GH-01 · correzione porta 2026-10-18:** PO indica l'interfaccia su `http://localhost:3080`. Applicato feedback/modifica: URL e troubleshooting README corretti; quickstart e procedura artifact impostano esplicitamente `FRONTEND_PORT=3080` in PowerShell, dato il fallback 3000 del manifest. Vite nativo resta 3000. Nessuna lettura di `.env`, modifica runtime o configurazione applicativa; destinazione operativa fornita dal PO, raggiungibilità non verificata. Correzione compresa nella richiesta precedente di pubblicazione README su main; accettazione editoriale ancora pendente.
 
 Verifiche correzione dalla root: verificatore documentale PASS exit 0 (1,035 s, 224 link/ancore); `git diff --check` PASS exit 0 (con stat: 0,113 s). Self-review dei riferimenti e dei comandi PowerShell completata; solo Markdown, suite applicative non necessarie. Pubblicazione prevista: `docs(readme): correct Docker web interface port to 3080`.
@@ -139,6 +141,10 @@ Evidenze correnti dalla root con `scripts/verify.ps1 -Profile Final -Scope All`:
 - Limiti: nessun collaudo visuale, nessun deploy; un servizio già avviato continua a usare la build precedente fino al riavvio/aggiornamento gestito dal PO. Il PO ha autorizzato esplicitamente commit e push nel turno successivo alla consegna.
 
 ## In attesa di accettazione utente
+
+CI-CONTEXT-01: fix env della porta dinamica PostgreSQL verificato con actionlint v1.7.7, rosso exit 1 e verde exit 0 (0,670 s). Nessuna suite applicativa o DB locale rieseguita: nessun sorgente, schema o comando test cambiato. Self-review conferma invariati healthcheck, porta dinamica e gate job Docker. CI remota da verificare dopo pubblicazione. Cache moduli spostata in `.gocache/actionlint-mod` perché il verificatore documentale includeva i Markdown scaricati sotto `.agent/artifacts`; primo controllo documentale FAIL per file terzi, da non confondere con errore dei documenti del progetto.
+
+Gate documentale finale dalla root PASS exit 0 (0,864 s, 224 link/ancore) e `git diff --check` PASS exit 0. Correzione della CI che accompagna la pubblicazione su main già richiesta dal PO; commit previsto `fix(ci): resolve PostgreSQL service port in step context`, nessun deploy. Nessun esito remoto anticipato.
 
 README-GH-01: README GitHub completo in italiano, consegna editoriale richiesta il 2026-10-18. Verifica tramite lettura del README su GitHub; nessuna modifica del comportamento applicativo. Pubblicato con commit `19e84ca`: `git push origin main` PASS exit 0; `git ls-remote origin refs/heads/main` conferma `19e84ca1a2b8f4aacfb6f72f5c3ee929d572c2de`, working tree pulita dopo il push. Questa nota successiva registra l'esito reale; nessun deploy o esito CI remota dichiarato.
 

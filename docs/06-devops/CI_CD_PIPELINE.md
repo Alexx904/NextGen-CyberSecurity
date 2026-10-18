@@ -1,5 +1,11 @@
 # CI/CD Pipeline
 
+## CI-CONTEXT-01 · Porta PostgreSQL · 2026-10-18
+
+Ultimo allineamento: 2026-10-18 · working tree. Il run segnalato dal PO è stato rifiutato prima dell'avvio perché `job.services.postgres.ports` era usato nell'env del job, dove `job` non è ammesso. `TEST_DB_PORT` viene ora risolta nell'env dello step di integrazione con `job.services.postgres.ports['5432']`; le altre TEST_DB_* restano nel job. Porta host dinamica, healthcheck, database isolato e gate immagini invariati. Contesti ammessi: [riferimento GitHub](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#context-availability).
+
+Verifica locale con `go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 -shellcheck= -pyflakes= .github/workflows/ci.yml` dalla root (strumento temporaneo, nessuna dipendenza applicativa): prima del fix exit 1, contesto vietato e indice numerico; dopo il fix PASS exit 0 (0,670 s wall, preparazione/download separati). Shellcheck/pyflakes disabilitati perché non disponibili; questo controllo riguarda schema, espressioni e contesti Actions, non l'esecuzione remota dei job.
+
 > Responsabile: DevOps Engineer. Fonte eseguibile: `.github/workflows/ci.yml`.
 
 La pipeline parte su push a `main`, `feat/**`, `fix/**`, `chore/**`, pull request verso `main` e avvio manuale `workflow_dispatch`.

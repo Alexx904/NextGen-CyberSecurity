@@ -73,7 +73,6 @@ jobs:
           --health-retries 10
     env:
       TEST_DB_HOST: 127.0.0.1
-      TEST_DB_PORT: ${{ job.services.postgres.ports[5432] }}
       TEST_DB_NAME: nextgen_ci_test
       TEST_DB_USER: nextgen_test
       TEST_DB_PASSWORD: ephemeral-ci-only
@@ -87,6 +86,8 @@ jobs:
           cache: true
           cache-dependency-path: backend/go.sum
       - name: Run Required PostgreSQL Integration Tests
+        env:
+          TEST_DB_PORT: ${{ job.services.postgres.ports['5432'] }}
         run: go test -tags=integration -count=1 -v ./internal/repository/postgres
 
   frontend:

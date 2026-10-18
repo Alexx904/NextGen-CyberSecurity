@@ -22,6 +22,14 @@
 
 ## 🚀 Coda di Sviluppo Attiva (Priorità validate dal PO)
 
+- [~] CI-CONTEXT-01 · Correggere contesto porta dinamica PostgreSQL in Actions
+  - File: .github/workflows/ci.yml.
+  - Dipende da: nessuno.
+  - Test: actionlint rosso/verde, verificatore documentale e diff check. Codice e schema DB invariati; esecuzione job GitHub da verificare.
+  - Evidenze: actionlint v1.7.7 riproduzione exit 1, corretto PASS exit 0; validazione GitHub remota non ancora eseguita.
+  - Docs: CI_CD_PIPELINE e PROJECT_STATE.
+  - DoD: validazione workflow PASS, gate integrazione preservato, Doc Sync e self-review; accettazione PO separata.
+
 - [~] README-GH-01 · README completo per GitHub
   - Feedback PO: URL Docker corretto a localhost:3080; quickstart/artifact con FRONTEND_PORT esplicita, Vite nativo invariato a 3000.
   - File: README.md.
