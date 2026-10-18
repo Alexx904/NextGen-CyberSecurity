@@ -22,6 +22,14 @@
 
 ## 🚀 Coda di Sviluppo Attiva (Priorità validate dal PO)
 
+- [~] README-GH-01 · README completo per GitHub
+  - File: README.md.
+  - Dipende da: nessuno.
+  - Test: verificatore documentale e git diff --check; nessuna suite applicativa per soli Markdown.
+  - Evidenze: dalla root verificatore PASS exit 0 (1,143 s; 64 Markdown, 224 link/ancore), diff check PASS exit 0 (controllo e inventario 0,148 s); self-review completata, nessun cambiamento applicativo.
+  - Docs: PROJECT_STATE e questo registro; contratti e domini invariati.
+  - DoD: contenuti aderenti alle fonti, riferimenti validi, self-review e controlli PASS. Commit e push main esplicitamente richiesti dal PO; accettazione editoriale separata.
+
 - [x] DOCKER-CI-01 · Immagini Docker scaricabili da GitHub Actions
   - Accettazione PO: 2026-10-17, «OK». Prima esecuzione GitHub ancora da verificare; nessuna autorizzazione implicita a commit/push/deploy.
   - File: .github/workflows/ci.yml, compose.images.yml, backend/.dockerignore, frontend/.dockerignore, frontend/Dockerfile.

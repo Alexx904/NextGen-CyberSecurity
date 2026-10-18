@@ -1,6 +1,6 @@
 # PROJECT STATE
 
-**Ultimo aggiornamento:** 2026-10-17
+**Ultimo aggiornamento:** 2026-10-18
 **Modalità progetto:** esistente (onboarded formalmente).
 
 > Memoria viva dell'agente. Letta a inizio sessione, aggiornata a fine di ogni turno.
@@ -47,6 +47,8 @@ Verifica pre-push del 2026-10-15: `go test ./...`, `go build ./...`, `go vet ./.
 **Fase:** rimozione della feature verificata e pubblicata su origin/main con le modifiche SSH/firewall, commit `4f9ea78` (25 file), push PASS exit 0. Riprogettazione da definire; nessun deploy.
 
 ## In corso
+
+**README-GH-01 · 2026-10-18:** PO richiede README completo per GitHub e push su main, autorizzando commit/pubblicazione di questo incremento. Working tree iniziale pulita su main, baseline `e692e76`; fetch origin PASS exit 0, divergenza 0/0. Applicati feedback/modifica, orchestration e commit. README ampliato con funzionalità, architettura, quickstart, configurazione effettiva, sviluppo, test, artifact CI, troubleshooting, limiti, roadmap e licenza non dichiarata. Fonti: manifest, config/server, route e documentazione canonica. Nessun codice, governance, dipendenza o servizio modificato. Assunzione reversibile: README in italiano, coerente con repository e richiesta. Solo verifiche documentali previste; nessun avvio stack, scansione, deploy o suite applicativa dichiarati. Pubblicazione autorizzata distinta dall'accettazione editoriale del PO.
 
 **DOCKER-CI-01 · pubblicazione richiesta 2026-10-17:** PO «effettua il push» autorizza commit e push delle nove modifiche Docker/Actions accettate su origin/main. Applicato commit.md, fetch origin PASS e divergenza iniziale 0/0; nessuna modifica estranea. Evidenze build/smoke/archivio/Compose precedenti riutilizzate perché sorgenti, dipendenze e configurazione invariati; soli Markdown aggiornati dopo i controlli. Messaggio commit: `ci(docker): package verified images as workflow artifacts`. La richiesta autorizza l'esecuzione CI conseguente al push, nessun deploy o pubblicazione registry. Esito push da verificare al termine; questa nota registra l'autorizzazione e la preparazione.
 
@@ -133,6 +135,10 @@ Evidenze correnti dalla root con `scripts/verify.ps1 -Profile Final -Scope All`:
 - Limiti: nessun collaudo visuale, nessun deploy; un servizio già avviato continua a usare la build precedente fino al riavvio/aggiornamento gestito dal PO. Il PO ha autorizzato esplicitamente commit e push nel turno successivo alla consegna.
 
 ## In attesa di accettazione utente
+
+README-GH-01: README GitHub completo in italiano, consegna editoriale richiesta il 2026-10-18. Verifica tramite lettura del README su GitHub; nessuna modifica del comportamento applicativo. Esiti controlli e pubblicazione registrati nella sessione corrente.
+
+Evidenze README-GH-01 dalla root: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-agent-docs.ps1` PASS exit 0, 1,143 s, 64 Markdown e 224 link/ancore; `git diff --check` PASS exit 0 (con inventario diff/status: 0,148 s). Self-review in prima persona: comandi confrontati con manifest/config, roadmap distinta dall'implementato, nessuna credenziale reale o nuovo termine di licenza. Task `[~]`, accettazione editoriale pendente. Fetch inizialmente negato su FETCH_HEAD dalla sandbox, poi PASS con escalation autorizzata; nessun rifiuto auto-review. Commit previsto `docs(readme): add comprehensive GitHub project guide`; push main richiesto dal PO, esito da verificare.
 
 DOCKER-CI-01 accettato dal PO il 2026-10-17, «OK»; nessuna attesa di accettazione relativa a questo incremento. Prima esecuzione remota ancora da verificare dopo pubblicazione autorizzata; istruzioni in [Deployment](06-devops/DEPLOYMENT.md#docker-ci-01--caricamento-artifact).
 
