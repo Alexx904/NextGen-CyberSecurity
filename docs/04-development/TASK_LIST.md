@@ -1,26 +1,55 @@
 # 3. Interactive Task List & Implementation Backlog
 
 > **Stato:** ATTIVO (Priorità validate dal Product Owner)
-> **Ultimo Aggiornamento:** 2026-10-17
+> **Ultimo Aggiornamento:** 2026-10-18
 > **Autore / Ruolo:** Codex Tech Lead (System Architect & QA)
 > **Documenti Correlati:** [REQUIREMENTS.md](../01-product/REQUIREMENTS.md) | [PRD.md](../01-product/PRD.md) | [HLD.md](../03-architecture/HLD.md) | [CHANGELOG.md](../../CHANGELOG.md)
 
 ---
 
 ## 📋 Regole di Avanzamento (Pipeline Autonoma)
-1. **Intake & Plan:** L'agente analizza la richiesta, aggiorna i requisiti se necessario e produce il piano con strategia di test.
-2. **Execute & Test:** Scrittura codice e test (happy path, error path, edge cases).
-3. **Zero-Assumption Verification:** I test devono essere eseguiti a terminale con esito positivo al 100% (exit code 0) prima di procedere.
-4. **Stati dei task:**
-   - `[ ]` da fare
-   - `[~]` implementato e verificato dall'agente con evidenze, in attesa di accettazione del Product Owner
-   - `[x]` accettato dall'utente e verificato
-   - `[!]` bloccato (con motivo indicato)
-5. **Archiviazione:** I task completati e accettati nelle Milestone 1, 1.1 e 1.2 (TASK-01 fino a TASK-60) sono archiviati in [CHANGELOG.md](../../CHANGELOG.md). Oltre 10 task `[x]`, spostare in archivio.
 
----
+Stati, DoD, gate e archiviazione sono definiti in [AGENTS sez. 5–10](../../AGENTS.md). Questo file possiede task, dipendenze e debito, non una seconda procedura. Task storici accettati in [CHANGELOG](../../CHANGELOG.md); la revisione governance preserva ID e stati esistenti.
 
 ## 🚀 Coda di Sviluppo Attiva (Priorità validate dal PO)
+
+- [~] AGENT-HARNESS-01 · Ottimizzare contesto, skill e verificatori della governance
+  - File: AGENTS.md, .agent/, .agents/skills/, scripts/*agent*, documenti di indice/stato/mapping.
+  - Dipende da: nessuno; modifiche applicative M1.1 preesistenti preservate.
+  - Test: controlli documentali, mapping completo, manifest skill e fixture negative; preservazione ID/stati.
+  - Docs: [piano/fonti](plans/AGENT-HARNESS-01.md), ADR-23, PROJECT_STATE, DOMAIN_MAP e indice.
+  - DoD: controlli PASS exit 0; snapshot preservato; self-review e Doc Sync; benchmark Sol non eseguito e non inferito dal risparmio caratteri.
+  - Evidenze 2026-10-18: Docs PASS exit 0 (report 20261018-114735-c1bb6cad); 22 fixture/check PASS exit 0 (2,276s); snapshot e 26 stati task preesistenti preservati. Nessun sorgente applicativo modificato da questo task; accettazione PO separata.
+
+- [ ] M11-CLOSE-01 · Completamento M1.1 senza riordino milestone
+  - File: backend/internal/domain/firewall*, backend/internal/service/firewall*, frontend/src/components/FirewallManager*.
+  - Dipende da: accettazioni M1.1 preservate; gate SSH-HARDEN-01 e TECH-DEBT-07.
+  - Test: input ostili rosso/verde, timer obbligatorio, regressione All, collaudi Linux/UI e matrice FR-07..FR-13.
+  - Docs: [piano](plans/M11-CLOSE-01.md), dominio SSH, API_SPEC, PROJECT_STATE.
+  - DoD: test e build/vet PASS; collaudi obbligatori eseguiti; Doc Sync e self-review; accettazione PO separata.
+  - Avanzamento 2026-10-18: fix input/commenti/timer e gate automatico All PASS (frontend ripetuto dopo correzione fixture); milestone non conclusa. Matrice [QA](../05-qa/M11_CLOSURE_QA.md). PO conferma iptables/iptables-nft, modello attuale.
+
+- [ ] M11-REPORT-01 · Completare filtri e collaudo archivio report FR-08
+  - Avanzamento: frontend implementato, 11 mirati e gate 175 test/build PASS exit 0. API/schema invariati; browser/PDF ancora aperti, nessuna promozione a `[~]`.
+  - File: frontend/src/pages/Reports*, frontend/src/types/report.ts, backend/internal/domain/report.go e percorsi report se necessario.
+  - Dipende da: M11-CLOSE-01 (ricognizione).
+  - Test: date/profilo/target/cartella, paginazione, isolamento aziende, PDF renderizzato; DB esplicito se cambia repository.
+  - Docs: reporting_and_assets, API_SPEC e matrice M1.1.
+  - DoD: mirati/regressione PASS; UI/PDF verificati; build/typecheck/vet PASS; Doc Sync e self-review.
+
+- [ ] M11-FIREWALL-01 · Completare operazioni e resilienza firewall FR-11
+  - File: backend/internal/domain/firewall*, backend/internal/service/firewall*, handler SSH, frontend/src/components/FirewallManager*.
+  - Dipende da: TECH-DEBT-07, SSH-HARDEN-01. Decisione PO acquisita: iptables/iptables-nft, modello corrente, niente nft nativo.
+  - Test: policy, modifica/riordino, conferma/rollback, disconnessione, timeout e multiistanza su laboratorio Linux isolato; UI terminale docked.
+  - Docs: ssh_and_firewall, API_SPEC, UI_SPECIFICATIONS, matrice M1.1.
+  - DoD: test mirati PASS; laboratorio/UI PASS; build/typecheck/vet PASS; Doc Sync e self-review.
+
+- [ ] M11-PERSIST-01 · Persistenza e recupero risultati progressivi FR-12
+  - File: backend/internal/service/discovery*, scan_orchestrator*, repository/migrations e handler streaming secondo contratto da definire.
+  - Dipende da: contratto PostgreSQL prima dell'implementazione.
+  - Test: scrittura incrementale, refresh/riconnessione, riavvio, tenant; integrazione PostgreSQL e migrazioni up/down, eventi durante Nmap.
+  - Docs: scanning_and_discovery, DATABASE_SCHEMA, API_SPEC, matrice M1.1.
+  - DoD: mirati PASS; DB/rollback/streaming PASS; gate All PASS; Doc Sync e self-review.
 
 - [~] CI-CONTEXT-01 · Correggere contesto porta dinamica PostgreSQL in Actions
   - File: .github/workflows/ci.yml.
@@ -206,6 +235,8 @@ DOCKER-CI-01: `npm ci` nella build segnala 16 vulnerabilità (7 moderate, 6 high
 - [ ] TECH-DEBT-09 · Alta · Dipendenze frontend: analizzare advisory e distinguere dipendenze runtime/build, aggiornare in incremento dedicato con test/build e verifica compatibilità. Impatto: vulnerabilità segnalate dal resolver npm durante la build Docker; dettaglio advisory ancora da valutare.
 
 Registro formale del debito tecnico e delle ottimizzazioni architetturali (regola ADR-10):
+
+- [ ] TECH-DEBT-10 · Media · Archivio Report: caricamento e memoria proporzionali allo storico del tenant; paginazione offset senza snapshot transazionale. Misurare sui volumi reali, poi introdurre filtro profilo/aggregazioni server e ordinamento stabile con integrazione PostgreSQL. ADR-22; nessun limite silenzioso accettato.
 
 | ID | Priorità | Componente / Percorso | Descrizione & Impatto | Piano di Rientro |
 |---|---|---|---|---|

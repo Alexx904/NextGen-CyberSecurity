@@ -2,9 +2,13 @@ package domain
 
 import (
 	"fmt"
+	"net/netip"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 )
@@ -88,7 +92,7 @@ type FirewallRuleParams struct {
 	Protocol     string     `json:"protocol"` // all, tcp, udp, icmp
 	Source       string     `json:"source"`   // e.g. 192.168.1.0/24 o 0.0.0.0/0
 	Destination  string     `json:"destination"`
-	Port         string     `json:"port"`     // Porta o range, es. 22 o 80:443
+	Port         string     `json:"port"` // Porta o range, es. 22 o 80:443
 	InInterface  string     `json:"in_interface"`
 	OutInterface string     `json:"out_interface"`
 	Comment      string     `json:"comment"`
@@ -129,9 +133,35 @@ func (p *FirewallRuleParams) Validate() error {
 	if p.Position < 0 {
 		return fmt.Errorf("%w: posizione negativa non consentita", ErrValidation)
 	}
+	for _, address := range []string{p.Source, p.Destination} {
+		if address == "" {
+			continue
+		}
+		ip, err := netip.ParseAddr(address)
+		if err == nil && ip.Is4() {
+			continue
+		}
+		prefix, err := netip.ParsePrefix(address)
+		if err != nil || !prefix.Addr().Is4() {
+			return fmt.Errorf("%w: indirizzo IPv4 o CIDR non valido", ErrValidation)
+		}
+	}
+	for _, iface := range []string{p.InInterface, p.OutInterface} {
+		if iface == "" || iface == "*" {
+			continue
+		}
+		if len(iface) > 15 || !firewallInterfacePattern.MatchString(iface) {
+			return fmt.Errorf("%w: interfaccia non valida", ErrValidation)
+		}
+	}
+	if len(p.Comment) > 255 || !utf8.ValidString(p.Comment) || strings.ContainsFunc(p.Comment, unicode.IsControl) {
+		return fmt.Errorf("%w: commento non valido (massimo 255 byte, senza controlli)", ErrValidation)
+	}
 
 	return nil
 }
+
+var firewallInterfacePattern = regexp.MustCompile(`^[a-zA-Z0-9_][a-zA-Z0-9_.:-]*\+?$`)
 
 func validatePortSpec(portSpec string) error {
 	// Supporto a porta singola "80" o range "80:443"
@@ -154,4 +184,3 @@ func validatePortSpec(portSpec string) error {
 	}
 	return nil
 }
-

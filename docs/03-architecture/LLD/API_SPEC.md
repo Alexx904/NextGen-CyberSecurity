@@ -34,6 +34,15 @@ Tutte le API rispondono sotto `/api/v1` con payload standard `{ "success": true,
 
 ## Autorità del contratto
 
+### M11-CLOSE-01 · Mutazioni firewall · 2026-10-18 · working tree
+
+POST regole: source/destination vuoti o IPv4/CIDR IPv4; interfacce ASCII max 15
+caratteri, wildcard `+` finale; commento UTF-8 max 255 byte senza controlli.
+Safety timer obbligatorio per POST/DELETE: flag legacy false non lo disattiva.
+Timeout omesso/0 = 60s, altri valori ammessi 10..300s; input invalidi HTTP 400
+`VALIDATION_FAILED`. Nessuna nuova API o migrazione. Restano aperti i limiti
+operativi watchdog nel [dominio SSH](../../domains/ssh_and_firewall.md).
+
 ### SSH-TOOLS-01 · 2026-10-17 · working tree
 
 `GET /api/v1/ssh/servers/{id}/firewall`: isolamento tenant e RBAC SecOps/admin

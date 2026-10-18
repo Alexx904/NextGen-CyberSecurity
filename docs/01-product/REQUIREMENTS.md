@@ -37,6 +37,7 @@
 ### FR-08: Hub Centralizzato di Reportistica White-Label (`/reports`)
 - **FR-08.1:** Schermata dedicata `/reports` che elenca tutti i report generati e le scansioni completate del tenant.
 - **FR-08.2:** Filtri avanzati per intervallo date, target, cartella dell'albero, profilo di scansione e livello di severità massima.
+  - M11-REPORT-01 (2026-10-18): filtri sullo storico completo, giorni UTC inclusivi e severità massima esatta. Scope aziendale anche nel cronologico; 10 righe per pagina. Download aziendali completi indipendenti dai filtri dello storico, con indicazione UI.
 - **FR-08.3:** Download con un click del report PDF White-Label e dell'export CSV.
 - **FR-08.4:** Supporto a due template selezionabili: *Executive Summary* (sintesi manageriale, grafici, indice di rischio) e *Technical Deep-Dive* (dettaglio tecnico porte, CPE, CVE, remediation).
 - **FR-08.5:** Personalizzazione avanzata in Settings: ragione sociale, disclaimer legale, firma responsabile e palette colori.
@@ -73,6 +74,8 @@
   - Supporto per autenticazione a **Password**, cifrata a riposo nel database PostgreSQL con algoritmo AES-256-GCM.
   - Verifica della connettività e dei permessi di esecuzione (`sudo`/`root`).
 - **FR-11.3 (Interfaccia Grafica Firewall iptables/nftables):**
+  - Decisione PO 2026-10-18: iptables e iptables-nft con modello INPUT/OUTPUT/FORWARD corrente; gestione nftables nativa esclusa.
+  - M11-CLOSE-01 (2026-10-18): mutazioni IPv4 con indirizzi/interfacce validati prima di SSH e commenti quotati come dati. Timer obbligatorio per aggiunta/eliminazione (anche flag legacy false); 0 = 60s, intervallo 10..300s. Questo incremento non chiude il collaudo watchdog Linux né implementa le operazioni GUI ancora mancanti: [matrice](../05-qa/M11_CLOSURE_QA.md).
   - Rilevamento stato firewall e visualizzazione delle Catene principali (`INPUT`, `OUTPUT`, `FORWARD`).
   - Visualizzazione e modifica sicura della Policy predefinita di ciascuna catena (`ACCEPT` o `DROP`).
   - Tabella visuale delle regole ordinate per catena con parametri: azione (`ACCEPT`, `DROP`, `REJECT`), protocollo (`TCP`, `UDP`, `ICMP`, `ALL`), sorgente, destinazione, porte, interfaccia e commento descrittivo.

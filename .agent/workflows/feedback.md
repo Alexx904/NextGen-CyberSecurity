@@ -1,34 +1,14 @@
 ---
-description: Gestisce l'esito dell'utente su una feature consegnata, tra accettazione (OK), rifiuto (KO) o richiesta di modifica
+description: Applica accettazione, correzione o modifica richiesta dal Product Owner
 ---
 
-Segui le regole di `AGENTS.md`. Input: il messaggio dell'utente sull'esito di una feature.
+# Feedback
 
-1. **Identifica la feature.** Leggi "In attesa di accettazione" in `docs/PROJECT_STATE.md`. Se il messaggio non indica chiaramente a quale feature si riferisce e ce n'è più di una, elenca le feature in attesa e chiedi quale.
+Identifica il task dalle attese correnti. Se un OK è ambiguo fra più consegne chiedi a quale si riferisce; non estenderlo a pubblicazione o lavoro futuro.
 
-2. **Classifica l'esito.**
+- **OK:** registra accettazione `[x]`, rimuovi l'attesa e conserva limiti/prove non eseguite. Conferma solo le assunzioni comprese nella consegna. Archivia i task oltre la soglia AGENTS; nessun commit implicito.
+- **KO:** raccogli solo dettagli mancanti, riapri il task e applica [fix](fix.md); se diverge l'atteso correggi prima il requisito. Nuova consegna solo dopo verifica, review e Doc Sync.
+- **Modifica:** per variazione locale usa intake/piano breve e gate pertinenti; per requisiti/architettura esegui impatto sui task già accettati e [feature](feature.md).
+- **Preferenza/vincolo:** registra una volta nella fonte che lo possiede quando cambia il contesto persistente.
 
-   **OK (funziona):**
-   - Imposta i task a `[x]` in `docs/04-development/TASK_LIST.md`.
-   - Se i task completati superano 10, archivia in `CHANGELOG.md`.
-   - Rimuovi la feature da "In attesa di accettazione" e aggiorna i documenti interessati.
-   - Conferma le assunzioni fatte (rimuovile da "Assunzioni da confermare") oppure chiedi conferma se erano rilevanti.
-   - Proponi l'eventuale commit tramite `commit.md`; eseguilo solo su richiesta. Nessun push o merge implicito.
-
-   **KO (non funziona):**
-   - Raccogli solo i dettagli essenziali mancanti (cosa ha fatto, cosa ha visto, cosa si aspettava). Se hai già abbastanza, non fare domande.
-   - Riporta il task in `[ ]` e registra il bug in `docs/04-development/TASK_LIST.md`.
-   - Riproduci il problema con un test che fallisce, individua la causa radice, correggi, riesegui test mirati e regressione pertinente; una sola verifica finale per lato coinvolto secondo `AGENTS.md` sez. 8 (failure loop, max 3 tentativi).
-   - Verifica che il comportamento rifiutato non dipenda da un requisito mal interpretato: se sì, correggi anche `docs/01-product/REQUIREMENTS.md`.
-   - Esegui il Doc Sync (`AGENTS.md` sez. 7) anche per il fix.
-   - Consegna un nuovo Pacchetto di Accettazione, con il task in `[~]`.
-
-   **Modifica (cambia/aggiungi/togli):**
-   - Se la modifica è piccola e locale: trattala come mini-feature (intake breve, piano, test, verifica).
-   - Se modifica requisiti o architettura già accettati: esegui l'analisi d'impatto sui task `[x]` e sui test esistenti, aggiorna docs e task list, poi applica `feature.md`.
-   - Esegui il Doc Sync (`AGENTS.md` sez. 7) e segnala all'utente cosa cambia di ciò che aveva già accettato.
-
-   **Indicazione generica (preferenza, vincolo, priorità):**
-   - Registrala in `PROJECT_STATE.md` o nel documento pertinente (ADR se è una decisione tecnica) e applicala da ora in poi.
-
-3. **Chiudi il turno** con "Stato" e "Serve da te", aggiornando `PROJECT_STATE.md`.
+Aggiorna PROJECT_STATE per stati realmente cambiati, senza appendere resoconti già presenti nei piani/QA. Concludi con Stato e Serve da te.

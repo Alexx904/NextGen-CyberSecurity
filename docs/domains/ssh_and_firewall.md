@@ -1,5 +1,19 @@
 # Dominio: Remote SSH Host & iptables/nftables Firewall Manager
 
+Decisione PO 2026-10-18: supporto iptables e iptables-nft con modello corrente
+INPUT/OUTPUT/FORWARD. Nessun gestore nativo di tabelle/catene nftables richiesto.
+La compatibilità iptables-nft va collaudata in laboratorio, non dedotta dal nome.
+
+## M11-CLOSE-01 · Validazione mutazioni · 2026-10-18 · working tree
+
+Contratto del primo incremento: IPv4/CIDR IPv4 letterali per source/destination;
+interfacce ASCII massimo 15 caratteri (`_`, `.`, `-`, `:`, wildcard `+` finale),
+vuoto/`*` senza filtro; commenti UTF-8 massimo 255 byte senza controlli e quotati
+come singolo argomento shell. Il timer è obbligatorio per add/delete anche con
+flag legacy false; timeout 0 = 60s, intervallo accettato 10..300s. Input invalidi
+rifiutati prima di ogni comando SSH. Nessuna nuova garanzia watchdog Linux:
+TECH-DEBT-07 resta aperto. [Piano](../04-development/plans/M11-CLOSE-01.md).
+
 ## SSH-TOOLS-01 · Proxy terminale e prerequisiti firewall · 2026-10-17 · working tree
 
 Accettato dal PO il 2026-10-17 con «Ok perfetto è funzionante», dopo il feedback

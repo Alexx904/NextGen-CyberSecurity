@@ -354,7 +354,7 @@ func (h *SSHFirewallHandler) AddFirewallRule(w http.ResponseWriter, r *http.Requ
 	}
 
 	timeoutSec := req.SafetyTimeoutSeconds
-	if timeoutSec <= 0 {
+	if timeoutSec == 0 {
 		timeoutSec = 60
 	}
 
@@ -427,13 +427,20 @@ func (h *SSHFirewallHandler) DeleteFirewallRule(w http.ResponseWriter, r *http.R
 
 	timeoutSec := 60
 	if toStr := r.URL.Query().Get("timeout"); toStr != "" {
-		if val, parseErr := strconv.Atoi(toStr); parseErr == nil && val > 0 {
-			timeoutSec = val
+		val, parseErr := strconv.Atoi(toStr)
+		if parseErr != nil {
+			response.Error(w, http.StatusBadRequest, "VALIDATION_FAILED", "Timeout non valido")
+			return
 		}
+		timeoutSec = val
 	}
 
 	status, err := h.firewallService.DeleteRule(r.Context(), tenantID, serverID, chain, lineNum, withSafetyTimer, timeoutSec)
 	if err != nil {
+		if errors.Is(err, domain.ErrValidation) {
+			response.Error(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			return
+		}
 		if errors.Is(err, domain.ErrSSHServerNotFound) || errors.Is(err, domain.ErrNotFound) {
 			response.Error(w, http.StatusNotFound, "NOT_FOUND", "Server SSH non trovato")
 			return
@@ -467,12 +474,16 @@ func (h *SSHFirewallHandler) ApplyWithSafetyTimer(w http.ResponseWriter, r *http
 	_ = json.NewDecoder(r.Body).Decode(&req)
 
 	timeoutSec := req.SafetyTimeoutSeconds
-	if timeoutSec <= 0 {
+	if timeoutSec == 0 {
 		timeoutSec = 60
 	}
 
 	status, err := h.firewallService.ApplyWithSafetyTimer(r.Context(), tenantID, serverID, timeoutSec)
 	if err != nil {
+		if errors.Is(err, domain.ErrValidation) {
+			response.Error(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			return
+		}
 		if errors.Is(err, domain.ErrSSHServerNotFound) || errors.Is(err, domain.ErrNotFound) {
 			response.Error(w, http.StatusNotFound, "NOT_FOUND", "Server SSH non trovato")
 			return

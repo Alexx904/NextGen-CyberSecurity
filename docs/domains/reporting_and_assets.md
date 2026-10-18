@@ -1,5 +1,14 @@
 # Dominio: Asset Tree Management & Centralized Reports Hub
 
+## M11-REPORT-01 · Archivio e filtri · 2026-10-18 · working tree
+
+Contratto UI: storico caricato su tutte le pagine API, quindi filtri locali per
+periodo UTC inclusivo, profilo, target, cartella e severità massima esatta.
+Scope azienda applicato sia a gruppi sia a cronologico, 10 righe/pagina.
+Errori di caricamento parziale impediscono aggregazioni incomplete. I download
+aziendali consolidati restano completi: i filtri selezionano solo lo storico.
+Nessuna modifica API/DB; [piano](../04-development/plans/M11-CLOSE-01.md).
+
 Ultimo allineamento: 2026-10-17 · working tree. Rimossa la voce di navigazione e la route `/pentest` per richiesta del PO; la riprogettazione è da definire. Le route aziendali e gli strumenti SSH restano invariati.
 
 > **Dominio:** Organizzazione Gerarchica Asset, Workstation Multi-Company Workflow e Generazione Report White-Label

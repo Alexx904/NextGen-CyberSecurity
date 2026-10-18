@@ -7,6 +7,12 @@ import { apiClient } from '../api/client';
 import { ReportItem } from '../types/report';
 import { TargetGroupNode } from '../types/target';
 
+const scope = vi.hoisted(() => ({ company: null as string | null }));
+vi.mock('../context/CompanyContext', () => ({ useCompany: () => ({
+  selectedCompanyId: scope.company, selectedCompany: null, departments: [],
+  companyGroupIds: new Set(scope.company ? [scope.company] : []),
+}) }));
+
 vi.mock('../api/reports', () => ({
   reportsApi: {
     list: vi.fn(),
@@ -116,6 +122,7 @@ describe('Reports Page - Multi-Company Scope & Target IP Inspection', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    scope.company = null;
 
     vi.mocked(reportsApi.list).mockResolvedValue({
       items: mockReports,
@@ -175,7 +182,7 @@ describe('Reports Page - Multi-Company Scope & Target IP Inspection', () => {
     });
 
     // Clicca sull'header di Alfa per collassare l'accordion
-    const alfaHeader = screen.getAllByText('Azienda Alfa S.r.l.')[0];
+    const alfaHeader = screen.getByRole('heading', { name: 'Azienda Alfa S.r.l.' });
     fireEvent.click(alfaHeader);
 
     // L'IP di Alfa non deve essere più visibile nella tabella espansa
@@ -238,5 +245,40 @@ describe('Reports Page - Multi-Company Scope & Target IP Inspection', () => {
       'executive',
       expect.any(Object)
     );
+  });
+
+  it('combines profile and inclusive date filters, with a visible invalid-period error', async () => {
+    render(<Reports />);
+    await screen.findByRole('heading', { name: 'Azienda Alfa S.r.l.' });
+    fireEvent.change(screen.getByLabelText('Profilo'), { target: { value: 'profile-fast' } });
+    expect(screen.queryByRole('heading', { name: 'Azienda Beta S.p.A.' })).toBeNull();
+    fireEvent.change(screen.getByLabelText('Dal giorno (UTC)'), { target: { value: '2026-10-10' } });
+    fireEvent.change(screen.getByLabelText('Al giorno (UTC)'), { target: { value: '2026-10-09' } });
+    expect(screen.getByRole('alert').textContent).toContain('data iniziale');
+    expect(screen.queryByRole('heading', { name: 'Azienda Alfa S.r.l.' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Azzera filtri' }));
+    expect(screen.getByRole('heading', { name: 'Azienda Beta S.p.A.' })).toBeDefined();
+  });
+
+  it('applies company scope to the chronological archive', async () => {
+    scope.company = 'group-alfa';
+    render(<Reports />);
+    await screen.findByText('192.168.1.100');
+    fireEvent.click(screen.getByText('Cronologico'));
+    await waitFor(() => expect(screen.getByText('192.168.1.100')).toBeDefined());
+    expect(screen.queryByText('10.0.0.50')).toBeNull();
+  });
+
+  it('loads all API pages and makes chronological pages navigable', async () => {
+    const rows = Array.from({ length: 12 }, (_, index) => ({ ...mockReports[0], scan_id: `scan-${index}`, target_id: `target-${index}`, target_value: `192.0.2.${index + 1}` }));
+    vi.mocked(reportsApi.list).mockImplementation(async params => ({ items: rows.slice(params?.offset || 0, (params?.offset || 0) + (params?.limit || 100)), total: rows.length, limit: params?.limit || 100, offset: params?.offset || 0 }));
+    render(<Reports />);
+    await screen.findByText('192.0.2.12');
+    fireEvent.click(screen.getByText('Cronologico'));
+    await screen.findByRole('button', { name: 'Pagina successiva' });
+    expect(screen.queryByText('192.0.2.12')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Pagina successiva' }));
+    expect(screen.getByText('192.0.2.12')).toBeDefined();
+    expect(reportsApi.list).toHaveBeenCalledWith({ limit: 10, offset: 10 });
   });
 });

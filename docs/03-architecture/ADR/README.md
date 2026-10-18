@@ -4,6 +4,45 @@
 
 ## 7. Architecture Decision Records (ADR)
 
+<a id="adr-23"></a>
+
+### ADR-23 · Contesto progressivo e procedure specializzate (2026-10-18)
+
+- Contesto: bootstrap esteso, regole ripetute e stato storico mescolato al corrente; glob non corrispondenti agli handler effettivi e comando migrazione privo del tag integration.
+- Decisione: AGENTS compatto con gate essenziali; quattro skill repository e playbook di ingresso; stato corrente separato da snapshot storico; mapping Markdown verificabile e controlli di manifest, riferimenti e liste. [Piano e fonti](../../04-development/plans/AGENT-HARNESS-01.md).
+- Supersessione parziale di ADR-10/12: lettura per argomento anziché soglia righe, handoff comune, Doc Sync solo sulle fonti cambiate e aggiornamento stato per fatti persistenti. Conservati SDLC, ownership, contratti, sicurezza e accettazioni.
+- Conseguenze: nessuna modifica al modello/config personale o ai gate applicativi; dipendenze invariate. Riduzione caratteri del bootstrap misurabile, qualità/routing/costo su Sol richiedono valutazione comportamentale. Python assente: manifest semplici validati da PowerShell, nessuna esecuzione del validatore Python dichiarata.
+
+### ADR-22 · Filtri sullo storico report completo (2026-10-18)
+
+- Contesto: UI troncava lo storico a 100/10 elementi; API non espone filtro profilo.
+  Il cronologico non applicava lo scope aziendale. FR-08 richiede filtri completi.
+- Decisione: riusare la paginazione API esistente e caricare sequenzialmente tutte
+  le pagine prima di aggregare/filtrare nel frontend. Stesso insieme per entrambe
+  le viste, giorni UTC inclusivi e severità esatta. Il cronologico pagina localmente
+  a 10 righe. Nessuna nuova API/SQL/migrazione; scope tenant resta lato backend.
+- Errori: pagine duplicate, incomplete o con conteggio variato producono errore e
+  retry esplicito. Risposte superate non aggiornano lo stato. Non è uno snapshot DB
+  transazionale: ordinamento concorrente a conteggio invariato resta un limite.
+- Tradeoff: costo iniziale proporzionale allo storico del tenant, memoria/browser
+  e latenza da misurare su volumi reali; futuro filtro profilo e aggregazione server
+  potranno sostituire il caricamento completo. Nessun limite silenzioso ai record.
+- Decisione PO firewall nello stesso incremento: iptables/iptables-nft con modello
+  corrente; nessun motore nft nativo. Collaudo della compatibilità ancora richiesto.
+
+### ADR-21 · Protezione obbligatoria delle mutazioni firewall (2026-10-18)
+
+- Contesto: il dominio richiede anti-lockout su ogni mutazione; flag API/UI
+  permettevano di disattivarlo. Alcuni campi finivano nella shell senza validazione.
+- Decisione: mantenere firme e campi legacy ma attivare sempre il timer per
+  add/delete. Timeout 0 usa 60s, intervallo ammesso 10..300s come UI esistente.
+  Validare IPv4/CIDR e interfacce prima di SSH; preservare i commenti come un
+  argomento shell quotato, max 255 byte UTF-8 senza controlli.
+- Conseguenze: le richieste legacy false ora richiedono backup/watchdog; eventuali
+  errori preparatori bloccano la modifica. Nessuna nuova dipendenza o migrazione;
+  nessuna garanzia multiistanza o rollback Linux dedotta. Questi gate e i gap
+  funzionali M1.1 restano nella [matrice QA](../../05-qa/M11_CLOSURE_QA.md).
+
 ### ADR-20 · Pinning esplicito dell'identità host SSH (2026-10-17)
 
 - Contesto: il fingerprint storico identifica la chiave client; il trasporto ignorava la host key. Timeout del solo dial non limita handshake e comandi.
@@ -79,6 +118,7 @@
     5. Migrazione libreria PDF al fork attivamente manutenuto `github.com/go-pdf/fpdf v0.9.0`.
   - **Conseguenze:** Zero falsi allarmi su profili TCP per porte UDP; controllo operativo totale prima di lanciare scansioni intrusive; compilazione PDF affidabile.
 - **ADR-06 (Attack Path Probabilistic Risk Formula & Scan Differential SEC-P2):**
+  - **Stato:** interpretazione probabilistica e inferenze del grafo superate da ADR-17; Scan Diff resta una decisione separata. Il testo seguente è storico, non il contratto corrente.
   - **Contesto:** Il rischio cumulativo calcolato tramite somma algebrica pura gonfiava artificialmente percorsi con molte vulnerabilità basse; gli archi pivot non esprimevano il grado di incertezza euristica; mancava il tracciamento dei finding risolti tra scansioni temporali dello stesso bersaglio.
   - **Decisione:**
     1. Formula del rischio cumulativo riscritta secondo la teoria dell'affidabilità probabilistica: $P_{\text{combined}} = 1 - \prod (1 - p_i)$, con fattore hop e pavimento a 85 per CVE critiche.

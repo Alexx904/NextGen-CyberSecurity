@@ -2,7 +2,7 @@
 
 ## Responsabilità
 
-Ownership primaria: `README.md, CHANGELOG.md e docs/README.md`. Operare nello scope assegnato dal Tech Lead; ownership non significa autorizzazione esclusiva o avvio automatico di un agente.
+Ownership primaria: `README.md, CHANGELOG.md e docs/README.md`.
 
 ## Input
 
@@ -16,4 +16,4 @@ Non trasformare un piano in funzionalità rilasciata; non duplicare contratti; p
 
 ## Handoff
 
-Restituire task/obiettivo, fonti lette, file modificati, contratti/decisioni, verifiche realmente eseguite, assunzioni, blocchi e prossimo ruolo. Applicare [orchestration.md](../workflows/orchestration.md). Il Tech Lead integra e verifica; l'accettazione funzionale resta al PO.
+Usare l'[handoff comune](../workflows/orchestration.md#delega-e-handoff); nessun processo o agente implicito.

@@ -295,7 +295,7 @@ func TestBuildIptablesAddCommand(t *testing.T) {
 			Position:     0,
 		}
 		cmd := service.BuildIptablesAddCommand(p)
-		expected := `sudo iptables -A INPUT -p tcp --dport 443 -s 10.0.0.0/24 -d 192.168.1.10 -i eth0 -j ACCEPT -m comment --comment "HTTPS access"`
+		expected := `sudo iptables -A INPUT -p tcp --dport 443 -s 10.0.0.0/24 -d 192.168.1.10 -i eth0 -j ACCEPT -m comment --comment 'HTTPS access'`
 		if cmd != expected {
 			t.Errorf("comando errato:\natteso:  %s\nottenuto: %s", expected, cmd)
 		}
@@ -315,6 +315,65 @@ func TestBuildIptablesAddCommand(t *testing.T) {
 			t.Errorf("comando insert errato:\natteso:  %s\nottenuto: %s", expected, cmd)
 		}
 	})
+}
+
+func TestFirewallMutationCannotDisableSafetyTimer(t *testing.T) {
+	for _, remove := range []bool{false, true} {
+		executor := &mockSSHExecutor{executeFunc: func(_ context.Context, _, _ uuid.UUID, cmd string) (string, string, int, error) {
+			if cmd == "sudo iptables-save" {
+				return "", "snapshot refused", 1, nil
+			}
+			return sampleIptablesOutput, "", 0, nil
+		}}
+		svc := service.NewFirewallService(executor, newMockBackupRepo())
+		tenant, server := uuid.New(), uuid.New()
+		var err error
+		if remove {
+			_, err = svc.DeleteRule(context.Background(), tenant, server, domain.ChainInput, 1, false, 60)
+		} else {
+			_, err = svc.AddRule(context.Background(), tenant, server, domain.FirewallRuleParams{Chain: domain.ChainInput, Action: domain.ActionAccept}, false, 60)
+		}
+		if err == nil {
+			t.Fatal("mutation bypassed failed safety snapshot")
+		}
+		if len(executor.commandLogs) != 1 || executor.commandLogs[0] != "sudo iptables-save" {
+			t.Fatalf("unexpected commands: %v", executor.commandLogs)
+		}
+	}
+}
+
+func TestFirewallRejectsInjectionBeforeSSH(t *testing.T) {
+	executor := &mockSSHExecutor{}
+	svc := service.NewFirewallService(executor, newMockBackupRepo())
+	_, err := svc.AddRule(context.Background(), uuid.New(), uuid.New(), domain.FirewallRuleParams{
+		Chain: domain.ChainInput, Action: domain.ActionAccept, Source: "192.0.2.1; id",
+	}, true, 60)
+	if !errors.Is(err, domain.ErrValidation) || len(executor.commandLogs) != 0 {
+		t.Fatalf("invalid input reached SSH: %v %v", err, executor.commandLogs)
+	}
+}
+
+func TestFirewallCommentPreservesShellMetacharactersAsData(t *testing.T) {
+	params := domain.FirewallRuleParams{Chain: domain.ChainInput, Action: domain.ActionAccept, Comment: "operator's $(id) `id` $HOME \\\"quoted\\\""}
+	if err := params.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	got := service.BuildIptablesAddCommand(params)
+	want := `sudo iptables -A INPUT -j ACCEPT -m comment --comment 'operator'"'"'s $(id) ` + "`id`" + ` $HOME \"quoted\"'`
+	if got != want {
+		t.Fatalf("comment quoting:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestFirewallRejectsInvalidTimeoutBeforeSSH(t *testing.T) {
+	for _, timeout := range []int{-1, 1, 9, 301, 2147483647} {
+		executor := &mockSSHExecutor{}
+		svc := service.NewFirewallService(executor, newMockBackupRepo())
+		_, err := svc.ApplyWithSafetyTimer(context.Background(), uuid.New(), uuid.New(), timeout)
+		if !errors.Is(err, domain.ErrValidation) || len(executor.commandLogs) != 0 {
+			t.Fatalf("timeout %d: err %v, commands %v", timeout, err, executor.commandLogs)
+		}
+	}
 }
 
 func TestFirewallService_GetStatus(t *testing.T) {

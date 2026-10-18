@@ -1,5 +1,19 @@
 # UI Specifications
 
+M11-REPORT-01 · 2026-10-18 · working tree: Report con filtri etichettati per giorni
+UTC inclusivi, profilo, target e cartella; severità massima esatta. Opzioni dallo
+storico completo nello scope. Periodo invertito con `role=alert`, reset filtri,
+cronologico 10 righe/pagina e pulsanti precedente/successiva disabilitati ai limiti.
+Nota esplicita: i download aziendali restano dossier completi. Caricamento parziale
+o incoerente espone errore/riprova anziché metriche tronche. Layout filtri 1/2/5
+colonne responsivo; prova visuale autonoma ancora aperta.
+
+M11-CLOSE-01 · 2026-10-18 · working tree: nel form firewall il safety timer
+è dichiarato obbligatorio e non esiste più la checkbox per disattivarlo.
+Timeout modificabile 10..300s, default 60s. Errori API di validazione esposti
+dal flusso esistente; test DOM della protezione obbligatoria. Nessun collaudo
+visuale autonomo disponibile: inventario browser vuoto.
+
 SSH-HARDEN-01 · 2026-10-17 · working tree: modale SSH con campo opzionale
 "Fingerprint SHA256 della chiave host", distinto dalle credenziali client.
 Spiegazione inline: canale fidato obbligatorio per verificarlo; senza pin le

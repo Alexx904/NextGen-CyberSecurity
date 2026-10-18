@@ -10,13 +10,8 @@ Segui le regole di `AGENTS.md`. Questo workflow prepara un rilascio formale di M
    - Verifica lo stato del debito tecnico in `docs/04-development/TASK_LIST.md`: nessun debito con priorità "Critica" deve essere aperto.
 
 2. **Suite Completa di Baseline (Zero-Assumption):**
-   - Esegui i test backend: `go test ./...` (tutti i package devono essere PASS).
-   - Esegui integrazioni PostgreSQL esplicite su DB dedicato: `go test -tags=integration -count=1 ./internal/repository/postgres`; nessuno skip ammesso. Esegui anche `go vet ./...`. Per il gate globale usare `scripts/verify.ps1 -Profile Full` dalla root; rollback e prove browser pertinenti restano separati.
-   - Esegui la build backend: `go build ./...` (exit code 0).
-   - Esegui i test frontend: `npm test` (tutti i test Vitest devono essere PASS).
-   - Esegui la build di produzione frontend: `npm run build` (tsc + vite, 0 errori, chunk size entro i limiti).
-   - Registra i risultati precisi nella tabella Baseline di `docs/PROJECT_STATE.md`.
-   - Riutilizza solo evidenze ancora valide secondo `AGENTS.md` sez. 8; non duplicare gli stessi comandi se già eseguiti dal profilo Full. Dati/servizi mutati invalidano le evidenze di integrazione.
+   - Applica [repo-verification](../../.agents/skills/repo-verification/SKILL.md) con profilo Full: entrambi i lati, build/vet e PostgreSQL dedicato. Rollback, browser/PDF e budget bundle pertinenti restano prove aggiuntive; non duplicare comandi già validi.
+   - Registra una sintesi della baseline corrente in PROJECT_STATE e collega il report dettagliato; dati/servizi mutati invalidano le evidenze di integrazione.
 
 3. **Versioning Semantico (SemVer):**
    - Determina il nuovo tag di versione seguendo SemVer (`vX.Y.Z`):
@@ -33,7 +28,7 @@ Segui le regole di `AGENTS.md`. Questo workflow prepara un rilascio formale di M
    - Aggiorna `docs/PROJECT_STATE.md`:
      - Aggiorna "Fase" con la nuova versione rilasciata e la prossima milestone.
      - Pulisci la lista "Accettati recentemente" spostandola nello storico.
-     - Inserisci una riga di log dettagliata per il rilascio.
+     - Inserisci una riga di log sintetica e collega le evidenze del rilascio.
 
 6. **Proposta di Tag e Merge al Product Owner:**
    - Prepara il messaggio di commit Conventional Commits: `chore(release): release vX.Y.Z`.

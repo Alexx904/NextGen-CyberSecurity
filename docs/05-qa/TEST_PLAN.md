@@ -1,5 +1,7 @@
 # Test Plan
 
+Ultimo allineamento governance: 2026-10-18 · working tree · AGENT-HARNESS-01. Evidenze applicative datate sotto non rieseguite da questa revisione.
+
 COMPANY-UX-02 · 2026-10-17: [evidenze flussi aziendali e clienti SSH](COMPANY_WORKFLOW_QA.md); 164 test frontend, suite backend e integrazioni su DB test separato, migrazioni up/down e trigger. Gate browser e rendering PDF aperti, nessuna validazione visuale presunta.
 
 AP-REVIEW-01 · 2026-10-17: [report di revisione Attack Path](ATTACK_PATH_REVIEW.md), con difetti riprodotti, correzioni, test sintetici e snapshot locale in sola lettura. Gate browser aperto; non dichiarare verificato il layout senza screenshot reali.
@@ -23,9 +25,7 @@ Limiti e piano nel [piano E28-S1-T1](../04-development/plans/E28-S1-T1-chokepoin
 
 Ultimo allineamento: 2026-10-17 · working tree · TEST-OPT-01. Politica vincolante: `AGENTS.md` sez. 8; decisione [ADR-19](../03-architecture/ADR/README.md#adr-19).
 
-Durante lo sviluppo usare test mirati e regressione dei dipendenti. Alla consegna eseguire una sola suite completa e build/typecheck/vet per lato coinvolto sul codice integrato; i sotto-task condividono quel gate. API/DTO comuni, autenticazione, tenant o impatto incerto estendono la verifica a entrambi i lati. DB/repository richiedono anche il percorso integration; migrazioni richiedono up/down separati. Sole modifiche Markdown richiedono solo controlli documentali.
-
-Riutilizzare un PASS solo con comando, sorgenti/test anche non tracciati, dipendenze, configurazione, toolchain e ambiente invariati e documentati; non basta il commit quando la working tree è sporca. Il runner misura e non decide automaticamente il riuso. Registrare NON ESEGUITO per prove mancanti; un percorso rapido verde non è evidenza PostgreSQL o browser.
+Policy di scope, gate finale e riuso: [AGENTS sez. 8](../../AGENTS.md). La [skill repo-verification](../../.agents/skills/repo-verification/SKILL.md) seleziona il profilo; qui risiedono comandi, ambiente e strategia dei test. Report del runner misurano esiti e durate, non certificano automaticamente la freschezza.
 
 Per ogni feature collegare FR/UC/storia → criterio osservabile → test → esito. Coprire happy/error/edge, isolamento tenant, autorizzazioni, input ostili e lifecycle risorse nei percorsi pertinenti. Per bug dimostrare riproduzione rossa e test verde; per refactor fissare prima gli invarianti.
 
@@ -56,6 +56,10 @@ Le integrazioni sono escluse dal percorso rapido mediante build tag `integration
 Test nuovi solo per rischi/comportamenti distinti; preferire sincronizzazione esplicita alle attese fisse quando il profiling ne giustifica il costo, conservando test reali di timeout/cancellazione. Nessun limite di tempo va abbassato per nascondere errori. Cache Go preservata; integrazioni con `-count=1` perché dipendono dallo stato esterno.
 
 Salvare le evidenze visuali temporanee in `.agent/artifacts/<task-id>/` (ignorato da Git). In `docs/` restano strategia, criteri e risultati testuali, senza screenshot o allegati binari.
+
+## Governance e skill
+
+AGENT-HARNESS-01: `scripts/test-agent-harness.ps1` esegue fixture isolate per glob, copertura/ambiguità, manifest, limiti dello stato e inclusione/esclusione dei documenti. `scripts/verify-agent-docs.ps1` controlla il repository corrente. [Piano e limiti](../04-development/plans/AGENT-HARNESS-01.md); nessuna attestazione di qualità/routing Sol da un PASS strutturale.
 
 ## Test case per feature
 

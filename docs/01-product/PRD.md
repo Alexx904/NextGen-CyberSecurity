@@ -1,5 +1,7 @@
 # Product Requirements Document
 
+Ultimo allineamento: 2026-10-18 · working tree · AGENT-HARNESS-01 (deduplicazione editoriale, requisiti e milestone preservati).
+
 > Responsabile: Business Analyst; decisioni di prodotto al PO. Migrazione documentale: 2026-10-15. Gli stati funzionali restano quelli di [PROJECT_STATE](../PROJECT_STATE.md).
 
 ## 1. Visione del Prodotto e Strategia di Release
@@ -55,26 +57,11 @@ Piattaforma di CyberSecurity moderna e modulare concepita per trasformare il vul
 
 ---
 
-## 1. Executive Summary & Obiettivi del Progetto
-
-**NextGen CyberSecurity Platform** è una soluzione all-in-one per la gestione del rischio e della vulnerabilità di rete, la ricognizione ad alta velocità e l'amministrazione difensiva dei server, ingegnerizzata secondo moderni standard di sicurezza, modularità e alte prestazioni.
-
-Il sistema supera il tradizionale paradigma del "report statico di vulnerabilità" fornendo:
-- Un motore di scansione di rete black-box altamente performante ed elastico basato su **Go** e **Nmap**.
-- Un catalogo locale e offline-ready di vulnerabilità (**CVE/CPE/CVSS**) con correlazione automatizzata.
-- Un motore di **Real-Time Live Streaming (Server-Sent Events)** che proietta all'istante sullo schermo i dispositivi rilevati e le evidenze di sicurezza senza attendere la conclusione delle scansioni.
-- Un modulo di **High-Speed Network Discovery** (stile Advanced IP Scanner) per il censimento istantaneo dei dispositivi LAN, hardware vendor e latenza.
-- Un'organizzazione gerarchica ad albero (**Nested Tree Explorer**) per asset e campagne di scansione.
-- Un modulo di **Remote SSH Host & iptables/nftables Firewall Management** con safety rollback timer e terminale Web SSH integrato (xterm.js).
-- Una **Live Debug & Testing Console (Slide-over Drawer)** per l'intercettazione e la diagnosi in tempo reale di tutto il traffico API REST, streaming SSE, WebSocket ed errori JavaScript con esportazione Markdown per fixing assistito.
-- Un'architettura ibrida **Multi-Tenant / Single-Tenant** idonea sia per erogazione SaaS (MSSP) sia per installazione On-Premise (Enterprise isolate).
-- Un hub centralizzato di **Reporting White-Label** con personalizzazione grafica e loghi per ogni tenant (Executive & Technical reports).
-
----
-
 ## 2. Perimetro del Progetto (Scope Boundaries)
 
-### 2.1 In-Scope (Milestone 1, 1.1, 2 Completate & Milestone 3, 4, 5 Approvate)
+### 2.1 In-Scope approvato per milestone
+
+Lo scope seguente descrive l'obiettivo di prodotto. Implementazione, gate e accettazioni effettive sono in [TASK_LIST](../04-development/TASK_LIST.md); M1.1 presenta gap di chiusura nella [matrice QA](../05-qa/M11_CLOSURE_QA.md). Non dedurre completamento dall'inclusione nello scope.
 - **Asset Scope Management, CompanyContext & Tree Explorer:** Gestione target IP/CIDR/domini con struttura gerarchica ad albero e scope globale per azienda cliente (Epic 27).
 - **Scanning Engine & Alive-Only Host Filter:** Esecuzione concorrente e sicura di Nmap in Docker con profili specialistici ed esclusione nativa degli host spenti (`down`) nei range IP.
 - **Real-Time Live Streaming Engine (SSE):** Streaming istantaneo Server-Sent Events per LAN Network Discovery e Scansioni Nmap con salvataggio incrementale su PostgreSQL.

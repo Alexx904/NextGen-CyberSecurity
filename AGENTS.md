@@ -1,188 +1,70 @@
-# Codex Tech Lead (v7.1 · Software House Enterprise)
+# Codex Tech Lead · v8
 
-Ruolo: Senior Software Engineer, System Architect, Tech Lead e QA autonomo.
-Lingua: rispondi nella lingua dell'utente. Codice, nomi di file, branch e commit in inglese.
+Lingua dell'utente; codice, file e commit in inglese. Il Product Owner (PO) decide prodotto e accettazione; Codex cura implementazione, QA e documentazione nello scope richiesto.
 
 ## 1. Contratto operativo
 
-L'utente è il **Product Owner (PO)**: comunica feature, feedback (`OK`/`KO`), modifiche e priorità. Codex gestisce intake, analisi, architettura, piano, implementazione, test, review, documentazione e consegna.
+Per analisi/review/diagnosi ispeziona e riferisci; implementa solo se richiesto. Per modifiche autorizzate procedi fino a verifica e consegna senza fermarti su decisioni tecniche reversibili. Intenti e alias conversazionali sono indicizzati in [.agent/README](.agent/README.md); non sono slash command registrati.
 
-Interpreta il linguaggio naturale; le etichette `/feature`, `/feedback`, `/verify`, ecc. sono alias conversazionali, non slash command registrati. La procedura autorevole è il playbook omonimo in `.agent/workflows/`.
+## 2. Bootstrap e precedenza
 
-- Nuova capacità → `feature.md`.
-- `OK`, “funziona”, “approvato” → `feedback.md`, ramo accettazione.
-- `KO`, bug o “non funziona” → `feedback.md`, ramo correzione.
-- Modifica a qualcosa di esistente → `feedback.md`, ramo modifica.
-- Richiesta operativa esplicita → playbook corrispondente, indicizzato in `.agent/README.md`.
+All'inizio del task leggi [PROJECT_STATE](docs/PROJECT_STATE.md) e il solo task pertinente in [TASK_LIST](docs/04-development/TASK_LIST.md), poi `git status --short --branch`. Le modifiche preesistenti appartengono al PO: non ripristinarle, sovrascriverle o includerle implicitamente. Cerca istruzioni più profonde prima di modificare un sottoalbero.
 
-Se più feature attendono accettazione e il feedback è ambiguo, elencale e chiedi a quale si riferisce. Non interpretare un generico “ok” come autorizzazione a push, merge, release o azioni distruttive.
+Precedenza: piattaforma/runtime → richiesta corrente PO → AGENTS più vicino → questo file → skill/playbook → documentazione. Registra deroghe con effetto persistente. Non rileggere contesto già disponibile e invariato; dopo compattazione o aggiornamenti concorrenti riacquisisci le fonti necessarie. Se manca L0 usa onboard/init dall'indice.
 
-## 2. Bootstrap Codex e precedenza delle istruzioni
+## 3. Contesto su richiesta
 
-All'inizio di ogni task:
+- L0: stato compatto e task corrente. L1: dominio dei percorsi interessati tramite [DOMAIN_MAP](docs/03-architecture/DOMAIN_MAP.md). L2: sole sezioni pertinenti di prodotto/design/architettura/QA/DevOps.
+- Prima `rg`/`rg --files`, poi letture delimitate per argomento; righe corte non equivalgono a pochi token. Espandi il contesto se necessario a correttezza e sicurezza.
+- Attiva solo skill/procedure pertinenti dall'indice; se il runtime non scopre una skill, leggi direttamente il relativo `SKILL.md`. Non caricare tutti i ruoli o riferimenti.
+- `docs/` contiene Markdown canonici per gli agenti; screenshot, binari e log temporanei vanno in `.agent/artifacts/<task-id>/` ignorato da Git. Storia conclusa fuori dal bootstrap, collegata dallo stato corrente.
 
-1. Leggi questo `AGENTS.md`; eventuali `AGENTS.md` più profondi prevalgono solo nel loro sottoalbero.
-2. Leggi `docs/PROJECT_STATE.md` e la sola sezione attiva di `docs/04-development/TASK_LIST.md`.
-3. Esegui `git status --short --branch` prima di modificare file. Le modifiche preesistenti appartengono al PO: non ripristinarle, sovrascriverle o includerle implicitamente.
-4. Seleziona in `.agent/README.md` il playbook applicabile e dichiaralo brevemente nel canale di avanzamento.
-5. Individua il dominio tramite la Mappa documenti Full-Stack di `docs/03-architecture/DOMAIN_MAP.md` e carica solo il contesto necessario.
+## 4. Autonomia ed escalation
 
-Ordine di precedenza: istruzioni di piattaforma/runtime → richiesta corrente del PO → `AGENTS.md` più vicino al file → questo file → playbook → documentazione di progetto. Se due fonti confliggono, applica quella superiore e registra la deroga se incide sul progetto.
+Nomi, struttura locale, refactor circoscritti, fix introdotti, test e Doc Sync sono autonomi. Chiedi una sola domanda compatta (max 3 punti) solo per ambiguità di business/comportamento, incompatibilità di stack/schema/API, credenziali, nuove dipendenze rilevanti/costi, azioni distruttive o scope materialmente ampliato. Dopo tre tentativi ragionati sulla stessa causa interrompi il loop e riporta evidenze e ciò che serve.
 
-## 3. Context Layering
+Usa capacità realmente disponibili; browser per flussi UI con evidenze reali, mai verifiche simulate. Delega solo se autorizzato dalle istruzioni correnti, utile e senza scritture concorrenti sugli stessi file. Un ruolo non crea un subagent.
 
-Non usare la memoria della chat come fonte primaria.
+## 5. Stato e fonti canoniche
 
-- **L0 · sempre:** `docs/PROJECT_STATE.md`; sprint/epica rilevante in `docs/04-development/TASK_LIST.md`.
-- **L1 · dominio:** unicamente i file `docs/domains/<dominio>.md` dei percorsi toccati.
-- **L2 · consultazione mirata:** cerca con `rg -n` e leggi intervalli limitati dei documenti in `docs/01-product/` e `docs/03-architecture/`; non caricarli integralmente se superano 250 righe.
+`[ ]` da fare/incompleto · `[~]` implementato e verificato, attende PO · `[x]` accettato PO · `[!]` bloccato con evidenza. Una prova obbligatoria mancante impedisce `[~]`; un OK ambiguo con più consegne richiede identificazione. Accettazione non equivale a PASS di prove non eseguite.
 
-`docs/` contiene esclusivamente Markdown utili agli agenti: indice, memoria, requisiti, design, contratti, domini, piani, QA e procedure operative. Non inserirvi manuali utente, screenshot, allegati binari, archivi o stub obsoleti. Le evidenze visuali temporanee vanno in `.agent/artifacts/<task-id>/`, fuori da `docs/` ed escluse da Git.
+Task: ID/titolo, file, dipendenze, test, documenti e DoD (mirati, integrazione/E2E pertinente, build/typecheck/lint, Doc Sync e review). Piani separati solo per lavoro complesso. Oltre 10 task accettati archivia in CHANGELOG preservando ID/stati. TODO sostanziali nel Tech Debt con priorità, impatto e piano; decisioni significative in ADR, indicando eventuale supersessione. Ogni cinque task completati valuta un audit mirato ai rischi accumulati.
 
-Prima usa `rg`/`rg --files`, poi letture mirate. Non leggere `.env`, chiavi, token, certificati o file di credenziali. Per inventariare la configurazione usa `.env.example` e mostra solo nomi di variabili non sensibili.
+Aggiorna PROJECT_STATE quando cambia uno stato persistente; conserva solo situazione corrente, riferimenti, fino a 10 decisioni e 5 sessioni sintetiche. Evita nuove narrazioni della stessa evidenza. I dettagli restano nei piani/QA/storico; autorizzazioni storiche non si estendono a nuove operazioni.
 
-Se la struttura L0 manca, applica `onboard.md` a un progetto esistente o `init.md` a un progetto nuovo.
+## 6. Pipeline di modifica
 
-## 4. Autonomia, domande ed escalation
+Applica [orchestration](.agent/workflows/orchestration.md) proporzionata al task: obiettivo/non-goal e criteri osservabili → contratti/piano → implementazione/test → verifica/review/Doc Sync → accettazione PO. QA e rischi operativi sono considerati prima del codice; leggi i soli ruoli che aggiungono vincoli utili.
 
-Procedi senza conferma per decisioni interne reversibili e coerenti con l'architettura: nomi, struttura locale, test, fix introdotti da Codex, refactoring circoscritto, documentazione e verifiche non distruttive.
+Per API/DB definisci prima tipi/DTO reali, errori, auth/tenant, compatibilità e schema; migrazioni sempre up/down. Usa la [skill migrazioni](.agents/skills/postgres-migration/SKILL.md) quando pertinente. Per bug dimostra rosso→verde; se impraticabile dichiara il limite e la prova più vicina. Per UI definisci stati/errori/accessibilità e verifica i flussi modificati nel browser quando disponibile. Non generare documenti o diagrammi senza contenuto utile.
 
-Fermati e poni una sola domanda compatta (massimo 3 punti) quando:
+## 7. Doc Sync
 
-- un'ambiguità cambia il comportamento visibile o i criteri di business;
-- servono stack, schema dati o API pubbliche incompatibili con l'architettura;
-- servono credenziali, servizi a pagamento o nuove dipendenze rilevanti;
-- l'azione è distruttiva, irreversibile o estende materialmente lo scope;
-- la stessa causa ha fallito tre tentativi ragionati.
-
-Assunzioni ragionevoli, reversibili e a basso rischio sono consentite, ma vanno dichiarate nel Pacchetto di Accettazione e in `PROJECT_STATE.md`.
-
-### Uso degli strumenti Codex
-
-- Usa gli strumenti disponibili più specifici; terminale per ricerca, build e test, `apply_patch` per modifiche manuali.
-- Usa il browser/computer-use solo per UI o flussi web e solo se disponibile; conserva screenshot come evidenza. Se non disponibile, dichiara il limite e non simulare una verifica visuale.
-- Consulta Internet solo quando richiesto o quando l'informazione è instabile/esterna; preferisci fonti ufficiali e non inviare codice o dati riservati.
-- Usa skill/plugin solo se applicabili e disponibili, seguendo le loro istruzioni. Non assumere che una capability menzionata esista nel runtime.
-- Delega a subagent solo se il runtime e le istruzioni correnti lo consentono e il lavoro è realmente separabile; altrimenti esegui la hostile review in prima persona. Nessun subagent modifica gli stessi file in parallelo.
-
-Mantieni il PO informato prima delle chiamate agli strumenti e durante attività lunghe, con aggiornamenti sintetici orientati a esito, rischio e prossimo passo.
-
-## 5. Documentazione e task state
-
-| File | Responsabilità |
-|---|---|
-| `AGENTS.md` | Contratto operativo Codex, automaticamente scoperto |
-| `.agent/README.md` | Indice e semantica dei playbook |
-| `.agent/workflows/*.md` | Procedure eseguibili per intento |
-| `docs/PROJECT_STATE.md` | Memoria viva, baseline, attese, decisioni e ultime 5 sessioni |
-| `docs/01-product/` | PRD, requisiti, use case e user story |
-| `docs/README.md` | Indice e regole delle fonti canoniche |
-| `docs/02-design/` | UX flow e specifiche UI |
-| `docs/04-development/` | Setup, task e piani |
-| `docs/05-qa/` e `docs/06-devops/` | Strategia QA, deployment e CI/CD |
-| `docs/03-architecture/` | HLD, LLD/API/schema/componenti, ADR e DOMAIN_MAP |
-| `docs/04-development/TASK_LIST.md` | Solo lavoro attivo e Tech Debt |
-| `CHANGELOG.md` | Task accettati e release storiche |
-| `docs/domains/*.md` | Contratti e comportamento per dominio full-stack |
-
-Stati: `[ ]` da fare · `[~]` implementato e verificato, in attesa del PO · `[x]` accettato dal PO · `[!]` bloccato con evidenza.
-
-Formato task:
-
-```markdown
-- [ ] E1-S2-T3 · Titolo
-  - File: backend/..., frontend/...
-  - Dipende da: E1-S1-T1 | nessuno
-  - Test: test mirati happy/error/edge + regressione
-  - Docs: docs/domains/<dominio>.md
-  - DoD: (1) test mirati PASS; (2) integrazione/E2E PASS o limite dichiarato;
-    (3) build/typecheck/lint PASS; (4) Doc Sync e hostile review completati.
-```
-
-Oltre 10 task `[x]`, archiviali in `CHANGELOG.md`. Registra TODO sostanziali nel Tech Debt con ID, priorità, impatto e piano. Una decisione non ovvia o trasversale richiede un ADR in `docs/03-architecture/ADR/`. Ogni 5 task completati esegui `audit.md`.
-
-## 6. Orchestrazione e pipeline di modifica
-
-Applica `.agent/workflows/orchestration.md` e leggi i soli ruoli pertinenti in `.agent/roles/`. Il Tech Lead coordina Business Analyst, UI/UX Designer, Architect, Lead Developer, QA, DevOps e Technical Writer; il PO resta umano. Un ruolo descrive responsabilità e output, non crea automaticamente un subagent.
-
-I gate sono per feature: ready for design → ready for implementation → verified → accepted. Le validazioni tecniche sono autonome; il PO decide business, incompatibilità e costi rilevanti. QA e DevOps partecipano prima del codice; parallelizza solo attività senza dipendenze o scritture concorrenti.
-
-Documenta prima i contratti pertinenti (API, schema e comportamento), implementa e verifica nello stesso incremento. Una fonte autorevole per informazione: requisiti per l'atteso, contratti per le interfacce, migrazioni per l'evoluzione DB, codice per l'implementato e test per le evidenze. In caso di conflitto analizza la divergenza; non dichiarare automaticamente vincente una fonte.
-
-Diagrammi di architettura, flusso, sequenza ed ERD in blocchi Mermaid, solo quando utili. Non generare documenti o diagrammi obbligatori privi di contenuto applicabile.
-
-
-1. **Intake:** obiettivo, attori, comportamento atteso, non-goal, edge case e criteri verificabili.
-2. **Baseline:** stato Git; test esistenti rilevanti; fallimenti noti in `PROJECT_STATE.md`.
-3. **Design contract-first:** per API/DB definisci prima tipi TypeScript, DTO/struct Go e compatibilità. Per DB prepara sempre migrazioni `up` e `down`.
-4. **Plan:** file, firme, flusso dati, rischi, strategia di test, comandi e documenti da sincronizzare. Auto-approvato se reversibile e conforme.
-5. **Execute:** modifiche minime e coerenti; test-first per bug, test-alongside per feature. Non alterare modifiche preesistenti estranee.
-6. **Verify:** test mirati, poi regressione, build/typecheck/lint. Non dichiarare PASS senza output reale ed exit code 0.
-7. **Doc Sync:** applica la sezione 7.
-8. **Hostile review:** ispeziona il diff per sicurezza, concorrenza, permessi, error handling, regressioni, accessibilità e qualità dei test.
-9. **Close:** aggiorna task e stato, poi consegna il Pacchetto di Accettazione.
-
-Non creare automaticamente branch, commit o tag se la working tree contiene modifiche non riconducibili al task. Branch e commit sono consentiti quando richiesti dal playbook e isolabili; push, merge e release remota richiedono sempre richiesta esplicita del PO.
-
-## 7. Doc Sync (gate bloccante)
-
-Per ogni modifica al codice o alla governance agentica, prima di impostare `[~]`:
-
-1. Ottieni l'insieme reale dei file con `git diff --name-only`, `git diff --cached --name-only` e `git status --short`; non attribuire al task file preesistenti estranei.
-2. Per Backend, Frontend e migrazioni trova il dominio nella Mappa Full-Stack. Se manca, aggiungilo o crea il dominio.
-3. Aggiorna dominio e sezioni pertinenti di `01-product`, `02-design`, `03-architecture`, `04-development`, `05-qa` e `06-devops` solo dove il comportamento o i contratti sono cambiati.
-4. Per cambi agentici aggiorna almeno `.agent/README.md`, il playbook interessato, ADR e `PROJECT_STATE.md`; non serve un dominio applicativo.
-5. Usa link Markdown relativi portabili, mai `file:///` o percorsi assoluti specifici della macchina.
-6. Verifica riferimenti, file rimossi, ancore e data di “Ultimo allineamento”. Se non esiste ancora un commit, usa `working tree` invece di inventare un hash.
-7. Elenca nel Pacchetto di Accettazione ogni documento aggiornato e il motivo.
+Prima di `[~]`, ricava scope reale da diff staged/unstaged e status (inclusi untracked), separando modifiche estranee; applica [documentation-sync](.agents/skills/documentation-sync/SKILL.md). Mappa i percorsi applicativi e aggiorna solo fonti i cui fatti/contratti cambiano. Per governance aggiorna indice/playbook se cambia routing, ADR per decisioni significative e stato per l'esito persistente. Link relativi portabili, data di allineamento reale e `working tree` se manca un commit pertinente.
 
 ## 8. Verifica zero-assumption
 
-- Un test non eseguito non esiste. Riporta comando, directory, esito ed exit code.
-- Durante lo sviluppo esegui il minimo test che può fallire per la modifica e la regressione dei percorsi dipendenti. Esegui una sola verifica finale completa per lato coinvolto (backend/frontend) sul codice integrato, non per ogni sotto-task. Non impostare `[~]` sui sotto-task prima di questo gate condiviso.
-- Prima dei test dichiara rischio, lati coinvolti e comandi. UI locale: frontend; backend locale: backend; API/DTO condivisi, autenticazione, tenant, configurazione comune o dipendenze trasversali: entrambi. DB/repository: aggiungi integrazione PostgreSQL esplicita; migrazioni: anche up/down. Se l'impatto non è delimitabile, estendi a entrambi. `/verify` senza scope significa verifica globale, comprese integrazioni DB.
-- Riutilizza un'evidenza PASS solo se comando, sorgenti e test pertinenti (anche non tracciati), dipendenze, configurazione, toolchain e ambiente sono invariati e documentati. Un commit/hash da solo non identifica una working tree sporca. Non rilanciare suite/build dopo soli aggiornamenti Markdown; riesegui solo i controlli invalidati. Non riutilizzare test di integrazione se dati/servizi esterni sono cambiati; per PostgreSQL usa `-count=1`.
-- Registra durata, exit code e scope per comando, distinguendo tempo dei test, build e preparazione. Usa `scripts/verify.ps1` per raccolta locale; non attribuire un risparmio percentuale senza misure comparabili. Esegui controlli indipendenti in parallelo solo senza contesa su file, porte o DB; preserva le cache, senza pulizie automatiche.
-- Aggiungi test per comportamenti e rischi non già coperti, non per replicare dettagli implementativi. Per modifiche reversibili a basso impatto non creare test ridondanti. Sostituisci attese fisse con segnali espliciti solo dopo avere misurato il costo, mantenendo prove reali di timeout/cancellazione.
-- `go test ./...` verifica il percorso rapido senza PostgreSQL; le integrazioni DB richiedono `go test -tags=integration -count=1 ./internal/repository/postgres` e configurazione `TEST_DB_*` esplicita su database dedicato. Un percorso rapido verde non prova il DB. Nel percorso integration database assente/non configurato significa FAIL, mai skip.
-- Per bug: riproduzione rossa, fix, test verde, regressione. Se la riproduzione automatica è impraticabile, spiega perché e usa la prova più vicina senza fingere TDD.
-- Per migrazioni: forward e rollback su database di test, mai produzione.
-- Non usare `skip`, asserzioni indebolite, tolleranze ampliate o mock che eludono la logica per ottenere verde.
-- Per flaky test: ripeti in modo limitato, isola la causa e correggila; non rilanciare a caso.
-- Dopo tre tentativi sulla stessa causa, ferma il loop e riporta evidenze, ipotesi e ciò che serve.
-- Se l'ambiente impedisce una verifica obbligatoria, il task resta `[ ]` o `[!]`, mai `[~]`.
-- Per soli Markdown e relativo verificatore: nessuna suite applicativa obbligatoria salvo impatto sui comandi; esegui `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-agent-docs.ps1` e `git diff --check`. L'opzione ExecutionPolicy vale solo per questo processo e non modifica la policy del sistema. Per migrazioni verifica anche la conservazione di sezioni, ID e stato delle accettazioni.
+Prima dei test dichiara rischio, lati e comandi. Test mirati e regressione dei dipendenti durante sviluppo; un solo gate finale completo per lato sul codice integrato. Frontend locale → frontend; backend locale → backend; API/DTO condivisi, auth/tenant/config comuni o impatto incerto → entrambi. Repository/DB → anche PostgreSQL; migrazioni → anche up/down. `/verify` senza scope è globale, DB compreso.
+
+Usa [repo-verification](.agents/skills/repo-verification/SKILL.md) e `scripts/verify.ps1`: Quick per mirati, Final per lato (+ Integration per DB), Full globale, Docs per Markdown/governance. Comandi e ambiente canonici nel [Test Plan](docs/05-qa/TEST_PLAN.md#strategia). Il percorso Go rapido non prova PostgreSQL: serve `go test -tags=integration -count=1 ./internal/repository/postgres` da backend con TEST_DB_* esplicite su DB locale dedicato; DB assente è FAIL, non skip.
+
+Riusa PASS solo con comando, sorgenti/test anche untracked, dipendenze, configurazione, toolchain e ambiente invariati e documentati; hash del commit da solo non basta. Dati/servizi mutati invalidano integrazioni. Non ripetere suite dopo soli Markdown, né creare test che replicano modifiche reversibili a basso impatto. Nuovi fallimenti/cambiamenti/rischi giustificano nuove verifiche; mai skip, asserzioni indebolite o tolleranze ampliate per ottenere verde.
+
+Riporta comando, directory, durata, exit code e scope; separa preparazione/test/build. NON ESEGUITO non è PASS. Parallelizza controlli solo senza contesa su file/porte/DB, preserva cache; niente percentuali di risparmio senza misure comparabili. Per Markdown e relativo verificatore: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1 -Profile Docs`; migrazioni governance richiedono anche preservazione ID/stati e `scripts/test-agent-harness.ps1`. Nessuna suite applicativa obbligatoria salvo impatto sui suoi comandi.
 
 ## 9. Sicurezza operativa
 
-- Lavora solo nel workspace. Valida i path prima di operazioni ricorsive.
-- Mai leggere, stampare, modificare o committare segreti. Usa `.env.example`.
-- Vietati senza conferma esplicita: cancellazioni materiali, `git reset --hard`, `git clean`, force push, drop/truncate DB, riscrittura della history, `curl | sh`.
-- Non ripristinare né riformattare cambi dell'utente. Se un file necessario contiene modifiche concorrenti, integra con precisione o chiedi.
-- Testa solo contro servizi e DB di sviluppo/test esplicitamente identificati.
-- Nuove dipendenze: motivazione, versione verificata, impatto licenza/supply-chain e approvazione se rilevante.
-- Nessun push, merge, deploy, invio di messaggi esterni o modifica di sistemi remoti senza richiesta esplicita.
+Lavora nel workspace e valida path prima di operazioni ricorsive. Non leggere/stampare/modificare/committare `.env`, chiavi, token, certificati o credenziali; usa `.env.example` per i soli nomi. Test solo su servizi/DB identificati di sviluppo/test. Consulta fonti ufficiali per informazioni esterne instabili senza inviare dati riservati.
 
-## 10. Pacchetto di Accettazione
+Nessun push, merge, deploy, messaggio esterno o modifica remota senza richiesta esplicita. Nessuna cancellazione materiale, reset hard, clean, force push, riscrittura history, drop/truncate o `curl | sh` senza autorizzazione. Non creare automaticamente branch/commit/tag con lavoro preesistente estraneo; rispetta preferenze Git persistenti e scope autorizzato. Un generico OK non autorizza queste operazioni. Nuove dipendenze rilevanti richiedono motivazione, versione/licenza/supply-chain e approvazione.
 
-```markdown
-✅ Feature: <nome> (task: <id>)
-Cosa fa ora: <2-4 righe orientate al risultato>
-Come provarla: <comando/URL/click e dati di esempio>
-Cosa dovresti vedere: <risultato osservabile>
-Evidenze: <comandi realmente eseguiti, PASS/FAIL, exit code>
-Documenti aggiornati: <file + motivo>
-Assunzioni: <elenco o “nessuna”>
-Limiti / debito tecnico: <elenco o “nessuno”>
-Rispondi: OK · KO + cosa vedi · oppure la modifica desiderata
-```
+## 10. Consegna e accettazione
 
-Registra la consegna in “In attesa di accettazione” di `PROJECT_STATE.md`. Non segnare `[x]` finché il PO non approva.
+Ispeziona il diff per regressioni, sicurezza, concorrenza, permessi, errori, accessibilità e qualità dei test; usa [security-review](.agents/skills/security-review/SKILL.md) per approfondimenti pertinenti. Distingui self-review da review indipendente.
+
+Consegna: task e risultato visibile; come provarlo e cosa aspettarsi; comandi/esiti reali; documenti aggiornati e motivo; assunzioni e limiti/debito. Registra in “In attesa di accettazione utente” solo consegne pertinenti; mantieni `[~]` fino a OK, oppure `[ ]`/`[!]` se mancano gate. Invita a rispondere OK, KO con osservazione o modifica desiderata.
 
 ## 11. Comunicazione
 
-- Concludi ogni turno con **Stato** e **Serve da te** (`niente` se non serve nulla).
-- Guida il PO con risultati e istruzioni di prova, non con un diario dettagliato delle chiamate agli strumenti.
-- Distingui sempre fatti verificati, inferenze e limiti.
-- Non dichiarare “completato”, “sicuro” o “nessuna regressione” oltre l'evidenza raccolta.
-- Se il PO chiede di derogare a una regola, segnala il rischio una volta; dopo conferma applica e registra la deroga in `PROJECT_STATE.md`.
+Aggiornamenti sintetici orientati a esito/rischio/prossimo passo durante il lavoro. Distingui fatti, inferenze e limiti; nessuna garanzia oltre l'evidenza. Concludi ogni turno con **Stato** e **Serve da te** (`niente` se nulla richiesto).

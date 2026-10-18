@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   FileText,
   FileCode,
@@ -21,7 +21,8 @@ import { apiClient } from '../api/client';
 import { reportsApi } from '../api/reports';
 import { ApiResponse } from '../types/auth';
 import { TargetGroupNode } from '../types/target';
-import { ReportItem, ReportFilterParams, ReportTemplate, ReportFormat } from '../types/report';
+import { ReportItem, ReportTemplate, ReportFormat } from '../types/report';
+import { filterReportArchive, loadReportArchive } from '../utils/reportArchive';
 import { useCompany } from '../context/CompanyContext';
 
 export const Reports: React.FC = () => {
@@ -36,7 +37,8 @@ export const Reports: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grouped' | 'flat'>('grouped');
 
   // Stato dati report e aziende
-  const [reports, setReports] = useState<ReportItem[]>([]);
+  const [allReports, setAllReports] = useState<ReportItem[]>([]);
+  const requestId = useRef(0);
   const [groupsTree, setGroupsTree] = useState<TargetGroupNode[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +46,22 @@ export const Reports: React.FC = () => {
   // Stato filtri di ricerca
   const [search, setSearch] = useState<string>('');
   const [severityFilter, setSeverityFilter] = useState<string>('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [profileFilter, setProfileFilter] = useState('');
+  const [targetFilter, setTargetFilter] = useState('');
+  const [groupFilter, setGroupFilter] = useState('');
+  const [archivePage, setArchivePage] = useState(0);
+  const scopedReports = useMemo(() => allReports.filter(item => !selectedCompanyId || (!!item.group_id && companyGroupIds.has(item.group_id))), [allReports, selectedCompanyId, companyGroupIds]);
+  const reports = useMemo(() => filterReportArchive(scopedReports, {
+    dateFrom, dateTo, profile: profileFilter, target: targetFilter, group: groupFilter,
+    severity: severityFilter, search,
+  }), [scopedReports, dateFrom, dateTo, profileFilter, targetFilter, groupFilter, severityFilter, search]);
+  const filtersActive = Boolean(search.trim() || severityFilter || dateFrom || dateTo || profileFilter || targetFilter || groupFilter);
+  const invalidPeriod = Boolean(dateFrom && dateTo && dateFrom > dateTo);
+  useEffect(() => { setArchivePage(0); }, [search, severityFilter, dateFrom, dateTo, profileFilter, targetFilter, groupFilter, selectedCompanyId]);
+  useEffect(() => { setProfileFilter(''); setTargetFilter(''); setGroupFilter(''); }, [selectedCompanyId]);
+  const visiblePage = Math.min(archivePage, Math.max(0, Math.ceil(reports.length / 10) - 1));
 
   // Accordion stato gruppi: Set degli ID collassati (vuoto = tutti espansi)
   const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<string>>(new Set());
@@ -58,42 +76,40 @@ export const Reports: React.FC = () => {
 
   // Caricamento dati dal backend (report + metadati cartelle/aziende)
   const fetchData = useCallback(async (silent = false) => {
+    const currentRequest = ++requestId.current;
+    const isCurrent = () => requestId.current === currentRequest;
     if (!silent) setLoading(true);
     setError(null);
 
     const isGrouped = viewMode === 'grouped';
     const effectiveLimit = isGrouped ? 100 : 10;
-    const effectiveOffset = 0;
-
-    const params: ReportFilterParams = {
-      limit: effectiveLimit,
-      offset: effectiveOffset,
-    };
-
-    if (search.trim()) params.search = search.trim();
-    if (severityFilter) params.severity = severityFilter;
 
     try {
       const [reportsData, groupsRes] = await Promise.all([
-        reportsApi.list(params),
-        apiClient.get<ApiResponse<TargetGroupNode[]>>('/target-groups').catch(() => null),
+        loadReportArchive(params => reportsApi.list(params), effectiveLimit, isCurrent),
+        apiClient.get<ApiResponse<TargetGroupNode[]>>('/target-groups'),
       ]);
-
-      setReports(reportsData.items || []);
+      if (!isCurrent()) return;
+      if (!groupsRes.data.success || !Array.isArray(groupsRes.data.data)) {
+        throw new Error('Impossibile caricare le cartelle dello storico.');
+      }
+      setAllReports(reportsData);
 
       if (groupsRes?.data?.data) {
         setGroupsTree(groupsRes.data.data);
       }
     } catch (err: any) {
+      if (!isCurrent()) return;
       setError(err.message || 'Errore durante il recupero dei report.');
-      setReports([]);
+      setAllReports([]);
     } finally {
-      if (!silent) setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  }, [viewMode, search, severityFilter]);
+  }, [viewMode]);
 
   useEffect(() => {
     fetchData();
+    return () => { requestId.current++; };
   }, [fetchData]);
 
   // Gestione del download del Documento Consolidato Aziendale (tutti gli IP dell'azienda)
@@ -245,7 +261,7 @@ export const Reports: React.FC = () => {
       });
 
       // Se non ci sono report ma gNode ha conteggi dal backend
-      if (companyReports.length === 0 && gNode.severity_counts) {
+      if (companyReports.length === 0 && gNode.severity_counts && !filtersActive) {
         crit = gNode.severity_counts['CRITICAL'] || 0;
         high = gNode.severity_counts['HIGH'] || 0;
         med = gNode.severity_counts['MEDIUM'] || 0;
@@ -292,6 +308,7 @@ export const Reports: React.FC = () => {
 
     // Filtra per ricerca e severità
     return scopedResult.filter((comp) => {
+      if (filtersActive) return comp.reports.length > 0;
       if (search.trim()) {
         const q = search.toLowerCase();
         const matchName = comp.name.toLowerCase().includes(q);
@@ -308,7 +325,7 @@ export const Reports: React.FC = () => {
 
       return true;
     });
-  }, [groupsTree, reports, search, severityFilter, selectedCompanyId, companyGroupIds]);
+  }, [groupsTree, reports, search, severityFilter, selectedCompanyId, companyGroupIds, filtersActive]);
 
   // Metriche sintetiche aggregate delle aziende
   const kpiStats = useMemo(() => {
@@ -583,14 +600,17 @@ export const Reports: React.FC = () => {
 
         <div className="flex items-center space-x-2">
           <select
+            aria-label="Severità massima"
             value={severityFilter}
             onChange={(e) => setSeverityFilter(e.target.value)}
             className="px-3 py-2 bg-slate-950 border border-cyber-border rounded-lg text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
           >
             <option value="">Tutte le severità</option>
-            <option value="CRITICAL">Critica (Score &lt; 50)</option>
-            <option value="HIGH">Alta (Score &lt; 75)</option>
+            <option value="CRITICAL">Critica</option>
+            <option value="HIGH">Alta</option>
             <option value="MEDIUM">Media</option>
+            <option value="LOW">Bassa</option>
+            <option value="INFO">Informativa</option>
           </select>
 
           {viewMode === 'grouped' && (
@@ -613,6 +633,38 @@ export const Reports: React.FC = () => {
           )}
         </div>
       </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
+        <label className="text-slate-300">Dal giorno (UTC)
+          <input aria-label="Dal giorno (UTC)" type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="block w-full mt-1 p-2 bg-slate-950 border border-cyber-border rounded" />
+        </label>
+        <label className="text-slate-300">Al giorno (UTC)
+          <input aria-label="Al giorno (UTC)" type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="block w-full mt-1 p-2 bg-slate-950 border border-cyber-border rounded" />
+        </label>
+        <label className="text-slate-300">Profilo
+          <select aria-label="Profilo" value={profileFilter} onChange={e => setProfileFilter(e.target.value)} className="block w-full mt-1 p-2 bg-slate-950 border border-cyber-border rounded">
+            <option value="">Tutti i profili</option>
+            {Array.from(new Map(scopedReports.map(r => [r.profile_id, r.profile_name]))).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+          </select>
+        </label>
+        <label className="text-slate-300">Target
+          <select aria-label="Target" value={targetFilter} onChange={e => setTargetFilter(e.target.value)} className="block w-full mt-1 p-2 bg-slate-950 border border-cyber-border rounded">
+            <option value="">Tutti i target</option>
+            {Array.from(new Map(scopedReports.map(r => [r.target_id, `${r.target_value} · ${r.group_name || 'Non assegnato'}`]))).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+          </select>
+        </label>
+        <label className="text-slate-300">Cartella
+          <select aria-label="Cartella" value={groupFilter} onChange={e => setGroupFilter(e.target.value)} className="block w-full mt-1 p-2 bg-slate-950 border border-cyber-border rounded">
+            <option value="">Tutte le cartelle</option>
+            {Array.from(new Map(scopedReports.filter(r => r.group_id).map(r => [r.group_id!, r.group_name || r.group_id!]))).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+          </select>
+        </label>
+      </div>
+      <p className="text-xs text-slate-400">I filtri selezionano lo storico. I download aziendali includono il dossier completo dell’azienda o reparto.</p>
+      {invalidPeriod && <p role="alert" className="text-sm text-rose-400">La data iniziale deve precedere o coincidere con quella finale.</p>}
+      {filtersActive && <button type="button" className="text-xs text-cyan-400" onClick={() => {
+        setSearch(''); setSeverityFilter(''); setDateFrom(''); setDateTo(''); setProfileFilter(''); setTargetFilter(''); setGroupFilter('');
+      }}>Azzera filtri</button>}
 
       {/* Loading & Error States */}
       {loading && (
@@ -899,7 +951,7 @@ export const Reports: React.FC = () => {
                     </td>
                   </tr>
                 ) : (
-                  reports.map((r) => (
+                  reports.slice(visiblePage * 10, (visiblePage + 1) * 10).map((r) => (
                     <tr key={r.scan_id} className="hover:bg-slate-900/50 transition-colors">
                       <td className="py-3 px-4 font-medium text-white">
                         {r.group_name || 'Non Assegnato'}
@@ -958,6 +1010,11 @@ export const Reports: React.FC = () => {
                 )}
               </tbody>
             </table>
+          </div>
+          <div className="p-3 flex items-center justify-between gap-3 text-xs text-slate-300">
+            <button type="button" disabled={visiblePage === 0} onClick={() => setArchivePage(visiblePage - 1)} className="disabled:opacity-40">Pagina precedente</button>
+            <span>Pagina {visiblePage + 1} di {Math.max(1, Math.ceil(reports.length / 10))}</span>
+            <button type="button" disabled={(visiblePage + 1) * 10 >= reports.length} onClick={() => setArchivePage(visiblePage + 1)} className="disabled:opacity-40">Pagina successiva</button>
           </div>
         </div>
       )}

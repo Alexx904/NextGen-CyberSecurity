@@ -17,9 +17,11 @@ Leggere prima [PROJECT_STATE](PROJECT_STATE.md) e il solo task pertinente in [TA
 
 - L0: stato e task corrente. L1: dominio interessato da [DOMAIN_MAP](03-architecture/DOMAIN_MAP.md). L2: sezioni pertinenti dei documenti di fase.
 - Requisiti: comportamento voluto; contratti: API attese; migrazioni: evoluzione eseguibile dello schema; codice: comportamento implementato; test: evidenza verificata. Una divergenza richiede analisi, non prevalenza automatica.
-- I domini conservano i dettagli verticali e collegano le specifiche globali. Non duplicare la stessa definizione in più file.
+- I domini conservano invarianti e dettagli verticali; ogni definizione ha una sola sede, collegata dalle altre fonti. Le quattro [skill](../.agent/README.md#routing) possiedono procedure specializzate; ruoli e documenti non ne duplicano i passi.
+- Stato corrente compatto; [snapshot storico](../.agent/history/PROJECT_STATE-2026-10-18.md) solo per ricostruire evidenze/accettazioni precedenti. Aggiornare lo stato per cambi persistenti, non a ogni turno; nessuna autorizzazione storica si estende a nuove operazioni.
+- [DOMAIN_MAP](03-architecture/DOMAIN_MAP.md) è la tabella eseguibile dei percorsi, inclusi core/test/untracked. Il verificatore rifiuta assenza di mapping, glob obsoleti e ownership ambigue; non certifica accordo semantico fra codice e requisiti.
 - FR/UC e stati di accettazione sono conservati. Nessun documento migrato costituisce nuova prova di conformità del codice.
 - `docs/` contiene solo documentazione Markdown necessaria agli agenti. Manuali utente, screenshot, binari, archivi e stub obsoleti sono esclusi.
 - Le evidenze visuali temporanee si salvano in `.agent/artifacts/<task-id>/`, fuori dalla documentazione canonica e ignorate da Git. I vecchi documenti numerati sono stati rimossi: usare esclusivamente i percorsi indicizzati sopra.
 
-Ultimo allineamento: 2026-10-15 · working tree.
+Ultimo allineamento: 2026-10-18 · working tree · AGENT-HARNESS-01.

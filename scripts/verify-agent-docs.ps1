@@ -1,7 +1,9 @@
 [CmdletBinding()]
-param()
+param([string]$RepositoryRoot)
 $ErrorActionPreference = 'Stop'
-$repoRoot = Split-Path $PSScriptRoot -Parent
+if (!$RepositoryRoot) { $RepositoryRoot = Split-Path $PSScriptRoot -Parent }
+$repoRoot = [IO.Path]::GetFullPath($RepositoryRoot).TrimEnd('\', '/')
+. (Join-Path $PSScriptRoot 'agent-docs-lib.ps1')
 $failures = [System.Collections.Generic.List[string]]::new()
 $required = @(
     'AGENTS.md', 'README.md', 'CHANGELOG.md', 'docs/README.md', 'docs/PROJECT_STATE.md',
@@ -32,7 +34,7 @@ foreach ($entry in Get-ChildItem -LiteralPath $docsRoot -Recurse -Force -File) {
 }
 $files = @(
     Get-Item -LiteralPath (Join-Path $repoRoot 'AGENTS.md'), (Join-Path $repoRoot 'README.md'), (Join-Path $repoRoot 'CHANGELOG.md')
-    Get-ChildItem -LiteralPath (Join-Path $repoRoot '.agent'), (Join-Path $repoRoot 'docs') -Recurse -File -Filter '*.md'
+    Get-AgentMarkdownFiles $repoRoot
 )
 $links = 0
 foreach ($file in $files) {
@@ -46,6 +48,11 @@ foreach ($file in $files) {
         if ($target -match '^file:') { $failures.Add("Nonportable link: $($file.Name) -> $target"); continue }
         $parts = $target -split '#', 2
         $destination = if ($parts[0]) { Join-Path $file.DirectoryName ([uri]::UnescapeDataString($parts[0])) } else { $file.FullName }
+        $destination = [IO.Path]::GetFullPath($destination)
+        if (!$destination.StartsWith($repoRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+            $failures.Add("Link escapes repository: $($file.Name) -> $target")
+            continue
+        }
         if (-not (Test-Path -LiteralPath $destination)) {
             $failures.Add("Broken link: $($file.FullName) -> $target")
             continue
@@ -73,9 +80,29 @@ foreach ($folder in @('roles', 'workflows')) {
         if ($registry -notmatch [regex]::Escape("$folder/$($file.Name)")) { $failures.Add("Not indexed: $folder/$($file.Name)") }
     }
 }
+$state = [IO.File]::ReadAllText((Join-Path $repoRoot 'docs/PROJECT_STATE.md'))
+foreach ($errorText in @(Test-AgentStateLimits $state)) { $failures.Add($errorText) }
+$map = [IO.File]::ReadAllText((Join-Path $repoRoot 'docs/03-architecture/DOMAIN_MAP.md'))
+foreach ($errorText in @(Test-AgentDomainMap $repoRoot $map)) { $failures.Add($errorText) }
+$skillNames = @('repo-verification', 'postgres-migration', 'security-review', 'documentation-sync')
+foreach ($name in $skillNames) {
+    if (!(Test-Path -LiteralPath (Join-Path $repoRoot ".agents/skills/$name/SKILL.md"))) { $failures.Add("Missing skill: $name") }
+}
+$seenSkills = @{}
+foreach ($skill in Get-ChildItem -LiteralPath (Join-Path $repoRoot '.agents/skills') -Recurse -File -Filter SKILL.md) {
+    $name = $skill.Directory.Name
+    if ($seenSkills.ContainsKey($name)) { $failures.Add("Duplicate skill: $name") }
+    $seenSkills[$name] = $true
+    foreach ($errorText in @(Test-AgentSkillManifest ([IO.File]::ReadAllText($skill.FullName)) $name)) { $failures.Add($errorText) }
+    if ($registry -notmatch [regex]::Escape(".agents/skills/$name/SKILL.md")) { $failures.Add("Not indexed skill: $name") }
+}
+foreach ($limit in @(@('AGENTS.md', 10000), @('docs/PROJECT_STATE.md', 8000))) {
+    $length = [IO.File]::ReadAllText((Join-Path $repoRoot $limit[0])).Length
+    if ($length -gt $limit[1]) { Write-Warning "Context budget exceeded: $($limit[0]) ($length characters); compact without losing invariants." }
+}
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { Write-Output "FAIL $_" }
     exit 1
 }
-Write-Output "PASS: agent-only docs structure; $($required.Count) required documents; $($files.Count) Markdown files; $links local links and anchors; indexed roles/workflows; balanced fences."
+Write-Output "PASS: agent-only docs structure; $($required.Count) required documents; $($files.Count) Markdown files; $links local links and anchors; indexed roles/workflows/skills; state limits; complete domain mapping; balanced fences."
 exit 0

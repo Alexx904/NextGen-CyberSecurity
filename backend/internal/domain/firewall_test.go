@@ -138,3 +138,46 @@ func TestFirewallRuleParams_Validate(t *testing.T) {
 	})
 }
 
+func TestFirewallRuleParams_RejectUnsafeNetworkFields(t *testing.T) {
+	for _, field := range []string{"source", "destination", "in", "out", "comment"} {
+		t.Run(field, func(t *testing.T) {
+			p := domain.FirewallRuleParams{Chain: domain.ChainInput, Action: domain.ActionAccept}
+			switch field {
+			case "source":
+				p.Source = "192.0.2.1; id"
+			case "destination":
+				p.Destination = "$(id)"
+			case "in":
+				p.InInterface = "eth0; id"
+			case "out":
+				p.OutInterface = "eth0\nwhoami"
+			case "comment":
+				p.Comment = "line\nbreak"
+			}
+			if !errors.Is(p.Validate(), domain.ErrValidation) {
+				t.Fatal("unsafe input accepted")
+			}
+		})
+	}
+}
+
+func TestFirewallNetworkFieldBoundaries(t *testing.T) {
+	for _, address := range []string{"", "0.0.0.0/0", "192.0.2.1", "192.0.2.0/24"} {
+		p := domain.FirewallRuleParams{Chain: domain.ChainInput, Action: domain.ActionAccept, Source: address, Destination: address, InInterface: "eth0.42", OutInterface: "veth+"}
+		if err := p.Validate(); err != nil {
+			t.Fatalf("valid %q: %v", address, err)
+		}
+	}
+	for _, address := range []string{"::1", "2001:db8::/32", "host.example", "-s", "192.0.2.1/33", "192.0.2.1 --jump DROP"} {
+		p := domain.FirewallRuleParams{Chain: domain.ChainInput, Action: domain.ActionAccept, Source: address}
+		if !errors.Is(p.Validate(), domain.ErrValidation) {
+			t.Fatalf("accepted %q", address)
+		}
+	}
+	for _, iface := range []string{"-eth0", "eth+0", "eth0 eth1", "abcdefghijklmnop", "eth$(id)"} {
+		p := domain.FirewallRuleParams{Chain: domain.ChainInput, Action: domain.ActionAccept, InInterface: iface}
+		if !errors.Is(p.Validate(), domain.ErrValidation) {
+			t.Fatalf("accepted interface %q", iface)
+		}
+	}
+}

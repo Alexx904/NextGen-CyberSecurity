@@ -51,7 +51,6 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
   const [newDestination, setNewDestination] = useState('');
   const [newComment, setNewComment] = useState('');
   const [newPosition, setNewPosition] = useState<number>(0); // 0 = append, >0 = insert at position
-  const [newWithTimer, setNewWithTimer] = useState(true);
   const [newTimeoutSec, setNewTimeoutSec] = useState(60);
 
   const fetchStatus = useCallback(async () => {
@@ -161,7 +160,7 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
       port: newPort.trim(),
       comment: newComment.trim(),
       position: newPosition,
-      with_safety_timer: newWithTimer,
+      with_safety_timer: true,
       safety_timeout_seconds: newTimeoutSec,
     };
 
@@ -550,19 +549,11 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
                 </div>
 
                 <div className="p-3 rounded-lg border border-cyan-800/40 bg-cyan-950/20 space-y-2">
-                  <label className="flex items-center space-x-2 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={newWithTimer}
-                      onChange={(e) => setNewWithTimer(e.target.checked)}
-                      className="rounded border-slate-700 bg-slate-950 text-cyan-500 focus:ring-cyan-500/20 w-4 h-4"
-                    />
-                    <span className="font-semibold text-white">Attiva Safety Rollback Timer (Anti-Lockout)</span>
-                  </label>
+                  <p className="font-semibold text-white">Safety Rollback Timer (Anti-Lockout) obbligatorio</p>
                   <p className="text-[11px] text-cyan-300/80 leading-relaxed font-sans">
                     Crea uno snapshot automatico delle regole. Se non confermi entro il tempo prestabilito, la configurazione precedente verrà ripristinata automaticamente.
                   </p>
-                  {newWithTimer && (
+                  {(
                     <div className="pt-2 flex items-center space-x-2">
                       <label className="text-slate-300 text-xs">Secondi prima del rollback:</label>
                       <input

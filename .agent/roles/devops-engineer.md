@@ -2,7 +2,7 @@
 
 ## Responsabilità
 
-Ownership primaria: `docs/06-devops/`. Operare nello scope assegnato dal Tech Lead; ownership non significa autorizzazione esclusiva o avvio automatico di un agente.
+Ownership primaria: `docs/06-devops/`.
 
 ## Input
 
@@ -16,4 +16,4 @@ Descrivere ciò che esiste e ciò che manca; mai eseguire deploy o modificare se
 
 ## Handoff
 
-Restituire task/obiettivo, fonti lette, file modificati, contratti/decisioni, verifiche realmente eseguite, assunzioni, blocchi e prossimo ruolo. Applicare [orchestration.md](../workflows/orchestration.md). Il Tech Lead integra e verifica; l'accettazione funzionale resta al PO.
+Usare l'[handoff comune](../workflows/orchestration.md#delega-e-handoff); nessun processo o agente implicito.

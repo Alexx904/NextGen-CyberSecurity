@@ -17,7 +17,7 @@ func TestBuildChokepointRule(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := service.BuildIptablesAddCommand(rule); got != `sudo iptables -I INPUT 1 -p tcp --dport 443 -d 192.0.2.10 -j DROP -m comment --comment "NextGen chokepoint mitigation"` {
+	if got := service.BuildIptablesAddCommand(rule); got != `sudo iptables -I INPUT 1 -p tcp --dport 443 -d 192.0.2.10 -j DROP -m comment --comment 'NextGen chokepoint mitigation'` {
 		t.Fatal(got)
 	}
 	for _, tc := range []struct {

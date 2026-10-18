@@ -92,7 +92,7 @@ func (s *firewallService) GetStatus(ctx context.Context, tenantID, serverID uuid
 }
 
 // AddRule aggiunge una regola in testa (position > 0) o in coda, con opzione di Safety Rollback Timer
-func (s *firewallService) AddRule(ctx context.Context, tenantID, serverID uuid.UUID, params domain.FirewallRuleParams, withSafetyTimer bool, timeoutSec int) (*domain.FirewallStatus, error) {
+func (s *firewallService) AddRule(ctx context.Context, tenantID, serverID uuid.UUID, params domain.FirewallRuleParams, _ bool, timeoutSec int) (*domain.FirewallStatus, error) {
 	lock := &s.operationMu[int(serverID[0])%len(s.operationMu)]
 	lock.Lock()
 	defer lock.Unlock()
@@ -100,13 +100,12 @@ func (s *firewallService) AddRule(ctx context.Context, tenantID, serverID uuid.U
 		return nil, err
 	}
 
-	if withSafetyTimer {
-		if timeoutSec <= 0 {
-			timeoutSec = 60
-		}
-		if err := s.startSafetyTimer(ctx, tenantID, serverID, timeoutSec, fmt.Sprintf("Aggiunta regola su %s (%s)", params.Chain, params.Action)); err != nil {
-			return nil, err
-		}
+	// The legacy flag cannot disable the mandatory anti-lockout protection.
+	if timeoutSec == 0 {
+		timeoutSec = 60
+	}
+	if err := s.startSafetyTimer(ctx, tenantID, serverID, timeoutSec, fmt.Sprintf("Aggiunta regola su %s (%s)", params.Chain, params.Action)); err != nil {
+		return nil, err
 	}
 
 	ruleCmd := BuildIptablesAddCommand(params)
@@ -119,7 +118,7 @@ func (s *firewallService) AddRule(ctx context.Context, tenantID, serverID uuid.U
 }
 
 // DeleteRule rimuove una regola per numero di riga, opzionalmente protetta dal Safety Timer
-func (s *firewallService) DeleteRule(ctx context.Context, tenantID, serverID uuid.UUID, chain domain.ChainName, lineNum int, withSafetyTimer bool, timeoutSec int) (*domain.FirewallStatus, error) {
+func (s *firewallService) DeleteRule(ctx context.Context, tenantID, serverID uuid.UUID, chain domain.ChainName, lineNum int, _ bool, timeoutSec int) (*domain.FirewallStatus, error) {
 	lock := &s.operationMu[int(serverID[0])%len(s.operationMu)]
 	lock.Lock()
 	defer lock.Unlock()
@@ -130,13 +129,11 @@ func (s *firewallService) DeleteRule(ctx context.Context, tenantID, serverID uui
 		return nil, fmt.Errorf("%w: numero riga non valido", domain.ErrValidation)
 	}
 
-	if withSafetyTimer {
-		if timeoutSec <= 0 {
-			timeoutSec = 60
-		}
-		if err := s.startSafetyTimer(ctx, tenantID, serverID, timeoutSec, fmt.Sprintf("Eliminazione regola %d da %s", lineNum, chain)); err != nil {
-			return nil, err
-		}
+	if timeoutSec == 0 {
+		timeoutSec = 60
+	}
+	if err := s.startSafetyTimer(ctx, tenantID, serverID, timeoutSec, fmt.Sprintf("Eliminazione regola %d da %s", lineNum, chain)); err != nil {
+		return nil, err
 	}
 
 	delCmd := fmt.Sprintf("sudo iptables -D %s %d", chain, lineNum)
@@ -153,7 +150,7 @@ func (s *firewallService) ApplyWithSafetyTimer(ctx context.Context, tenantID, se
 	lock := &s.operationMu[int(serverID[0])%len(s.operationMu)]
 	lock.Lock()
 	defer lock.Unlock()
-	if timeoutSec <= 0 {
+	if timeoutSec == 0 {
 		timeoutSec = 60
 	}
 
@@ -237,6 +234,9 @@ func (s *firewallService) Rollback(ctx context.Context, tenantID, serverID uuid.
 }
 
 func (s *firewallService) startSafetyTimer(ctx context.Context, tenantID, serverID uuid.UUID, timeoutSec int, label string) error {
+	if timeoutSec < 10 || timeoutSec > 300 {
+		return fmt.Errorf("%w: timeout safety timer consentito 10-300 secondi", domain.ErrValidation)
+	}
 	s.mu.Lock()
 	if _, exists := s.timers[serverID]; exists {
 		s.mu.Unlock()
@@ -355,11 +355,14 @@ func BuildIptablesAddCommand(params domain.FirewallRuleParams) string {
 	parts = append(parts, fmt.Sprintf("-j %s", params.Action))
 
 	if strings.TrimSpace(params.Comment) != "" {
-		sanitizedComment := strings.ReplaceAll(params.Comment, `"`, "")
-		parts = append(parts, fmt.Sprintf(`-m comment --comment "%s"`, sanitizedComment))
+		parts = append(parts, "-m comment --comment "+quoteFirewallArgument(params.Comment))
 	}
 
 	return strings.Join(parts, " ")
+}
+
+func quoteFirewallArgument(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }
 
 // ParseIptablesOutput analizza l'output formattato di "iptables -L -n -v --line-numbers"

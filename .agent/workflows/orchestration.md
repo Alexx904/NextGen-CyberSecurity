@@ -4,7 +4,7 @@ description: Orchestra ruoli, dipendenze e handoff proporzionati per singola fea
 
 # Orchestration
 
-Il Tech Lead mantiene scope, dipendenze, task e responsabilità finale. Leggere solo i [ruoli pertinenti](../README.md#ruoli-e-ownership); i ruoli possono essere svolti dallo stesso agente o da subagent disponibili e autorizzati. La definizione di un ruolo non avvia un processo.
+Il Tech Lead mantiene scope, dipendenze, task e responsabilità finale. Leggere solo i [ruoli pertinenti](../README.md#ruoli-e-ownership) che aggiungono vincoli utili; il resto è coperto da AGENTS e skill. I ruoli possono essere svolti dallo stesso agente o da subagent disponibili e autorizzati. La definizione di un ruolo non avvia un processo.
 
 ## Gate per feature
 
