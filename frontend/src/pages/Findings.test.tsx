@@ -233,9 +233,9 @@ describe('Findings Page - Multi-Company Scope & IP Inspection', () => {
       expect(screen.getAllByText('Azienda Beta S.p.A.').length).toBeGreaterThan(0);
     });
 
-    // Clicca sulla card di Azienda Beta
-    const betaCards = screen.getAllByText('Azienda Beta S.p.A.');
-    fireEvent.click(betaCards[0]);
+    // Complete the initial company selection before testing a switch.
+    await screen.findByText('CVE-2021-41773');
+    fireEvent.click(screen.getByRole('button', { name: /Azienda Beta S\.p\.A\./ }));
 
     // Ora deve comparire l'IP di Beta e il suo finding
     await waitFor(() => {

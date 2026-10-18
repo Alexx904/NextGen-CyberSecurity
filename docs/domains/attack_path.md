@@ -6,6 +6,14 @@
 
 ## Scopo e limite di validazione
 
+E28-S1-T2 (2026-10-18, working tree) adds an operational UI only for current
+SERVICE chokepoints: explicit matching SSH server, backend preview and impact
+acknowledgement, followed by the existing firewall safety manager. Auditor stays
+read-only, unsupported nodes disabled. No client-generated arbitrary rule, automatic
+server selection or automatic confirmation. Model risk/path counts are not reduced
+merely because a firewall rule was applied. Contract in
+[Active Defense](active_defense_and_soar.md); browser gate pending.
+
 Analisi euristica per ordinare verifiche e individuare nodi comuni ai percorsi modellati. Non prova accessibilità da Internet, sfruttabilità, RCE, credenziali condivise o lateral movement reale. Un inventario SSH non descrive trust fra host. Il modello non contiene routing, ACL, identità/privilegi né vettori CVSS: non deve presentarli come conoscenze acquisite.
 
 [MITRE TA0008](https://attack.mitre.org/tactics/TA0008/) descrive il movimento e controllo di sistemi remoti; il modello attuale genera ipotesi, non verifica quelle capacità. [FIRST](https://www.first.org/cvss/user-guide.html) distingue severità CVSS e rischio.

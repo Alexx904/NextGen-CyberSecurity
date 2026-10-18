@@ -1,19 +1,20 @@
 # M1.1 · Matrice di chiusura
 
-Ultimo allineamento: 2026-10-18 · working tree. Ricognizione statica e primo
-incremento firewall; non attestazione di completamento della milestone.
+Ultimo allineamento: 2026-10-18 · working tree. Current outcome: M1.1 `[~]`,
+implemented and verified; PO acceptance separate. The matrix owns current gates;
+sections below retain historical failures/environment limits for each increment.
 
 ## Criteri e gap
 
 | Requisito | Evidenza presente | Gap da chiudere |
 |---|---|---|
-| FR-07 alive-only | Test orchestratore `TestScanOrchestrator_AliveOnlyFiltering`, parser range/down | Collaudo integrato UI/export con host up/down e filtro senza porte |
-| FR-08 report | Report service/handler, PDF/CSV e report aziendali accettati; M11-REPORT-01 aggiunge filtri periodo/profilo/target/cartella e paginazione completa, scope cronologico, test automatici PASS | Collaudo browser e render PDF aperti; costo caricamento storico da misurare |
-| FR-09 albero | Gerarchia azienda/reparto e report per reparto accettati (COMPANY-UX-02) | Collaudo browser; prevale il contratto aggiornato a due livelli |
-| FR-10 discovery | Test service/handler, parsing e identità DISCOVERY-01 accettati | Collaudo LAN isolata e revisione azioni rapide e riconnessione |
-| FR-11 SSH/firewall | Terminale/proxy accettati, pinning e deadline con test; PO conferma iptables/iptables-nft con modello attuale, niente nft nativo | Gate visuale pinning; watchdog Linux/multiistanza TECH-DEBT-07; policy, modifica/riordino regole e terminale docked richiesti ma non dimostrati dalle API/UI correnti; collaudo iptables-nft |
-| FR-12 SSE/persistenza | Test `realtime_e2e_test.go`, risultati discovery progressivi in `sessionResults` | La memoria del processo non prova PostgreSQL FR-12.3: definire e implementare persistenza discovery e verificare recupero; verificare anche scansioni durante esecuzione Nmap, non solo eventi dopo parsing |
-| FR-13 diagnostica | Test logger/exporter/drawer/context e debugConsoleE2E | Collaudo browser e verifica redazione integrata |
+| FR-07 alive-only | Browser real QA range .3–.5: 2 up/3 total, 1 offline excluded; one open service .4:22, open-port toggle consistent. CSV one service, PDF two A4 pages rendered/inspected with summary and only service evidence | Range text remains metadata, not a persisted inactive host; no customer network used |
+| FR-08 report | Filtri e archivio automatici PASS; browser 3080: 21 report, tre pagine, periodo invertito, combinazione profilo/cartella/target e isolamento Casa→Casa 2; Executive PDF A4 di quattro pagine renderizzato e ispezionato | Costo storico da misurare; media score dello storico UI e score consolidato PDF hanno basi diverse, non sono confronti equivalenti |
+| FR-09 albero | Browser Casa 14 target, Reparto1 sette; cambio Casa 2 zero. Difetto reparto obsoleto riprodotto/corretto rosso→verde e ricollaudato nella build aggiornata | Prevale il contratto accettato a due livelli; nessuna nuova scrittura su aziende cliente |
+| FR-10 discovery | Isolated .3/.4 discovered, copy IP/import company choice/recovery PASS; new CSV two visible/JSON one selected, only selected .4 launches one new job in three-target QA company; mobile toolbar 390px PASS | Historical FR-10.5 superseded by accepted cleanup/SCAN-UX; no host-only preset reintroduced |
+| FR-11 SSH/firewall | M11-FIREWALL-01: nft/legacy quattro prove ciascuno, OpenSSH disconnect/late mutation PASS; browser expiry/conferma/policy/riordino/sostituzione e terminale I/O PASS, 192 test frontend/gate All PASS | Limiti UID/host/state descritti nel piano; accettazione PO separata, nessun server cliente usato |
+| FR-12 SSE/persistenza | Gate All/DB PASS; migrazione 000011/up-down-up; callback host/finding e errori DB prima del publish. Browser con Nmap sul solo host Docker sintetico: snapshot completo e parziale conservati dopo refresh e restart backend | Nessuna prova su LAN cliente; nessuna ripresa automatica del processo o pub/sub live distribuito |
+| FR-13 diagnostica | Browser REST export redacts synthetic SSH password. WS logger fix RED→GREEN; real WS filter/Markdown/JSON show 64 state/frame metadata entries; no terminal sentinel, ticket query or JWT-shaped value | Raw terminal content intentionally excluded, rather than relying on free-text secret redaction; no external sharing |
 
 Non riesumare requisiti precedenti superati dalle accettazioni PO (es. albero
 arbitrariamente profondo). M3 remediation chokepoint, notifiche e virtual patching
@@ -86,3 +87,52 @@ configurazione e ambiente backend invariati. Nessun PASS visuale/PDF/LAN/DB dedo
 Self-review: isolamento scope, race richieste, errori pagine parziali, nomi filtri,
 perimetro download, nessun segreto o dipendenza aggiunti. Limite: costo lineare
 dello storico; TECH-DEBT-10, ADR-22. Task resta `[ ]` per gate browser/PDF aperto.
+
+## Browser e PDF · 2026-10-18
+
+Il PO ha reso disponibile il browser ed eseguito il login su localhost:3080.
+Archivio Casa: 21 report su tre pagine (10/10/1), verifica pagina 2 e 3, reset
+pagina dopo filtri; profilo TCP 100 + cartella Casa → sette righe, target
+192.168.1.1 nella cartella Casa → una riga. Periodo iniziale successivo al finale:
+messaggio esplicito e storico vuoto. Cambio scope Casa 2 → nessun report Casa.
+Nessuna scansione, importazione o modifica di dati applicativi.
+
+Executive consolidato Casa scaricato tramite UI. Copia e quattro PNG in
+`.agent/artifacts/M11-REPORT-01/`. `pdfinfo`: A4, quattro pagine, 9057 byte.
+Poppler eseguito in container temporaneo con pacchetto Alpine `poppler-utils` e
+font Liberation; rendering/testo PASS exit 0 (2,950s). Primo rendering senza font
+produceva diagnostica Helvetica; corretto l'ambiente, non il PDF. Ispezionate
+tutte le quattro pagine: cover, posture/priorità reparto, priorità senza reparto
+e inventario; nessun taglio/sovrapposizione rilevato. Non prova correttezza delle CVE.
+
+SSH: modale creazione con campo pin e istruzione canale fidato; modifica server
+esistente, cambio endpoint a indirizzo TEST-NET azzera il pin; Annulla preserva
+l'host registrato. Screenshot osservato nel tool; nessuna connessione SSH o
+mutazione firewall avviata.
+
+Difetto riprodotto al login: provider aziende montato prima dell'autenticazione,
+due richieste inventario premature e contesto vuoto fino a refresh. Test
+`src/App.test.tsx` rosso exit 1 (1,699s), provider spostato dentro le rotte protette;
+verde con regressione contesto/discovery: 14 test exit 0 (1,959s). Fix non ancora
+collaudato nella build Docker; nessun deploy implicito.
+
+## Gate integrato e deploy locale autorizzato
+
+Root: `scripts/verify.ps1 -Profile Final -Scope All -Integration`, DB locale
+dedicato `nextgen_discovery_test` su 55432 con TEST_DB_* esplicite. PASS exit 0:
+backend suite 22,846s, vet 1,112s, build 1,255s; frontend 184 test 5,578s,
+build/typecheck 11,427s; PostgreSQL 5,609s; docs 0,598s/diff 0,059s.
+Report `.agent/artifacts/testing/20261018-124105-426c02b0.json`.
+Self-review, non review indipendente: SQL parametrico/FK tenant, topic tenant,
+ordine commit/SSE, pipe con join e cancellazione, fallimenti storage senza
+notifiche di successo, raw XML preservato, nessuna dipendenza applicativa aggiunta.
+
+PO ha poi autorizzato il deploy locale dei soli container app. Immagini verificate
+`m11-persist-20261018`, Compose exit 0 (6,665s); backend healthy, frontend e
+`/healthz` HTTP 200. Migrazione applicata all'avvio senza fermare PostgreSQL.
+Discovery reale sul solo container 172.30.77.3 in rete Docker interna isolata:
+un host trovato, nessun import. Refresh/restart conservano il risultato completo;
+refresh immediato dopo il primo device durante enrichment conserva uno snapshot
+parziale, con banner corretto anche dopo restart. Regola TCP temporanea del solo
+container rimossa. Dettagli nel [piano persistence](../04-development/plans/M11-PERSIST-01.md).
+M11-REPORT-01, SSH-HARDEN-01 e M11-PERSIST-01 passano a `[~]`; M1.1 resta aperta.

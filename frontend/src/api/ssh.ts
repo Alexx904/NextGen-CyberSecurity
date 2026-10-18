@@ -79,10 +79,11 @@ export const sshApi = {
     lineNum: number,
     chain: ChainName = 'INPUT',
     withSafetyTimer: boolean = true,
-    timeout: number = 60
+    timeout: number = 60,
+    revision?: string
   ): Promise<FirewallStatus> => {
     const res = await apiClient.delete<ApiResponse<FirewallStatus>>(
-      `/ssh/servers/${serverId}/firewall/rules/${lineNum}?chain=${chain}&safety_timer=${withSafetyTimer}&timeout=${timeout}`
+      `/ssh/servers/${serverId}/firewall/rules/${lineNum}?chain=${chain}&safety_timer=${withSafetyTimer}&timeout=${timeout}&expected_revision=${encodeURIComponent(revision || '')}`
     );
     if (!res.data.success || !res.data.data) {
       throw new Error(res.data.error?.message || 'Errore durante la cancellazione della regola firewall');
@@ -97,6 +98,28 @@ export const sshApi = {
     if (!res.data.success || !res.data.data) {
       throw new Error(res.data.error?.message || 'Errore durante l\'attivazione del safety timer');
     }
+    return res.data.data;
+  },
+
+  replaceFirewallRule: async (serverId: string, line: number, payload: AddFirewallRulePayload): Promise<FirewallStatus> => {
+    const res = await apiClient.put<ApiResponse<FirewallStatus>>(`/ssh/servers/${serverId}/firewall/rules/${line}`, payload);
+    if (!res.data.success || !res.data.data) throw new Error(res.data.error?.message || 'Sostituzione regola fallita');
+    return res.data.data;
+  },
+
+  moveFirewallRule: async (serverId: string, chain: ChainName, from: number, to: number, revision: string): Promise<FirewallStatus> => {
+    const res = await apiClient.post<ApiResponse<FirewallStatus>>(`/ssh/servers/${serverId}/firewall/rules/move`, {
+      chain, from, to, expected_revision: revision, safety_timeout_seconds: 60,
+    });
+    if (!res.data.success || !res.data.data) throw new Error(res.data.error?.message || 'Riordino regola fallito');
+    return res.data.data;
+  },
+
+  setFirewallPolicy: async (serverId: string, chain: ChainName, policy: 'ACCEPT' | 'DROP', revision: string): Promise<FirewallStatus> => {
+    const res = await apiClient.put<ApiResponse<FirewallStatus>>(`/ssh/servers/${serverId}/firewall/policy`, {
+      chain, policy, expected_revision: revision, safety_timeout_seconds: 60,
+    });
+    if (!res.data.success || !res.data.data) throw new Error(res.data.error?.message || 'Cambio policy fallito');
     return res.data.data;
   },
 

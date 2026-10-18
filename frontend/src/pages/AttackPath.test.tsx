@@ -13,6 +13,8 @@ const companyState = vi.hoisted(() => ({
   allTargets: [] as TargetItem[],
   companyTargetValues: new Set<string>(),
 }));
+const authState = vi.hoisted(() => ({ user: { role: 'SecOps' } }));
+vi.mock('../context/AuthContext', () => ({ useAuth: () => authState }));
 vi.mock('../context/CompanyContext', () => ({ useCompany: () => companyState }));
 
 vi.mock('../api/attackPath', () => ({
@@ -141,10 +143,26 @@ describe('AttackPath Page - Visual Graph Explorer & Chokepoints', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    authState.user.role = 'SecOps';
     companyState.selectedCompanyId = null;
     companyState.companyTargetValues = new Set();
     companyState.departments = [];
     companyState.allTargets = [];
+  });
+
+  it('offers mitigation for a service chokepoint to SecOps', async () => {
+    vi.mocked(attackPathApi.getGraph).mockResolvedValue({ ...mockGraphData, chokepoints: [{ ...mockGraphData.chokepoints[0], node_id: 'srv-192-168-1-10-80' }] });
+    render(<MemoryRouter><AttackPath /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Chokepoints (1)' }));
+    expect((screen.getByRole('button', { name: 'Neutralizza Chokepoint http (80)' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('keeps remediation unavailable to an Auditor', async () => {
+    authState.user.role = 'Auditor';
+    vi.mocked(attackPathApi.getGraph).mockResolvedValue({ ...mockGraphData, chokepoints: [{ ...mockGraphData.chokepoints[0], node_id: 'srv-192-168-1-10-80' }] });
+    render(<MemoryRouter><AttackPath /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Chokepoints (1)' }));
+    expect(screen.queryByRole('button', { name: /Neutralizza Chokepoint/ })).toBeNull();
   });
 
   it('rende correttamente i dati del grafo, i KPI e le card di riepilogo', async () => {

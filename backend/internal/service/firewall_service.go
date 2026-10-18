@@ -5,15 +5,12 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
-
 	"nextgen-cybersec/internal/domain"
 )
 
-// FirewallService gestisce la consultazione, configurazione e resilienza anti-lockout del firewall iptables
 type FirewallService interface {
 	GetStatus(ctx context.Context, tenantID, serverID uuid.UUID) (*domain.FirewallStatus, error)
 	AddRule(ctx context.Context, tenantID, serverID uuid.UUID, params domain.FirewallRuleParams, withSafetyTimer bool, timeoutSec int) (*domain.FirewallStatus, error)
@@ -23,300 +20,188 @@ type FirewallService interface {
 	Rollback(ctx context.Context, tenantID, serverID uuid.UUID, backupID *uuid.UUID) error
 }
 
-type activeSafetyTimer struct {
-	serverID   uuid.UUID
-	tenantID   uuid.UUID
-	backupID   uuid.UUID
-	remotePID  int
-	expiresAt  time.Time
-	timeoutSec int
-	cancelCh   chan struct{}
-}
-
 type firewallService struct {
-	operationMu [64]sync.Mutex // Bounded locks serialize each server's mutation lifecycle.
-	executor    SSHExecutor
-	backupRepo  domain.FirewallBackupRepository
-	mu          sync.Mutex
-	timers      map[uuid.UUID]*activeSafetyTimer
+	executor   SSHExecutor
+	backupRepo domain.FirewallBackupRepository
 }
 
-// NewFirewallService crea un'istanza di FirewallService collegando l'esecutore SSH e il repository backup
 func NewFirewallService(executor SSHExecutor, backupRepo domain.FirewallBackupRepository) FirewallService {
-	return &firewallService{
-		executor:   executor,
-		backupRepo: backupRepo,
-		timers:     make(map[uuid.UUID]*activeSafetyTimer),
-	}
+	return &firewallService{executor: executor, backupRepo: backupRepo}
 }
 
-// GetStatus recupera le catene attive e lo stato dell'anti-lockout timer
-func (s *firewallService) GetStatus(ctx context.Context, tenantID, serverID uuid.UUID) (*domain.FirewallStatus, error) {
-	// SSH exec has no interactive TTY. Never wait for a sudo password prompt.
-	cmd := `export LC_ALL=C; export PATH=/usr/sbin:/sbin:/usr/bin:/bin:$PATH; if ! command -v iptables >/dev/null 2>&1; then exit 127; fi; if [ "$(id -u)" -eq 0 ]; then iptables -L -n -v --line-numbers; elif ! command -v sudo >/dev/null 2>&1; then exit 126; else sudo -n iptables -L -n -v --line-numbers; fi`
-	stdout, stderr, exitCode, err := s.executor.ExecuteCommand(ctx, tenantID, serverID, cmd)
-	if err != nil || exitCode != 0 {
-		if exitCode == 127 {
-			return nil, domain.ErrFirewallUnavailable
-		}
-		diagnostic := strings.ToLower(stderr)
-		if exitCode == 126 || strings.Contains(diagnostic, "a password is required") ||
-			strings.Contains(diagnostic, "not in the sudoers") || strings.Contains(diagnostic, "not allowed to execute") ||
-			strings.Contains(diagnostic, "must have a tty") || strings.Contains(diagnostic, "must be root") ||
-			strings.Contains(diagnostic, "permission denied") {
-			return nil, domain.ErrFirewallPrivilegesRequired
-		}
-		return nil, fmt.Errorf("%w: recupero stato firewall fallito (exit %d): %s %v", domain.ErrSSHExecutionFailed, exitCode, stderr, err)
-	}
-
-	chains, err := ParseIptablesOutput(stdout)
+func (s *firewallService) readRemoteStatus(ctx context.Context, tenantID, serverID uuid.UUID) (*remoteFirewallState, *domain.FirewallStatus, error) {
+	output, err := s.remoteCall(ctx, tenantID, serverID, uuid.New(), 0, "status", "")
 	if err != nil {
-		return nil, fmt.Errorf("parsing regole firewall fallito: %w", err)
+		return nil, nil, err
 	}
-
-	status := &domain.FirewallStatus{
-		ServerID: serverID,
-		Chains:   chains,
+	state, rules, err := parseRemoteFirewallState(output)
+	if err != nil {
+		return nil, nil, err
 	}
-
-	s.mu.Lock()
-	if timer, ok := s.timers[serverID]; ok {
+	chains, err := ParseIptablesOutput(rules)
+	if err != nil {
+		return nil, nil, err
+	}
+	status := &domain.FirewallStatus{ServerID: serverID, Chains: chains}
+	status.Revision, err = remoteFirewallRevision(output)
+	if err != nil {
+		return nil, nil, err
+	}
+	if state != nil {
 		status.ActiveSafetyTimer = true
-		exp := timer.expiresAt
-		status.SafetyTimerExpiresAt = &exp
-		status.SafetyTimeoutSeconds = timer.timeoutSec
+		expires := state.ExpiresAt
+		status.SafetyTimerExpiresAt = &expires
+		status.SafetyTimeoutSeconds = state.Timeout
 	}
-	s.mu.Unlock()
-
-	return status, nil
+	return state, status, nil
 }
 
-// AddRule aggiunge una regola in testa (position > 0) o in coda, con opzione di Safety Rollback Timer
+func (s *firewallService) GetStatus(ctx context.Context, tenantID, serverID uuid.UUID) (*domain.FirewallStatus, error) {
+	_, status, err := s.readRemoteStatus(ctx, tenantID, serverID)
+	return status, err
+}
+
 func (s *firewallService) AddRule(ctx context.Context, tenantID, serverID uuid.UUID, params domain.FirewallRuleParams, _ bool, timeoutSec int) (*domain.FirewallStatus, error) {
-	lock := &s.operationMu[int(serverID[0])%len(s.operationMu)]
-	lock.Lock()
-	defer lock.Unlock()
 	if err := params.Validate(); err != nil {
 		return nil, err
 	}
-
-	// The legacy flag cannot disable the mandatory anti-lockout protection.
-	if timeoutSec == 0 {
-		timeoutSec = 60
+	verb := "-A"
+	if params.Position > 0 {
+		verb = "-I"
 	}
-	if err := s.startSafetyTimer(ctx, tenantID, serverID, timeoutSec, fmt.Sprintf("Aggiunta regola su %s (%s)", params.Chain, params.Action)); err != nil {
-		return nil, err
-	}
-
-	ruleCmd := BuildIptablesAddCommand(params)
-	_, stderr, exitCode, err := s.executor.ExecuteCommand(ctx, tenantID, serverID, ruleCmd)
-	if err != nil || exitCode != 0 {
-		return nil, fmt.Errorf("%w: inserimento regola fallito (exit %d): %s %v", domain.ErrSSHExecutionFailed, exitCode, stderr, err)
-	}
-
-	return s.GetStatus(ctx, tenantID, serverID)
+	return s.mutate(ctx, tenantID, serverID, timeoutSec, "Add firewall rule", firewallRuleArguments(params, verb, params.Position)...)
 }
 
-// DeleteRule rimuove una regola per numero di riga, opzionalmente protetta dal Safety Timer
 func (s *firewallService) DeleteRule(ctx context.Context, tenantID, serverID uuid.UUID, chain domain.ChainName, lineNum int, _ bool, timeoutSec int) (*domain.FirewallStatus, error) {
-	lock := &s.operationMu[int(serverID[0])%len(s.operationMu)]
-	lock.Lock()
-	defer lock.Unlock()
 	if !chain.IsValid() {
 		return nil, domain.ErrInvalidChainName
 	}
 	if lineNum <= 0 {
-		return nil, fmt.Errorf("%w: numero riga non valido", domain.ErrValidation)
+		return nil, domain.ErrValidation
 	}
-
-	if timeoutSec == 0 {
-		timeoutSec = 60
-	}
-	if err := s.startSafetyTimer(ctx, tenantID, serverID, timeoutSec, fmt.Sprintf("Eliminazione regola %d da %s", lineNum, chain)); err != nil {
-		return nil, err
-	}
-
-	delCmd := fmt.Sprintf("sudo iptables -D %s %d", chain, lineNum)
-	_, stderr, exitCode, err := s.executor.ExecuteCommand(ctx, tenantID, serverID, delCmd)
-	if err != nil || exitCode != 0 {
-		return nil, fmt.Errorf("%w: eliminazione regola fallita (exit %d): %s %v", domain.ErrSSHExecutionFailed, exitCode, stderr, err)
-	}
-
-	return s.GetStatus(ctx, tenantID, serverID)
+	return s.mutate(ctx, tenantID, serverID, timeoutSec, "Delete firewall rule", "-D", string(chain), strconv.Itoa(lineNum))
 }
 
-// ApplyWithSafetyTimer attiva esplicitamente uno snapshot e avvia il timer di rollback preventivo
 func (s *firewallService) ApplyWithSafetyTimer(ctx context.Context, tenantID, serverID uuid.UUID, timeoutSec int) (*domain.FirewallStatus, error) {
-	lock := &s.operationMu[int(serverID[0])%len(s.operationMu)]
-	lock.Lock()
-	defer lock.Unlock()
+	return s.mutate(ctx, tenantID, serverID, timeoutSec, "Preventive firewall snapshot")
+}
+
+func (s *firewallService) mutate(ctx context.Context, tenantID, serverID uuid.UUID, timeoutSec int, label string, args ...string) (*domain.FirewallStatus, error) {
+	return s.mutateRevision(ctx, tenantID, serverID, timeoutSec, label, "", args...)
+}
+
+func (s *firewallService) mutateRevision(ctx context.Context, tenantID, serverID uuid.UUID, timeoutSec int, label, revision string, args ...string) (*domain.FirewallStatus, error) {
 	if timeoutSec == 0 {
 		timeoutSec = 60
 	}
-
-	if err := s.startSafetyTimer(ctx, tenantID, serverID, timeoutSec, "Snapshot preventivo manuale"); err != nil {
+	if timeoutSec < 10 || timeoutSec > 300 {
+		return nil, domain.ErrValidation
+	}
+	token := uuid.New()
+	arguments := append([]string{revision}, args...)
+	output, err := s.remoteCall(ctx, tenantID, serverID, token, timeoutSec, "apply", "", arguments...)
+	if err != nil {
 		return nil, err
 	}
-
-	return s.GetStatus(ctx, tenantID, serverID)
+	snapshot, _, err := parseRemoteFirewallBackup(output, token)
+	if err != nil {
+		return nil, err
+	}
+	backup := &domain.FirewallBackup{ID: token, TenantID: tenantID, ServerID: serverID, RawIptablesRules: snapshot, Label: label, CreatedAt: time.Now().UTC()}
+	if err := s.backupRepo.CreateBackup(ctx, backup); err != nil {
+		// The detached remote watchdog remains armed. Do not acknowledge success.
+		return nil, fmt.Errorf("%w: backup could not be persisted; remote rollback remains armed", domain.ErrSSHExecutionFailed)
+	}
+	state, status, err := s.readRemoteStatus(ctx, tenantID, serverID)
+	if err != nil {
+		return nil, err
+	}
+	if state == nil || state.ID != token || state.TenantID != tenantID || state.ServerID != serverID {
+		return nil, domain.ErrNoSafetyTimerActive
+	}
+	return status, nil
 }
 
-// Confirm disattiva il timer e termina il processo di revert remoto garantendo le modifiche
 func (s *firewallService) Confirm(ctx context.Context, tenantID, serverID uuid.UUID) error {
-	lock := &s.operationMu[int(serverID[0])%len(s.operationMu)]
-	lock.Lock()
-	defer lock.Unlock()
-	s.mu.Lock()
-	timer, exists := s.timers[serverID]
-	if !exists || timer.tenantID != tenantID || !time.Now().Before(timer.expiresAt) {
-		s.mu.Unlock()
+	state, _, err := s.readRemoteStatus(ctx, tenantID, serverID)
+	if err != nil {
+		return err
+	}
+	if state == nil || state.TenantID != tenantID || state.ServerID != serverID || !time.Now().Before(state.ExpiresAt) {
 		return domain.ErrNoSafetyTimerActive
 	}
-	s.mu.Unlock()
-
-	// Termina il processo di revert autonomo sull'host remoto e pulisce lo snapshot temporaneo
-	killCmd := fmt.Sprintf("sudo kill %d && rm -f /tmp/ng_fw_backup_%s.rules", timer.remotePID, serverID.String())
-	if _, _, code, err := s.executor.ExecuteCommand(ctx, tenantID, serverID, killCmd); err != nil || code != 0 {
-		return domain.ErrSSHExecutionFailed
-	}
-	s.mu.Lock()
-	delete(s.timers, serverID)
-	s.mu.Unlock()
-	close(timer.cancelCh)
-
-	return nil
-}
-
-// Rollback ripristina immediatamente l'ultimo snapshot valido via iptables-restore
-func (s *firewallService) Rollback(ctx context.Context, tenantID, serverID uuid.UUID, backupID *uuid.UUID) error {
-	lock := &s.operationMu[int(serverID[0])%len(s.operationMu)]
-	lock.Lock()
-	defer lock.Unlock()
-
-	var backup *domain.FirewallBackup
-	var err error
-
-	if backupID != nil && *backupID != uuid.Nil {
-		backup, err = s.backupRepo.GetBackupByID(ctx, tenantID, *backupID)
-	} else {
-		backup, err = s.backupRepo.GetLatestBackup(ctx, tenantID, serverID)
-	}
-
+	backup, err := s.backupRepo.GetBackupByID(ctx, tenantID, state.ID)
 	if err != nil {
-		return fmt.Errorf("recupero snapshot backup fallito: %w", err)
+		return err
 	}
 	if backup.ServerID != serverID || backup.TenantID != tenantID {
 		return domain.ErrFirewallBackupNotFound
 	}
-
-	// Ripristino mediante stream di regole su sudo iptables-restore
-	restoreCmd := fmt.Sprintf("sudo iptables-restore <<'EOF'\n%s\nEOF", backup.RawIptablesRules)
-	_, stderr, exitCode, err := s.executor.ExecuteCommand(ctx, tenantID, serverID, restoreCmd)
-	if err != nil || exitCode != 0 {
-		return fmt.Errorf("%w: ripristino iptables-restore fallito (exit %d): %s %v", domain.ErrSSHExecutionFailed, exitCode, stderr, err)
-	}
-	// Keep the remote watchdog alive until restore has succeeded.
-	s.mu.Lock()
-	timer, exists := s.timers[serverID]
-	s.mu.Unlock()
-	if exists && timer.tenantID == tenantID {
-		cmd := fmt.Sprintf("sudo kill %d && rm -f /tmp/ng_fw_backup_%s.rules", timer.remotePID, serverID.String())
-		if _, _, code, err := s.executor.ExecuteCommand(ctx, tenantID, serverID, cmd); err != nil || code != 0 {
-			return domain.ErrSSHExecutionFailed
-		}
-		s.mu.Lock()
-		delete(s.timers, serverID)
-		s.mu.Unlock()
-		close(timer.cancelCh)
-	}
-
-	return nil
+	_, err = s.remoteCall(ctx, tenantID, serverID, state.ID, 0, "confirm", "")
+	return err
 }
 
-func (s *firewallService) startSafetyTimer(ctx context.Context, tenantID, serverID uuid.UUID, timeoutSec int, label string) error {
-	if timeoutSec < 10 || timeoutSec > 300 {
-		return fmt.Errorf("%w: timeout safety timer consentito 10-300 secondi", domain.ErrValidation)
+func (s *firewallService) Rollback(ctx context.Context, tenantID, serverID uuid.UUID, backupID *uuid.UUID) error {
+	state, _, err := s.readRemoteStatus(ctx, tenantID, serverID)
+	if err != nil {
+		return err
 	}
-	s.mu.Lock()
-	if _, exists := s.timers[serverID]; exists {
-		s.mu.Unlock()
+	if state != nil && (state.TenantID != tenantID || state.ServerID != serverID) {
 		return domain.ErrSafetyTimerActive
 	}
-	s.mu.Unlock()
-
-	// 1. Snapshot corrente con iptables-save
-	stdout, stderr, exitCode, err := s.executor.ExecuteCommand(ctx, tenantID, serverID, "sudo iptables-save")
-	if err != nil || exitCode != 0 {
-		return fmt.Errorf("%w: esecuzione iptables-save fallita (exit %d): %s %v", domain.ErrSSHExecutionFailed, exitCode, stderr, err)
+	var backup *domain.FirewallBackup
+	if backupID != nil && *backupID != uuid.Nil {
+		backup, err = s.backupRepo.GetBackupByID(ctx, tenantID, *backupID)
+	} else if state != nil {
+		backup, err = s.backupRepo.GetBackupByID(ctx, tenantID, state.ID)
+	} else {
+		backup, err = s.backupRepo.GetLatestBackup(ctx, tenantID, serverID)
 	}
-
-	rawRules := stdout
-	backup := &domain.FirewallBackup{
-		ID:               uuid.New(),
-		TenantID:         tenantID,
-		ServerID:         serverID,
-		RawIptablesRules: rawRules,
-		Label:            label,
-		CreatedAt:        time.Now().UTC(),
+	if err != nil {
+		return err
 	}
-
-	if err := s.backupRepo.CreateBackup(ctx, backup); err != nil {
-		return fmt.Errorf("salvataggio backup snapshot fallito: %w", err)
+	if backup.ServerID != serverID || backup.TenantID != tenantID {
+		return domain.ErrFirewallBackupNotFound
 	}
-
-	// 2. Scrittura snapshot temporaneo sull'host remoto e lancio processo watchdog distaccato
-	backupFile := fmt.Sprintf("/tmp/ng_fw_backup_%s.rules", serverID.String())
-	prepCmd := fmt.Sprintf("cat <<'EOF' > %s\n%s\nEOF", backupFile, rawRules)
-	if _, stderr, exitCode, err := s.executor.ExecuteCommand(ctx, tenantID, serverID, prepCmd); err != nil || exitCode != 0 {
-		return fmt.Errorf("scrittura file snapshot remoto fallita: %s %v", stderr, err)
+	if strings.TrimSpace(backup.RawIptablesRules) == "" {
+		return domain.ErrValidation
 	}
-
-	// Remote self-revert watchdog distaccato con nohup (garantisce revert anche con disconnessione o restart backend)
-	watchdogCmd := fmt.Sprintf("nohup sh -c 'sleep %d && sudo iptables-restore < %s && rm -f %s' >/dev/null 2>&1 & echo $!", timeoutSec, backupFile, backupFile)
-	pidOut, stderr, exitCode, err := s.executor.ExecuteCommand(ctx, tenantID, serverID, watchdogCmd)
-	if err != nil || exitCode != 0 {
-		return fmt.Errorf("avvio watchdog remoto fallito: %s %v", stderr, err)
+	token := backup.ID
+	if state != nil {
+		token = state.ID
 	}
+	_, err = s.remoteCall(ctx, tenantID, serverID, token, 0, "rollback", backup.RawIptablesRules)
+	return err
+}
 
-	remotePID, pidErr := strconv.Atoi(strings.TrimSpace(pidOut))
-	if pidErr != nil || remotePID <= 1 {
-		return fmt.Errorf("%w: PID watchdog non valido", domain.ErrSSHExecutionFailed)
+func firewallRuleArguments(params domain.FirewallRuleParams, verb string, position int) []string {
+	args := []string{verb, string(params.Chain)}
+	if position > 0 {
+		args = append(args, strconv.Itoa(position))
 	}
-
-	// 3. Registrazione timer in memoria
-	cancelCh := make(chan struct{})
-	expiresAt := time.Now().Add(time.Duration(timeoutSec) * time.Second)
-	timer := &activeSafetyTimer{
-		serverID:   serverID,
-		tenantID:   tenantID,
-		backupID:   backup.ID,
-		remotePID:  remotePID,
-		expiresAt:  expiresAt,
-		timeoutSec: timeoutSec,
-		cancelCh:   cancelCh,
+	if params.Protocol != "" && params.Protocol != "all" {
+		args = append(args, "-p", params.Protocol)
 	}
-
-	s.mu.Lock()
-	s.timers[serverID] = timer
-	s.mu.Unlock()
-
-	// 4. Goroutine watchdog backend per sincronizzazione dello stato
-	go func() {
-		select {
-		case <-time.After(time.Duration(timeoutSec) * time.Second):
-			s.mu.Lock()
-			currentTimer, exists := s.timers[serverID]
-			if exists && currentTimer == timer {
-				delete(s.timers, serverID)
-			}
-			s.mu.Unlock()
-		case <-cancelCh:
-			// Timer annullato esplicitamente da Confirm o Rollback
-			return
-		}
-	}()
-
-	return nil
+	if params.Port != "" {
+		args = append(args, "--dport", params.Port)
+	}
+	if params.Source != "" && params.Source != "0.0.0.0/0" {
+		args = append(args, "-s", params.Source)
+	}
+	if params.Destination != "" && params.Destination != "0.0.0.0/0" {
+		args = append(args, "-d", params.Destination)
+	}
+	if params.InInterface != "" && params.InInterface != "*" {
+		args = append(args, "-i", params.InInterface)
+	}
+	if params.OutInterface != "" && params.OutInterface != "*" {
+		args = append(args, "-o", params.OutInterface)
+	}
+	args = append(args, "-j", string(params.Action))
+	if strings.TrimSpace(params.Comment) != "" {
+		args = append(args, "-m", "comment", "--comment", params.Comment)
+	}
+	return args
 }
 
 // BuildIptablesAddCommand costruisce la riga di comando per aggiungere la regola
@@ -445,6 +330,18 @@ func ParseIptablesOutput(rawOutput string) (map[domain.ChainName]*domain.Firewal
 		bytesCount := parseCounter(fields[2])
 		target := domain.RuleAction(fields[3])
 		prot := fields[4]
+		// Numeric listing is used by iptables-nft with -n. Keep the editable
+		// protocols canonical while retaining unknown protocol numbers verbatim.
+		switch prot {
+		case "0":
+			prot = "all"
+		case "1":
+			prot = "icmp"
+		case "6":
+			prot = "tcp"
+		case "17":
+			prot = "udp"
+		}
 		opt := fields[5]
 		inIface := fields[6]
 		outIface := fields[7]

@@ -1,4 +1,15 @@
+import type { AddFirewallRulePayload, FirewallStatus } from './ssh';
+
 export type AttackNodeType = 'ENTRYPOINT' | 'SUBNET' | 'HOST' | 'SERVICE' | 'VULNERABILITY';
+
+export interface ChokepointRemediationResult {
+  node_id: string;
+  server_id: string;
+  rule: Omit<AddFirewallRulePayload, 'expected_revision' | 'with_safety_timer' | 'safety_timeout_seconds'>;
+  command: string;
+  safety_timeout_seconds: number;
+  firewall?: FirewallStatus;
+}
 export type AttackEdgeType = 'NETWORK_ACCESS' | 'EXPLOITS' | 'PIVOTS_TO' | 'TRUSTED_RELATION';
 export type PathSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
 

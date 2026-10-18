@@ -82,6 +82,24 @@
 
 ---
 
+### UC-21: Valutazione Applicabilità Exploit (Milestone 6, pianificata)
+- **Attore / precondizioni:** analista autorizzato nel tenant; azienda, asset e finding disponibili.
+- **Trigger / flusso:** apre "Valuta sfruttabilità", consulta candidati Metasploit e riferimenti pubblici con prerequisiti/fonti e salva la valutazione nel report, senza esecuzione.
+- **Eccezioni:** catalogo assente/obsoleto, fingerprint incompleto o nessuna corrispondenza restano espliciti; nessuna corrispondenza non significa sistema sicuro.
+- **Postcondizione:** valutazione potenziale tracciata con provenienza. Riferimenti: FR-22, E31-S1-T1.
+
+### UC-22: Validazione Mirata (Milestone 7, pianificata)
+- **Attore / precondizioni:** operatore abilitato, worker disponibile, autorizzazione valida per asset, controllo e finestra.
+- **Trigger / flusso:** seleziona un controllo revisionato, esamina impatto e prerequisiti, avvia il job e consulta esito/evidenze nel finding e nel report.
+- **Eccezioni:** controllo non supportato, scope non valido, worker indisponibile, timeout o cancellazione producono errore/esito esplicito, mai un risultato "sicuro" implicito.
+- **Postcondizione:** risultato validato, non confermato o inconcludente con audit e versione del modulo. Riferimenti: FR-23, E32-S1-T1.
+
+### UC-23: Pentest Controllato e Retest (Milestone 8, pianificata)
+- **Attore / precondizioni:** penetration tester abilitato, perimetro e prova esplicitamente autorizzati, finestra e piano di arresto/cleanup validi.
+- **Trigger / flusso:** esamina la prova selezionata, conferma l'esecuzione, monitora job/sessioni, raccoglie evidenze minime, completa cleanup e report; dopo la correzione avvia un retest autorizzato.
+- **Eccezioni:** effetti inattesi, perdita connessione o arresto richiedono verifica del target e degli effetti residui; un job interrotto non equivale a rollback.
+- **Postcondizione:** impatto osservato e limiti documentati, eventuale correzione riverificata collegata alla prova originale. Riferimenti: FR-24, E33-S1-T1.
+
 ## Completamento progressivo
 
 Gli UC conservano gli identificativi e il dettaglio storico. Per ogni UC modificato esplicitare: attore, precondizioni, trigger, happy path, errori/eccezioni, postcondizioni e riferimenti FR/test. L'assenza di UC-16 è preesistente: non rinumerare gli altri UC.

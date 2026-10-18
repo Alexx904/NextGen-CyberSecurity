@@ -1,5 +1,8 @@
 # High-Level Design
 
+> Publication scope 2026-10-18: alert-channel / outbox / migration 000012 sections describe deferred T4/T5 design and local prototype evidence. Their code and routes are excluded from this release; published migration is 000011. Alert-specific commands are future gates.
+
+
 > Responsabile: Software Architect. Architettura ereditata; migrazione strutturale 2026-10-15.
 
 ## 1. Diagramma Architetturale di Sistema
@@ -151,6 +154,14 @@ backend/
 ---
 
 ## Documenti tecnici
+
+E28-S1-T2..T5 (2026-10-18, working tree): UI remediation reuses the remote
+firewall timer. Virtual patch generation is a tenant-read advisory catalog with
+no execution. Alerting adds a cancellable worker and transactional PostgreSQL
+outbox; source triggers enqueue persisted observations, leased jobs feed bounded
+TLS transports. Admin destination management, write-only encrypted configuration,
+scope/revision rechecks and restricted egress follow ADR-26. [Contracts, coverage
+and QA](../domains/active_defense_and_soar.md). No new application dependency.
 
 E28-S1-T1 (2026-10-17, working tree): DefenseService collega il grafo corrente al
 gestore firewall esistente; handler SecOps/admin e DTO additivi, nessuna nuova

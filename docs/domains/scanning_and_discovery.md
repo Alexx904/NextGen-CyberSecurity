@@ -1,5 +1,21 @@
 # Dominio: Scanning & LAN Network Discovery
 
+## M11-DISCOVERY-UI-01 · Selected devices and exports · 2026-10-18 · working tree
+
+Discovery exports CSV/JSON for the explicitly labelled visible/selected set.
+CSV quotes cells and neutralizes spreadsheet formula prefixes; JSON preserves
+snapshot metadata, partial status and exported count. Local download only.
+Selected-device action opens import/destination, then existing scan configuration
+restricted to the selected IP values in fresh inventory and the chosen subtree.
+It sends existing target_id requests, never a whole-group fallback; blacklist and
+company scope apply, duplicate IP entries are deduplicated. Definite rejected
+requests can be retried without repeating confirmed successes; network/5xx
+uncertainty blocks retry and requires history review. Import alone does not run
+scans. Restricted scheduling uses the same eligible set. Successful import refreshes
+company context. Eight accepted presets remain; historical FR-10.5 is superseded.
+[Plan and QA](../04-development/plans/M11-DISCOVERY-UI-01.md). Browser export,
+single selected job, existing-device reuse and 390px toolbar PASS; task `[~]`.
+
 > Dominio: port/service discovery, vulnerability scanning e SSE. File: `backend/internal/scanner/`, `backend/internal/service/scan*`, `backend/internal/service/discovery_service.go`, handler scan/discovery, `frontend/src/components/NewScanModal.tsx`, `frontend/src/components/scans/`, pagine Scans/ScanDetail/NetworkDiscovery.
 
 ## 1. Contratto di esecuzione
@@ -82,6 +98,34 @@ OUI identifica l'assegnatario dell'interfaccia, non necessariamente il produttor
 - Esiste sovrapposizione tecnica fra Stage 2 e il profilo TCP 100; i flussi restano distinti: Discovery inventaria/importa asset, scansioni produce esecuzioni persistite, finding, storico e pianificazioni sugli asset censiti. I profili host-only sono tolti dalla modale, non dal contratto storico.
 
 ## 5. API e streaming
+
+M11-PERSIST-01 · 2026-10-18 · working tree: il server inietta un repository
+PostgreSQL discovery. Sessione creata prima di Nmap; ogni dispositivo viene
+confermato su DB prima dell'evento SSE; completamento persistito prima dell'evento
+terminale. Nessun fallback alla memoria se il DB fallisce. ID sessione riutilizzato
+→ 409 prima dello scanner. Letture e scritture filtrate per tenant; topic live
+includono tenant e sessione, anche se il client si sottoscrive prima dell'avvio.
+
+Il runner collega `StreamNmapXML` a stdout durante il processo tramite pipe:
+callback per ciascun elemento host XML completo, non per singolo pacchetto/probe.
+Host up discovery salvati subito con identità osservata; DNS/HTTP/porte aggiornano
+lo stesso IP dopo lo sweep. UI sostituisce il dispositivo esistente, senza duplicarlo.
+L'orchestratore correla/persiste anche i finding al completamento XML di ciascun
+host; errore DB interrompe il job, senza pubblicare finding non confermati.
+Il parsing finale supporta runner legacy senza duplicare gli host già processati.
+Un errore callback cancella il processo; timeout/cancellazione mantengono i dati
+già confermati e non pubblicano successo. XML finale mantenuto per statistiche.
+
+Replay SSE: sottoscrizione prima della lettura dello snapshot; sono possibili
+duplicati dello stesso IP, gestiti come aggiornamenti dal client. Un errore DB nel
+replay produce errore visibile e chiusura. Ultimi risultati: sessione più recente
+per data avvio/ID, anche incompleta, recuperabile da una nuova istanza del servizio.
+`completed_at` zero indica snapshot parziale; UI lo esplicita e permette ricarica.
+Solo HTTP 404 è archivio vuoto: errori di rete/auth/DB restano visibili. Nessuna
+ripresa automatica del processo dopo restart; nessun nuovo probe LAN eseguito da
+questi test. Trasporto live ancora locale all'istanza; replay durevole su riconnessione.
+Schema/rollback nel [database](../03-architecture/LLD/DATABASE_SCHEMA.md);
+contratto e gate nel [piano](../04-development/plans/M11-PERSIST-01.md).
 
 - `GET /api/v1/scan-profiles`: profili sistema/custom tenant.
 - `POST /api/v1/scan-profiles`: nome, nmap_args, descrizione, timeout_seconds, categoria; invasività calcolata server-side.

@@ -55,6 +55,12 @@ type SSHExecutor interface {
 	ExecuteCommand(ctx context.Context, tenantID, serverID uuid.UUID, cmd string) (stdout string, stderr string, exitCode int, err error)
 }
 
+// SSHInputExecutor transports snapshots as data rather than shell source.
+type SSHInputExecutor interface {
+	SSHExecutor
+	ExecuteCommandWithInput(ctx context.Context, tenantID, serverID uuid.UUID, cmd, input string) (stdout string, stderr string, exitCode int, err error)
+}
+
 // SSHService astrae la gestione dell'inventario dei server SSH e l'interazione sicura via RFC 4251
 type SSHService interface {
 	SSHExecutor
@@ -285,6 +291,14 @@ func (s *sshService) TestConnection(ctx context.Context, tenantID, serverID uuid
 
 // ExecuteCommand esegue un comando remoto via SSH catturando stdout, stderr ed exit code
 func (s *sshService) ExecuteCommand(ctx context.Context, tenantID, serverID uuid.UUID, cmd string) (string, string, int, error) {
+	return s.executeCommand(ctx, tenantID, serverID, cmd, "")
+}
+
+func (s *sshService) ExecuteCommandWithInput(ctx context.Context, tenantID, serverID uuid.UUID, cmd, input string) (string, string, int, error) {
+	return s.executeCommand(ctx, tenantID, serverID, cmd, input)
+}
+
+func (s *sshService) executeCommand(ctx context.Context, tenantID, serverID uuid.UUID, cmd, input string) (string, string, int, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	server, err := s.repo.GetByID(ctx, tenantID, serverID)
@@ -309,6 +323,9 @@ func (s *sshService) ExecuteCommand(ctx context.Context, tenantID, serverID uuid
 	var stdoutBuf, stderrBuf bytes.Buffer
 	session.Stdout = &stdoutBuf
 	session.Stderr = &stderrBuf
+	if input != "" {
+		session.Stdin = strings.NewReader(input)
+	}
 
 	err = session.Run(cmd)
 	if ctx.Err() != nil {

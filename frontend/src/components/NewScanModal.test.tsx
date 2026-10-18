@@ -42,6 +42,70 @@ beforeEach(() => {
 });
 
 describe('Minimal Nmap scan workflow', () => {
+  it('honors a blacklisted duplicate IP in the selected subtree', async () => {
+    vi.mocked(apiClient.get).mockImplementation(((url: string) => url.startsWith('/targets?') ? Promise.resolve(success({ items: [targets[0], { ...targets[0], id: 'duplicate-blocked', group_id: 'department', is_blacklisted: true }], total: 2 })) : get(url)) as never);
+    render(<NewScanModal isOpen onClose={vi.fn()} onScanLaunched={vi.fn()} targetValues={['192.168.1.10']} />);
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+    expect(launch().disabled).toBe(true);
+    expect(apiClient.post).not.toHaveBeenCalled();
+  });
+  it('schedules the chosen preset only for the selected eligible device', async () => {
+    const close = vi.fn();
+    render(<NewScanModal isOpen onClose={close} onScanLaunched={vi.fn()} targetValues={['192.168.1.10']} />);
+    await waitFor(() => expect(launch().disabled).toBe(false));
+    fireEvent.change(screen.getByLabelText('Tipo di scansione'), { target: { value: 'quick' } });
+    fireEvent.click(screen.getByLabelText('Pianifica scansione ricorrente'));
+    fireEvent.click(screen.getByRole('button', { name: 'Crea pianificazione' }));
+    await waitFor(() => expect(close).toHaveBeenCalledOnce());
+    expect(apiClient.post).toHaveBeenCalledWith('/scan-profiles', expect.objectContaining({ name: 'Porte TCP frequenti (100)', nmap_args: '-sS -F -T3', timeout_seconds: 900 }));
+    expect(vi.mocked(apiClient.post).mock.calls.filter(([url]) => url === '/schedules')).toEqual([['/schedules', { target_id: 'one', profile_id: 'created', cron_expression: '0 2 * * *', is_active: true }]]);
+  });
+  it('launches only the selected discovered IP and excludes other same-group and blacklisted targets', async () => {
+    const onScanLaunched = vi.fn();
+    vi.mocked(apiClient.post).mockImplementation(((url: string, body: object) => Promise.resolve(success(url === '/scan-profiles' ? { ...body, id: 'created' } : { id: 'scan-one' }))) as never);
+    render(<NewScanModal isOpen onClose={vi.fn()} onScanLaunched={onScanLaunched} targetValues={['192.168.1.10', '192.168.1.30']} />);
+    await waitFor(() => expect(launch().disabled).toBe(false));
+    fireEvent.click(launch());
+    await waitFor(() => expect(onScanLaunched).toHaveBeenCalledWith([{ id: 'scan-one' }]));
+    const requests = vi.mocked(apiClient.post).mock.calls.filter(([url]) => url === '/scans');
+    expect(requests).toEqual([['/scans', { target_id: 'one', profile_id: 'created' }]]);
+  });
+
+  it('retries only failed selected devices after a partial launch', async () => {
+    let secondAttempts = 0;
+    vi.mocked(apiClient.post).mockImplementation(((url: string, body: { target_id?: string }) => {
+      if (url === '/scan-profiles') return Promise.resolve(success({ ...body, id: 'created' }));
+      if (body.target_id === 'two' && ++secondAttempts === 1) return Promise.reject({ response: { status: 429 } });
+      return Promise.resolve(success({ id: `scan-${body.target_id}` }));
+    }) as never);
+    const close = vi.fn();
+    render(<NewScanModal isOpen onClose={close} onScanLaunched={vi.fn()} targetValues={['192.168.1.10', '192.168.1.20']} />);
+    await waitFor(() => expect(launch().disabled).toBe(false));
+    fireEvent.click(launch());
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', expect.stringContaining('1 non riuscite'));
+    expect(close).not.toHaveBeenCalled();
+    fireEvent.click(launch());
+    await waitFor(() => expect(close).toHaveBeenCalledOnce());
+    expect(vi.mocked(apiClient.post).mock.calls.filter(([url, body]) => url === '/scans' && (body as {target_id?: string}).target_id === 'one')).toHaveLength(1);
+  });
+
+  it('never expands an empty discovery selection to the entire company', async () => {
+    render(<NewScanModal isOpen onClose={vi.fn()} onScanLaunched={vi.fn()} targetValues={[]} />);
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+    expect(launch().disabled).toBe(true);
+    expect(apiClient.post).not.toHaveBeenCalled();
+  });
+
+  it('blocks retry after a lost launch response instead of risking a duplicate scan', async () => {
+    vi.mocked(apiClient.post).mockImplementation(((url: string, body: object) => url === '/scan-profiles' ? Promise.resolve(success({ ...body, id: 'created' })) : Promise.reject(new Error('connection lost'))) as never);
+    render(<NewScanModal isOpen onClose={vi.fn()} onScanLaunched={vi.fn()} targetValues={['192.168.1.10']} />);
+    await waitFor(() => expect(launch().disabled).toBe(false));
+    fireEvent.click(launch());
+    expect((await screen.findByRole('alert')).textContent).toContain('verifica lo storico');
+    expect(launch().disabled).toBe(true);
+    fireEvent.click(launch());
+    expect(vi.mocked(apiClient.post).mock.calls.filter(([url]) => url === '/scans')).toHaveLength(1);
+  });
   it('contains keyboard focus, closes on Escape and restores the previous focus', async () => {
     const trigger = document.createElement('button'); document.body.appendChild(trigger); trigger.focus();
     const props = await open(); const dialog = screen.getByRole('dialog');

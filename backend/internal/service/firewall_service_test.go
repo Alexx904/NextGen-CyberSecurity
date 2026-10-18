@@ -179,47 +179,30 @@ func TestParseIptablesOutput(t *testing.T) {
 	}
 }
 
-func TestFirewallRejectsInvalidWatchdogPIDBeforeMutation(t *testing.T) {
-	executor := &mockSSHExecutor{executeFunc: func(_ context.Context, _, _ uuid.UUID, cmd string) (string, string, int, error) {
-		if strings.Contains(cmd, "echo $!") {
-			return "not-a-pid", "", 0, nil
-		}
-		return "*filter\nCOMMIT", "", 0, nil
-	}}
-	svc := service.NewFirewallService(executor, newMockBackupRepo())
-	_, err := svc.AddRule(context.Background(), uuid.New(), uuid.New(), domain.FirewallRuleParams{Chain: domain.ChainInput, Action: domain.ActionDrop, Protocol: "tcp", Port: "443"}, true, 60)
-	if err == nil {
-		t.Fatal("invalid PID must prevent mutation")
+func TestFirewallRejectsInvalidTransactionBeforeAcknowledgement(t *testing.T) {
+	executor := &protocolFirewallExecutor{malformed: true}
+	repo := newMockBackupRepo()
+	svc := service.NewFirewallService(executor, repo)
+	_, err := svc.AddRule(context.Background(), uuid.New(), uuid.New(), domain.FirewallRuleParams{Chain: domain.ChainInput, Action: domain.ActionAccept}, true, 60)
+	if !errors.Is(err, domain.ErrSSHExecutionFailed) {
+		t.Fatalf("malformed transaction acknowledged: %v", err)
 	}
-	for _, cmd := range executor.commandLogs {
-		if strings.Contains(cmd, "iptables -A") {
-			t.Fatalf("mutation after invalid PID: %s", cmd)
-		}
+	if len(repo.backups) != 0 {
+		t.Fatal("malformed snapshot persisted")
 	}
 }
 
 func TestFirewallFailedConfirmOrRollbackKeepsWatchdog(t *testing.T) {
 	for _, operation := range []string{"confirm", "rollback"} {
 		t.Run(operation, func(t *testing.T) {
-			fail := false
-			executor := &mockSSHExecutor{executeFunc: func(_ context.Context, _, _ uuid.UUID, cmd string) (string, string, int, error) {
-				if fail && (strings.HasPrefix(cmd, "sudo kill") || strings.HasPrefix(cmd, "sudo iptables-restore")) {
-					return "", "failed", 1, nil
-				}
-				if strings.Contains(cmd, "echo $!") {
-					return "12345", "", 0, nil
-				}
-				if cmd == "sudo iptables-save" {
-					return "*filter\nCOMMIT", "", 0, nil
-				}
-				return sampleIptablesOutput, "", 0, nil
-			}}
-			svc := service.NewFirewallService(executor, newMockBackupRepo())
+			executor := &protocolFirewallExecutor{}
+			repo := newMockBackupRepo()
+			svc := service.NewFirewallService(executor, repo)
 			tenant, id := uuid.New(), uuid.New()
 			if _, err := svc.ApplyWithSafetyTimer(context.Background(), tenant, id, 60); err != nil {
 				t.Fatal(err)
 			}
-			fail = true
+			executor.failAction = operation
 			var err error
 			if operation == "confirm" {
 				err = svc.Confirm(context.Background(), tenant, id)
@@ -231,10 +214,11 @@ func TestFirewallFailedConfirmOrRollbackKeepsWatchdog(t *testing.T) {
 			}
 			status, err := svc.GetStatus(context.Background(), tenant, id)
 			if err != nil || !status.ActiveSafetyTimer {
-				t.Fatalf("watchdog lost: %+v %v", status, err)
+				t.Fatalf("remote protection lost: %+v %v", status, err)
 			}
-			fail = false
-			if err := svc.Confirm(context.Background(), tenant, id); err != nil {
+			executor.failAction = ""
+			// A fresh service instance sees and confirms the same remote state.
+			if err := service.NewFirewallService(executor, repo).Confirm(context.Background(), tenant, id); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -242,13 +226,8 @@ func TestFirewallFailedConfirmOrRollbackKeepsWatchdog(t *testing.T) {
 }
 
 func TestFirewallConcurrentTimerPreparation(t *testing.T) {
-	executor := &mockSSHExecutor{executeFunc: func(_ context.Context, _, _ uuid.UUID, cmd string) (string, string, int, error) {
-		if strings.Contains(cmd, "echo $!") {
-			return "12345", "", 0, nil
-		}
-		return sampleIptablesOutput, "", 0, nil
-	}}
-	svc := service.NewFirewallService(executor, newMockBackupRepo())
+	executor := &protocolFirewallExecutor{}
+	repo := newMockBackupRepo()
 	tenant, id := uuid.New(), uuid.New()
 	errs := make(chan error, 2)
 	var wg sync.WaitGroup
@@ -256,7 +235,7 @@ func TestFirewallConcurrentTimerPreparation(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := svc.ApplyWithSafetyTimer(context.Background(), tenant, id, 60)
+			_, err := service.NewFirewallService(executor, repo).ApplyWithSafetyTimer(context.Background(), tenant, id, 60)
 			errs <- err
 		}()
 	}
@@ -275,7 +254,7 @@ func TestFirewallConcurrentTimerPreparation(t *testing.T) {
 	if success != 1 || conflicts != 1 {
 		t.Fatalf("success %d conflicts %d", success, conflicts)
 	}
-	if err := svc.Confirm(context.Background(), tenant, id); err != nil {
+	if err := service.NewFirewallService(executor, repo).Confirm(context.Background(), tenant, id); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -319,12 +298,7 @@ func TestBuildIptablesAddCommand(t *testing.T) {
 
 func TestFirewallMutationCannotDisableSafetyTimer(t *testing.T) {
 	for _, remove := range []bool{false, true} {
-		executor := &mockSSHExecutor{executeFunc: func(_ context.Context, _, _ uuid.UUID, cmd string) (string, string, int, error) {
-			if cmd == "sudo iptables-save" {
-				return "", "snapshot refused", 1, nil
-			}
-			return sampleIptablesOutput, "", 0, nil
-		}}
+		executor := &protocolFirewallExecutor{rejectSnapshot: true}
 		svc := service.NewFirewallService(executor, newMockBackupRepo())
 		tenant, server := uuid.New(), uuid.New()
 		var err error
@@ -336,8 +310,8 @@ func TestFirewallMutationCannotDisableSafetyTimer(t *testing.T) {
 		if err == nil {
 			t.Fatal("mutation bypassed failed safety snapshot")
 		}
-		if len(executor.commandLogs) != 1 || executor.commandLogs[0] != "sudo iptables-save" {
-			t.Fatalf("unexpected commands: %v", executor.commandLogs)
+		if len(executor.commands) != 1 || !strings.Contains(executor.commands[0], "nextgen-firewall 'apply'") {
+			t.Fatal("legacy false flag bypassed the atomic protection request")
 		}
 	}
 }
@@ -377,30 +351,13 @@ func TestFirewallRejectsInvalidTimeoutBeforeSSH(t *testing.T) {
 }
 
 func TestFirewallService_GetStatus(t *testing.T) {
-	executor := &mockSSHExecutor{
-		executeFunc: func(ctx context.Context, tenantID, serverID uuid.UUID, cmd string) (string, string, int, error) {
-			if strings.Contains(cmd, "iptables -L") {
-				return sampleIptablesOutput, "", 0, nil
-			}
-			return "", "", 0, nil
-		},
-	}
-	repo := newMockBackupRepo()
-	svc := service.NewFirewallService(executor, repo)
-
-	tenantID := uuid.New()
-	serverID := uuid.New()
-
-	status, err := svc.GetStatus(context.Background(), tenantID, serverID)
+	svc := service.NewFirewallService(&protocolFirewallExecutor{}, newMockBackupRepo())
+	status, err := svc.GetStatus(context.Background(), uuid.New(), uuid.New())
 	if err != nil {
-		t.Fatalf("GetStatus fallito: %v", err)
+		t.Fatal(err)
 	}
-
-	if status.ActiveSafetyTimer {
-		t.Errorf("nessun safety timer doveva essere attivo")
-	}
-	if len(status.Chains) != 3 {
-		t.Errorf("attese 3 catene, ottenute %d", len(status.Chains))
+	if status.ActiveSafetyTimer || len(status.Chains) != 3 {
+		t.Fatalf("incorrect remote status: %+v", status)
 	}
 }
 
@@ -416,7 +373,7 @@ func TestFirewallStatusUnattendedAccess(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			executor := &mockSSHExecutor{executeFunc: func(_ context.Context, _, _ uuid.UUID, cmd string) (string, string, int, error) {
-				if !strings.Contains(cmd, "sudo -n iptables") || !strings.Contains(cmd, "id -u") || !strings.Contains(cmd, "/usr/sbin") {
+				if !strings.Contains(cmd, "sudo -n") || !strings.Contains(cmd, "id -u") || !strings.Contains(cmd, "/usr/sbin") {
 					t.Error("firewall status does not support root/PATH/noninteractive sudo")
 				}
 				return "", tc.stderr, tc.code, errors.New("exit status")
@@ -430,120 +387,47 @@ func TestFirewallStatusUnattendedAccess(t *testing.T) {
 }
 
 func TestFirewallService_AddRule_WithSafetyTimer_And_Confirm(t *testing.T) {
-	executor := &mockSSHExecutor{
-		executeFunc: func(ctx context.Context, tenantID, serverID uuid.UUID, cmd string) (string, string, int, error) {
-			if strings.Contains(cmd, "iptables-save") {
-				return "# Raw rules\n*filter\n:INPUT ACCEPT [0:0]\nCOMMIT\n", "", 0, nil
-			}
-			if strings.Contains(cmd, "echo $!") {
-				return "98765\n", "", 0, nil
-			}
-			if strings.Contains(cmd, "iptables -L") {
-				return sampleIptablesOutput, "", 0, nil
-			}
-			return "", "", 0, nil
-		},
-	}
+	executor := &protocolFirewallExecutor{}
 	repo := newMockBackupRepo()
 	svc := service.NewFirewallService(executor, repo)
-
-	tenantID := uuid.New()
-	serverID := uuid.New()
-
-	params := domain.FirewallRuleParams{
-		Chain:    domain.ChainInput,
-		Action:   domain.ActionAccept,
-		Protocol: "tcp",
-		Port:     "8080",
+	tenant, server := uuid.New(), uuid.New()
+	status, err := svc.AddRule(context.Background(), tenant, server, domain.FirewallRuleParams{Chain: domain.ChainInput, Action: domain.ActionAccept, Protocol: "tcp", Port: "8080"}, true, 60)
+	if err != nil || !status.ActiveSafetyTimer || status.SafetyTimeoutSeconds != 60 {
+		t.Fatalf("protection not active: %+v %v", status, err)
 	}
-
-	// 1. Add rule with safety timer
-	status, err := svc.AddRule(context.Background(), tenantID, serverID, params, true, 60)
-	if err != nil {
-		t.Fatalf("AddRule fallito: %v", err)
+	latest, err := repo.GetLatestBackup(context.Background(), tenant, server)
+	if err != nil || !strings.Contains(latest.RawIptablesRules, "*filter") || latest.ID != executor.token {
+		t.Fatalf("transaction backup not persisted: %+v %v", latest, err)
 	}
-
-	if !status.ActiveSafetyTimer {
-		t.Errorf("il safety timer doveva risultare attivo")
+	if _, err := svc.ApplyWithSafetyTimer(context.Background(), tenant, server, 60); !errors.Is(err, domain.ErrSafetyTimerActive) {
+		t.Fatalf("overlap accepted: %v", err)
 	}
-	if status.SafetyTimeoutSeconds != 60 {
-		t.Errorf("atteso timeout di 60 secondi, ottenuto: %d", status.SafetyTimeoutSeconds)
+	if err := svc.Confirm(context.Background(), tenant, server); err != nil {
+		t.Fatal(err)
 	}
-
-	// Verifica che lo snapshot sia stato salvato nel repository
-	latestBackup, err := repo.GetLatestBackup(context.Background(), tenantID, serverID)
-	if err != nil {
-		t.Fatalf("GetLatestBackup fallito: %v", err)
+	status, err = svc.GetStatus(context.Background(), tenant, server)
+	if err != nil || status.ActiveSafetyTimer {
+		t.Fatal("confirmed state remained pending")
 	}
-	if !strings.Contains(latestBackup.RawIptablesRules, "*filter") {
-		t.Errorf("contenuto backup non conforme: %s", latestBackup.RawIptablesRules)
-	}
-
-	// 2. Tentativo di avviare un secondo safety timer sullo stesso server deve dare ErrSafetyTimerActive
-	_, err = svc.ApplyWithSafetyTimer(context.Background(), tenantID, serverID, 60)
-	if !errors.Is(err, domain.ErrSafetyTimerActive) {
-		t.Errorf("atteso ErrSafetyTimerActive, ottenuto: %v", err)
-	}
-
-	// 3. Confirm
-	if err := svc.Confirm(context.Background(), tenantID, serverID); err != nil {
-		t.Fatalf("Confirm fallito: %v", err)
-	}
-
-	// 4. Dopo confirm, GetStatus deve mostrare timer non più attivo
-	statusAfter, _ := svc.GetStatus(context.Background(), tenantID, serverID)
-	if statusAfter.ActiveSafetyTimer {
-		t.Errorf("dopo confirm il timer non deve essere attivo")
-	}
-
-	// 5. Secondo Confirm deve restituire ErrNoSafetyTimerActive
-	err = svc.Confirm(context.Background(), tenantID, serverID)
-	if !errors.Is(err, domain.ErrNoSafetyTimerActive) {
-		t.Errorf("atteso ErrNoSafetyTimerActive, ottenuto: %v", err)
+	if err := svc.Confirm(context.Background(), tenant, server); !errors.Is(err, domain.ErrNoSafetyTimerActive) {
+		t.Fatalf("duplicate confirm accepted: %v", err)
 	}
 }
 
 func TestFirewallService_Rollback(t *testing.T) {
-	restoreExecuted := false
-	executor := &mockSSHExecutor{
-		executeFunc: func(ctx context.Context, tenantID, serverID uuid.UUID, cmd string) (string, string, int, error) {
-			if strings.Contains(cmd, "iptables-restore") {
-				restoreExecuted = true
-				return "", "", 0, nil
-			}
-			if strings.Contains(cmd, "iptables-save") {
-				return "*filter\n:INPUT ACCEPT [0:0]\nCOMMIT\n", "", 0, nil
-			}
-			if strings.Contains(cmd, "iptables -L") {
-				return sampleIptablesOutput, "", 0, nil
-			}
-			return "", "", 0, nil
-		},
-	}
+	executor := &protocolFirewallExecutor{}
 	repo := newMockBackupRepo()
 	svc := service.NewFirewallService(executor, repo)
-
-	tenantID := uuid.New()
-	serverID := uuid.New()
-
-	// Inserimento manuale backup di test
-	backup := &domain.FirewallBackup{
-		ID:               uuid.New(),
-		TenantID:         tenantID,
-		ServerID:         serverID,
-		RawIptablesRules: "*filter\n:INPUT ACCEPT [0:0]\nCOMMIT\n",
-		Label:            "Manual initial snapshot",
-		CreatedAt:        time.Now().UTC(),
-	}
+	tenant, server := uuid.New(), uuid.New()
+	backup := &domain.FirewallBackup{ID: uuid.New(), TenantID: tenant, ServerID: server, RawIptablesRules: "*filter\n# snapshot data with EOF and $(id)\n:INPUT ACCEPT [0:0]\nCOMMIT\n", Label: "Manual fixture", CreatedAt: time.Now().UTC()}
 	_ = repo.CreateBackup(context.Background(), backup)
-
-	// Esecuzione rollback esplicito
-	err := svc.Rollback(context.Background(), tenantID, serverID, &backup.ID)
-	if err != nil {
-		t.Fatalf("Rollback fallito: %v", err)
+	if err := svc.Rollback(context.Background(), tenant, server, &backup.ID); err != nil {
+		t.Fatal(err)
 	}
-
-	if !restoreExecuted {
-		t.Errorf("il comando iptables-restore doveva essere eseguito")
+	if len(executor.inputs) != 2 || executor.inputs[1] != backup.RawIptablesRules {
+		t.Fatal("snapshot was not sent as stdin data")
+	}
+	if strings.Contains(executor.commands[1], backup.RawIptablesRules) {
+		t.Fatal("snapshot injected into shell source")
 	}
 }

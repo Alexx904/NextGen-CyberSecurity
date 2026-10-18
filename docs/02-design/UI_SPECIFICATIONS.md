@@ -1,5 +1,35 @@
 # UI Specifications
 
+> Publication scope 2026-10-18: alert-channel / outbox / migration 000012 sections describe deferred T4/T5 design and local prototype evidence. Their code and routes are excluded from this release; published migration is 000011. Alert-specific commands are future gates.
+
+
+E28-S1-T2 · 2026-10-18 · working tree: "Neutralizza Chokepoint" opens a focused,
+scrolling mitigation dialog for supported SERVICE nodes. Explicit server choice,
+backend preview, returned rule/command/timeout and impact acknowledgement precede
+"Applica blocco porta". Missing pin/empty inventory/loading/unsupported nodes block
+apply. A fresh server selection clears preview and consent. Success opens existing
+FirewallManager; uncertain outcomes offer "Verifica stato firewall" without retry.
+Auditor has no mutation action. Scope change dismisses an unapplied dialog.
+Keyboard focus containment/Escape supported; complete browser gate pending.
+
+M11-DISCOVERY-UI-01 · 2026-10-18 · working tree: discovery CSV/JSON buttons label
+the exported count and visible/selected set. Selected scan action opens import
+with company destination preselected, then existing scan configuration scoped
+to those IPs; no launch occurs on import alone. Empty/blacklisted/out-of-scope
+selection cannot fall back to the whole company. Confirmed partial launches are
+not repeated; uncertain network/5xx outcomes block retry pending history review.
+Toolbar wraps on smaller widths. Eight accepted scanner presets remain unchanged.
+
+M11-FIREWALL-01 · 2026-10-18 · working tree: firewall policy ACCEPT/DROP,
+full rule replacement and up/down ordering use the loaded revision. Pending
+transactions disable mutations; expired pending state remains visible, polls
+the host, and cannot be confirmed. Missing revision explains why edits are disabled.
+Replacement warns about advanced flags; changing TCP/UDP to ICMP/all clears port.
+Rule dialog supports Escape/Tab focus containment and returns focus to its opener.
+Terminal opens lazily on request, docked below the firewall with optional full
+screen; closing while ticket acquisition is pending cannot open a late session.
+Browser check of this build is pending.
+
 M11-REPORT-01 · 2026-10-18 · working tree: Report con filtri etichettati per giorni
 UTC inclusivi, profilo, target e cartella; severità massima esatta. Opzioni dallo
 storico completo nello scope. Periodo invertito con `role=alert`, reset filtri,
@@ -69,3 +99,24 @@ Accettazione funzionale PO del 2026-10-16: scansioni testate e dichiarate corret
 Ultimo allineamento: 2026-10-16 · working tree. Il PO conferma scope intero gruppo. Card compatta nella pagina Scansioni per ultimo lotto lanciato: percentuale stimata, barra accessibile, conteggi per stato e intervallo residuo quando disponibile. Aggiornamento ogni 5s; nessun punto percentuale inventato in assenza di telemetria. Messaggio «in calcolo» in coda, statistiche scadute o fase senza ETA. Il 100% indica tutti i job terminati e mantiene visibili errori/annullamenti. Ricaricamento recupera ID lotto della sessione tenant; la card non aggrega lo storico e non viene mescolata con i filtri tabellari.
 
 Dettaglio singolo continua a mostrare SSE e barra totale del job (senza la vecchia barra duplicata), distinguendo percentuale della fase da stima totale. Test automatici includono polling, ripristino sessione, gruppi oltre 50 job, errori e assenza di ETA; visuale reale ancora non disponibile.
+## Virtual patch panel (E28-S1-T3)
+
+Finding detail opens a separate keyboard-accessible panel with product, catalog
+revision/coverage, strategy and operational impact before the engine selector.
+Fail2ban/CrowdSec/ModSecurity/Nginx previews have per-file copy/download. Missing
+coverage has an explicit unsupported state without exports. Load/export errors
+remain visible; Escape closes and restores focus, Tab cycles inside. Long text
+and snippets wrap/scroll on mobile. [Behavior and verified limits](../domains/active_defense_and_soar.md#virtual-patch-templates-e28-s1-t3-in-progress).
+
+## Notification channels in Settings (E28-S1-T5)
+
+Tenant administrators see an independent channel card below branding. List,
+loading/error/empty, inline form and two-step removal are keyboard operable.
+New channel defaults disabled, tenant/company scope and explicit event selection;
+provider fields explain TLS/public destination policy. Existing credentials are
+never displayed: metadata edits omit configuration, replacement is explicit and
+required on provider change. Test button requires acknowledgement and tests the
+draft without saving/activating. Config changes clear acknowledgement/result.
+Accepted test asks operator to check receipt; failure never claims delivery.
+Draft secrets clear on close/save and do not enter diagnostic exports.
+[Contract and limits](../domains/active_defense_and_soar.md#alerting-hub-e28-s1-t4t5-in-progress).

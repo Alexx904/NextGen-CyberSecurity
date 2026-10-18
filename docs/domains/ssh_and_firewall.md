@@ -2,7 +2,50 @@
 
 Decisione PO 2026-10-18: supporto iptables e iptables-nft con modello corrente
 INPUT/OUTPUT/FORWARD. Nessun gestore nativo di tabelle/catene nftables richiesto.
-La compatibilità iptables-nft va collaudata in laboratorio, non dedotta dal nome.
+Compatibilità iptables-nft e iptables-legacy verificata nel laboratorio descritto
+sotto; nessuna prova su host cliente.
+
+## M11-FIREWALL-01 · Remote transaction · 2026-10-18 · working tree
+
+Supersedes the local timer/PID lifecycle described by earlier increments.
+Snapshot, watchdog readiness and mutation run under one remote `flock` shared
+by all application instances using the same managed SSH UID. Private state in
+`/tmp/nextgen-fw-<uid>` must belong to that UID with mode 0700 and no symlink.
+Random transaction IDs bind pending state to tenant/server. Other accounts,
+administrators, host reboot and removal of temporary state are outside this
+coordination/persistence boundary.
+
+The watchdog starts before mutation, survives SSH closure, and restores under
+the same lock at expiry. Failed restores retain pending state and retry. Confirm
+checks the tenant/server DB backup and removes the matching pending marker;
+it never kills a PID. Remote application precedes DB backup persistence; DB
+failure returns an error and leaves rollback armed. Rollback streams the raw
+snapshot on SSH stdin, without evaluating it as shell source. A local timeout
+does not imply that remote execution stopped.
+
+Remote prerequisites: sh, flock, stat, nohup, date, sha256sum, awk, core file/sleep
+utilities and iptables/save/restore. Root executes directly; other SSH users need
+noninteractive sudo for those individual iptables tools, including restore test.
+No remote installation or privileged shell is granted automatically.
+
+Revision is SHA256 of canonical `iptables -S`, computed under the remote lock.
+New policy/replacement/move operations require the revision; new UI supplies it
+for add/delete too. Stale revisions return 409 before snapshot/mutation. Move
+preserves complete saved filter rules and other tables; replacement explicitly
+uses only the visible form fields and warns that advanced options are replaced.
+Policy supports ACCEPT/DROP. Existing SecOps, TenantAdmin and SuperAdmin access
+and tenant-owned SSH inventory checks apply.
+
+UI retains expired-but-pending state and polls it, disables confirmation after
+expiry, and opens the docked terminal only on explicit action. Closing a terminal
+while its ticket is pending cannot open a late WebSocket. Standalone mode remains.
+[Plan and measured Linux/OpenSSH checks](../04-development/plans/M11-FIREWALL-01.md).
+Browser proves expiry, confirmation, moving, policy and docked SSH I/O on the
+authorized isolated fixture. Numeric iptables-nft protocol IDs 0/1/6/17 normalize
+to all/icmp/tcp/udp; unknown numbers remain read-only. Replacement on the corrected
+source and company-switch regression pass in browser. Task `[~]`, awaits PO.
+FR-13 follow-up records WS state and frame-size metadata, without terminal content
+or ticket query; [diagnostic contract](debug_console.md). Real WS filter/export PASS.
 
 ## M11-CLOSE-01 · Validazione mutazioni · 2026-10-18 · working tree
 
@@ -12,7 +55,8 @@ vuoto/`*` senza filtro; commenti UTF-8 massimo 255 byte senza controlli e quotat
 come singolo argomento shell. Il timer è obbligatorio per add/delete anche con
 flag legacy false; timeout 0 = 60s, intervallo accettato 10..300s. Input invalidi
 rifiutati prima di ogni comando SSH. Nessuna nuova garanzia watchdog Linux:
-TECH-DEBT-07 resta aperto. [Piano](../04-development/plans/M11-CLOSE-01.md).
+The later remote transaction above addresses the lifecycle; its browser gate
+remains open. [Historical first-increment plan](../04-development/plans/M11-CLOSE-01.md).
 
 ## SSH-TOOLS-01 · Proxy terminale e prerequisiti firewall · 2026-10-17 · working tree
 
@@ -55,9 +99,9 @@ durata interattiva dopo l'handshake. API additive, migrazione 000010 up/down:
 legacy rimane inventariato ma non connettibile; down perde solo i pin host.
 Re-upgrade richiede nuova configurazione, mai riuso del fingerprint client.
 
-TECH-DEBT-07 resta aperto: la transazione remota snapshot/watchdog/applicazione,
-il coordinamento fra istanze e il collaudo Linux timeout/disconnessione/rollback
-non sono risolti dalle sole deadline. E28-S1-T1 non promosso per questo incremento.
+The deadline increment alone did not resolve TECH-DEBT-07; see the later remote
+transaction and its separate Linux/OpenSSH evidence above. E28-S1-T1 requires
+its own complete remediation gates.
 Piano e verifiche: [SSH-HARDEN-01](../04-development/plans/SSH-HARDEN-01.md).
 
 ## COMPANY-UX-02 · Clienti autonomi · 2026-10-17 · working tree
@@ -88,11 +132,14 @@ API create accetta stringa `client_name`; update omesso conserva, stringa vuota 
 
 ### 2.2 Safety Rollback Timer (Protezione Anti-Lockout Remota)
 - Per prevenire il blocco accidentale dell'amministratore (lockout dalla porta 22):
-  1. Prima dell'applicazione delle nuove regole, viene salvato uno snapshot consistente in `FIREWALL_BACKUPS`.
-  2. Viene applicata la nuova configurazione e attivato un timer asincrono server-side remoto distaccato (`nohup sh -c 'sleep 60 && (iptables-restore < backup || sudo iptables-restore < backup)' >/dev/null 2>&1 &`).
-  3. L'esecuzione remota garantisce che il rollback avvenga anche in caso di disconnessione della sessione SSH o di crash del backend.
-  4. L'utente deve inviare un comando esplicito di conferma (`POST /api/v1/ssh/servers/{id}/firewall/confirm`).
-  5. Se confermato in tempo, il processo di ripristino remoto viene terminato (`kill`), rendendo definitive le regole.
+  1. Remote lock protects snapshot, watchdog readiness and mutation; see the
+     current transaction contract above.
+  2. The successful remote response is persisted in `FIREWALL_BACKUPS` before
+     acknowledging the pending mutation to the caller.
+  3. The detached watchdog restores after expiry independently of backend memory
+     or SSH connection, while host/tools/state remain available.
+  4. Explicit confirmation before expiry removes the matching pending marker;
+     failed rollback retains protection for retry. No PID cancellation is used.
 
 ---
 

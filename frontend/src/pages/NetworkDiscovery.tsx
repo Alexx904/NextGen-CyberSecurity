@@ -28,7 +28,10 @@ import {
   DiscoveryCompletePayload,
   DiscoveryErrorPayload,
 } from '../types/discovery';
-import { TargetGroupNode } from '../types/target';
+import { TargetGroupNode, TargetItem, TargetListResponseData } from '../types/target';
+import { useCompany } from '../context/CompanyContext';
+import { NewScanModal } from '../components/NewScanModal';
+import { saveDiscoveryExport } from '../utils/discoveryExport';
 
 interface FlattenedGroup {
   id: string;
@@ -39,6 +42,10 @@ interface FlattenedGroup {
 
 export const NetworkDiscovery: React.FC = () => {
   const navigate = useNavigate();
+  const { selectedCompanyId, refreshCompanies } = useCompany();
+  const [scanSelection, setScanSelection] = useState<{ values: string[]; groupId: string } | null>(null);
+  const [importForScan, setImportForScan] = useState(false);
+  const [launchedScanCount, setLaunchedScanCount] = useState(0);
 
   // Stato input e parametri scansione
   const [subnet, setSubnet] = useState<string>('192.168.1.0/24');
@@ -76,10 +83,10 @@ export const NetworkDiscovery: React.FC = () => {
         if (payload?.device) {
           setDiscoveryResult((prev) => {
             const currentDevices = prev?.devices || [];
-            if (currentDevices.some((d) => d.ip === payload.device.ip)) {
-              return prev;
-            }
-            const updated = [payload.device, ...currentDevices];
+            const exists = currentDevices.some((device) => device.ip === payload.device.ip);
+            const updated = exists
+              ? currentDevices.map((device) => device.ip === payload.device.ip ? payload.device : device)
+              : [payload.device, ...currentDevices];
             return {
               id: prev?.id || payload.session_id,
               tenant_id: prev?.tenant_id || '',
@@ -190,8 +197,8 @@ export const NetworkDiscovery: React.FC = () => {
           setSubnet(res.subnet);
         }
       }
-    } catch (err: any) {
-      // Se 404 è normale al primo avvio
+    } catch {
+      setError('Impossibile recuperare i risultati discovery salvati. Riprova con Ricarica risultati.');
     } finally {
       setLoadingInitial(false);
     }
@@ -295,7 +302,9 @@ export const NetworkDiscovery: React.FC = () => {
   };
 
   // Importazione massiva nei target
-  const handleOpenImportModal = () => {
+  const handleOpenImportModal = (forScan = false) => {
+    setImportForScan(forScan);
+    setTargetGroupId(selectedCompanyId || '');
     setImportError(null);
     setImportResult(null);
     setImportMode('select');
@@ -356,11 +365,38 @@ export const NetworkDiscovery: React.FC = () => {
       }));
 
     try {
-      const res = await discoveryApi.importTargets({
+      let existingIPs = new Set<string>();
+      if (importForScan) {
+        if (!finalGroupId) throw new Error('Scegli una cartella per configurare la scansione.');
+        const scopeIDs = new Set([finalGroupId]);
+        const groupIndex = groupOptions.findIndex(group => group.id === finalGroupId);
+        if (groupIndex >= 0) {
+          for (let i = groupIndex + 1; i < groupOptions.length && groupOptions[i].depth > groupOptions[groupIndex].depth; i++) scopeIDs.add(groupOptions[i].id);
+        }
+        const inventory: TargetItem[] = [];
+        let offset = 0;
+        while (true) {
+          const response = await apiClient.get<ApiResponse<TargetListResponseData>>(`/targets?limit=200&offset=${offset}`);
+          const page = response.data.success && response.data.data;
+          if (!page || (!page.items.length && offset < page.total)) throw new Error('Inventario target incompleto. Riprova.');
+          inventory.push(...page.items);
+          offset += page.items.length;
+          if (offset >= page.total) break;
+        }
+        existingIPs = new Set(inventory.filter(target => target.group_id && scopeIDs.has(target.group_id)).map(target => target.value));
+      }
+      const missingDevices = devicesToImport.filter(device => !existingIPs.has(device.ip));
+      const res: ImportTargetsResponseData = missingDevices.length ? await discoveryApi.importTargets({
         group_id: finalGroupId,
-        devices: devicesToImport,
-      });
+        devices: missingDevices,
+      }) : { group_id: finalGroupId, total_imported: 0, total_skipped: devicesToImport.length, imported: [] };
       setImportResult(res);
+      void refreshCompanies();
+      if (importForScan && finalGroupId && !res.errors?.length) {
+        setScanSelection({ values: [...selectedIPs], groupId: finalGroupId });
+        setLaunchedScanCount(0);
+        setIsImportModalOpen(false);
+      }
     } catch (err: any) {
       setImportError(err.message || 'Errore durante l\'importazione dei target');
     } finally {
@@ -470,6 +506,7 @@ export const NetworkDiscovery: React.FC = () => {
               disabled={isScanning}
               className="p-2.5 rounded-lg border border-cyber-border bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
               title="Ricarica ultimi risultati memorizzati"
+              aria-label="Ricarica risultati"
             >
               <RefreshCw className="w-4 h-4" />
             </button>
@@ -543,9 +580,16 @@ export const NetworkDiscovery: React.FC = () => {
 
       {/* Notifica di errore */}
       {error && (
-        <div className="p-4 rounded-xl border border-rose-900/50 bg-rose-950/20 flex items-center space-x-3 text-rose-300">
+        <div role="alert" className="p-4 rounded-xl border border-rose-900/50 bg-rose-950/20 flex items-center space-x-3 text-rose-300">
           <AlertCircle className="w-5 h-5 flex-shrink-0 text-rose-400" />
           <div className="text-sm font-medium">{error}</div>
+        </div>
+      )}
+
+      {!isScanning && discoveryResult && (!discoveryResult.completed_at || discoveryResult.completed_at.startsWith('0001-')) && (
+        <div role="status" className="p-4 rounded-xl border border-amber-900/50 bg-amber-950/20 text-sm text-amber-200">
+          Risultati parziali salvati. Il completamento della ricognizione non è confermato.
+          {' '}Usa Ricarica risultati per recuperare gli aggiornamenti disponibili oppure avvia una nuova discovery.
         </div>
       )}
 
@@ -563,7 +607,7 @@ export const NetworkDiscovery: React.FC = () => {
             />
           </div>
 
-          <div className="flex items-center space-x-3 text-xs">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="text-slate-400">
               Mostrati <strong className="text-white">{filteredDevices.length}</strong> di{' '}
               <strong className="text-white">{discoveryResult.devices.length}</strong> host
@@ -572,13 +616,18 @@ export const NetworkDiscovery: React.FC = () => {
             {selectedIPs.size > 0 && (
               <button
                 type="button"
-                onClick={handleOpenImportModal}
+                onClick={() => handleOpenImportModal()}
                 className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold shadow-[0_0_15px_rgba(16,185,129,0.25)] transition-all"
               >
                 <FolderPlus className="w-3.5 h-3.5" />
                 <span>Importa Selezionati ({selectedIPs.size})</span>
               </button>
             )}
+            {selectedIPs.size > 0 && <button type="button" onClick={() => handleOpenImportModal(true)} className="rounded-lg border border-cyan-700 px-3 py-1.5 text-cyan-300">Scansiona selezionati ({selectedIPs.size})</button>}
+            {(['csv', 'json'] as const).map(format => <button key={format} type="button" onClick={() => {
+              const devices = selectedIPs.size ? discoveryResult.devices.filter(device => selectedIPs.has(device.ip)) : filteredDevices;
+              saveDiscoveryExport(discoveryResult, devices, format);
+            }} className="rounded-lg border border-slate-700 px-2 py-1.5 text-slate-200">{format.toUpperCase()} ({selectedIPs.size ? `${selectedIPs.size} selezionati` : `${filteredDevices.length} visibili`})</button>)}
           </div>
         </div>
       )}
@@ -804,7 +853,7 @@ export const NetworkDiscovery: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={handleOpenImportModal}
+              onClick={() => handleOpenImportModal()}
               className="flex items-center space-x-1.5 px-4 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-lg transition-all"
             >
               <FolderPlus className="w-3.5 h-3.5" />
@@ -813,6 +862,9 @@ export const NetworkDiscovery: React.FC = () => {
           </div>
         </div>
       )}
+
+      {launchedScanCount > 0 && <p role="status" className="mt-3 text-sm text-emerald-300">{launchedScanCount} scansioni avviate. <button type="button" onClick={() => navigate('/scans')} className="underline">Vai alle scansioni</button></p>}
+      {scanSelection && <NewScanModal isOpen onClose={() => setScanSelection(null)} defaultGroupId={scanSelection.groupId} targetValues={scanSelection.values} onScanLaunched={scans => setLaunchedScanCount(count => count + (scans?.length || 0))} />}
 
       {/* Modal di Importazione Massiva */}
       {isImportModalOpen && (
@@ -969,7 +1021,7 @@ export const NetworkDiscovery: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleExecuteImport}
-                    disabled={isImporting}
+                    disabled={isImporting || (importForScan && importMode === 'select' && !targetGroupId)}
                     className="flex items-center space-x-1.5 px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition-all shadow-md"
                   >
                     {isImporting ? (
@@ -980,7 +1032,7 @@ export const NetworkDiscovery: React.FC = () => {
                     ) : (
                       <>
                         <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Conferma Importazione</span>
+                        <span>{importForScan ? 'Importa e configura scansione' : 'Conferma Importazione'}</span>
                       </>
                     )}
                   </button>
@@ -1031,6 +1083,12 @@ export const NetworkDiscovery: React.FC = () => {
                   >
                     Chiudi
                   </button>
+                  {importForScan && importResult.group_id && <button type="button" onClick={() => {
+                    const failed = new Set(importResult.errors?.map(item => item.ip));
+                    setScanSelection({ values: [...selectedIPs].filter(ip => !failed.has(ip)), groupId: importResult.group_id! });
+                    setLaunchedScanCount(0);
+                    setIsImportModalOpen(false);
+                  }} className="px-3 py-2 text-cyan-300">Configura scansione dispositivi importati</button>}
                   <button
                     type="button"
                     onClick={() => navigate('/targets')}

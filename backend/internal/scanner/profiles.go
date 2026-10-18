@@ -33,6 +33,7 @@ const (
 
 // ProfileConfig racchiude le specifiche operative di un profilo di scansione Nmap
 type ProfileConfig struct {
+	OnHost       HostCallback               `json:"-"`
 	OnProgress   func(TaskProgress)         `json:"-"`
 	Name         string                     `json:"name"`
 	Args         []string                   `json:"args"`

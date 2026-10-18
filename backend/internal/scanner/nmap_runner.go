@@ -122,7 +122,9 @@ func (r *NmapRunner) RunScan(ctx context.Context, target string, profile Profile
 	}
 	r.logger.Info("Esecuzione comando Nmap", "binary", r.binaryPath, "profile", profile.Name, "target", target, "args", strings.Join(args, " "))
 	// 3. Creazione del processo senza shell di sistema (exec.CommandContext diretto)
-	cmd := r.cmdFactory(ctx, r.binaryPath, args...)
+	processCtx, cancelProcess := context.WithCancel(ctx)
+	defer cancelProcess()
+	cmd := r.cmdFactory(processCtx, r.binaryPath, args...)
 
 	// 4. Configurazione Graceful Cancellation: propagazione SIGTERM e WaitDelay (NFR-REL-01)
 	cmd.Cancel = func() error {
@@ -144,9 +146,30 @@ func (r *NmapRunner) RunScan(ctx context.Context, target string, profile Profile
 		cmd.Stdout = io.MultiWriter(&stdoutBuf, &progressWriter{onProgress: profile.OnProgress})
 	}
 	cmd.Stderr = &stderrBuf
+	var hostWriter *io.PipeWriter
+	var hostDone chan error
+	if profile.OnHost != nil {
+		reader, writer := io.Pipe()
+		hostWriter = writer
+		hostDone = make(chan error, 1)
+		cmd.Stdout = io.MultiWriter(cmd.Stdout, writer)
+		go func() {
+			_, err := StreamNmapXML(reader, profile.OnHost)
+			_ = reader.CloseWithError(err)
+			if err != nil {
+				cancelProcess()
+			}
+			hostDone <- err
+		}()
+	}
 
 	// 5. Esecuzione del processo
 	runErr := cmd.Run()
+	var hostErr error
+	if hostWriter != nil {
+		_ = hostWriter.Close()
+		hostErr = <-hostDone
+	}
 	duration := time.Since(start)
 
 	exitCode := 0
@@ -187,6 +210,9 @@ func (r *NmapRunner) RunScan(ctx context.Context, target string, profile Profile
 	}
 
 	// 7. Gestione errore del processo Nmap
+	if hostErr != nil {
+		return result, fmt.Errorf("stream Nmap hosts: %w", hostErr)
+	}
 	if runErr != nil {
 		r.logger.Error("Esecuzione Nmap terminata con errore",
 			"exit_code", exitCode,

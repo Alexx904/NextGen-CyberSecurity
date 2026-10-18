@@ -4,6 +4,66 @@
 
 ## 7. Architecture Decision Records (ADR)
 
+### ADR-26 · Transactional alert outbox and restricted egress (2026-10-18)
+
+- Context: in-memory notification callbacks could lose persisted findings on a
+  crash. Tenant-admin destinations also create SSRF and credential disclosure
+  risks, including secret URL paths in client diagnostics.
+- Decision: migration 000012 adds encrypted channel configuration, observation
+  baselines and a durable outbox. Source triggers queue events in the source
+  transaction; tenant advisory locks serialize observations across host batches.
+  Job claims use SKIP LOCKED, leases and tokens, six attempts and bounded
+  exponential backoff with provider delay. Channel changes cancel unclaimed
+  old messages; workers recheck current tenant/company/revision before sending.
+  Admin-only destination management and explicit synthetic-test consent; no
+  plaintext configuration returned or logged. Public HTTPS/TLS SMTP only,
+  validated DNS at dial time, no redirects or environment proxies.
+- Consequences: at-least-once delivery, possible duplicates and in-flight sends
+  after disable are explicit. Transactional enqueue failure fails the source
+  write. Tenant write serialization, historical baseline cost, retained delivery
+  audit and queue capacity need operational measurement. Private relays require
+  a separately reviewed policy. Root companies with channels cannot be silently
+  reparented/deleted. Existing history is not replayed to a newly added channel.
+  Teams uses current Workflows cards. TLS-certificate expiry remains unimplemented
+  until an observed certificate model exists; it is not inferred from banners.
+  [Contract and QA plan](../../04-development/plans/E28-S1-T4-alerting.md).
+
+### ADR-25 · Host-owned firewall transaction (2026-10-18)
+
+- Context: local timers and separate remote commands allowed overlap across
+  backend instances and late changes after local SSH cancellation.
+- Decision: snapshot, ready detached watchdog and mutation share a remote flock
+  per managed UID. Private host state binds a random token to tenant/server;
+  confirm/rollback/expiry use the same lock and token, without killing PIDs.
+  Persist the returned backup before acknowledging; DB failure keeps protection.
+  Snapshot travels on SSH stdin. Revision-checked editor prevents stale writes;
+  move preserves saved rule data, replacement explicitly replaces form fields.
+- Supersedes the process-local lifecycle of ADR-16 and historical PID cancellation
+  in the SSH domain. Extends ADR-20/21 without weakening pins or mandatory timers.
+- Consequences: remote tools/sudo prerequisites are checked without installation;
+  same UID is the coordination boundary. Host reboot, deleted temporary state,
+  independent administrators/accounts remain limitations. No new schema/library.
+  Linux iptables-nft and real OpenSSH disconnect/late-mutation checks are separate
+  from unit tests; browser gate remains required. [Plan](../../04-development/plans/M11-FIREWALL-01.md).
+
+### ADR-24 · Snapshot discovery durevoli e host streaming (2026-10-18)
+
+- Contesto: `sessionResults` viveva solo nel processo; `StreamNmapXML` esisteva
+  ma il runner consegnava host/finding dopo la fine di Nmap. Replay letto prima
+  della sottoscrizione; topic discovery privo del tenant.
+- Decisione: due tabelle normalizzate con FK tenant/sessione e upsert dispositivo
+  per IP; scrittura prima di SSE, errore DB interrompe senza successo. Runner
+  collega stdout al parser tramite pipe e attende il join prima di ritornare;
+  errore callback cancella il processo. Finding gestiti nella stessa callback,
+  parsing finale senza duplicati. Subscribe prima del replay, topic tenant/sessione.
+- Compatibilità: payload invariati, 409 per ID sessione già usato, ultima sessione
+  anche incompleta; UI espone snapshot parziali ed errori di recupero. Nessuna
+  ripresa automatica del job dopo restart; pub/sub live ancora in memoria locale.
+- Conseguenze: migrazione 000011 con down distruttivo del solo storico discovery;
+  backup delle nuove tabelle prima di rollback su dati da conservare. Nessuna nuova
+  dipendenza applicativa; test DB dedicati, streaming subprocess e gate All.
+  [Contratto e prove](../../04-development/plans/M11-PERSIST-01.md).
+
 <a id="adr-23"></a>
 
 ### ADR-23 · Contesto progressivo e procedure specializzate (2026-10-18)

@@ -1,11 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { NetworkDiscovery } from './NetworkDiscovery';
 import { DebugProvider } from '../context/DebugContext';
 import { discoveryApi } from '../api/discovery';
 import { apiClient } from '../api/client';
 import { debugLogger } from '../utils/debugLogger';
+
+vi.mock('../context/CompanyContext', () => ({
+  useCompany: () => ({ selectedCompanyId: null, refreshCompanies: vi.fn() }),
+  getAllDescendantGroupIds: (node: { id: string }) => [node.id],
+}));
 
 // Mock EventSource
 class MockEventSource {
@@ -94,6 +99,28 @@ describe('NetworkDiscovery Live Real-Time SSE Integration', () => {
       </MemoryRouter>
     );
 
+  it.each([false, true])('configures only the selected device, already inventoried=%s', async (alreadyImported) => {
+    let inventoryReady = alreadyImported;
+    vi.mocked(discoveryApi.getLastResults).mockResolvedValue({ id: 'session', tenant_id: 'tenant', subnet: '192.0.2.0/30', total_discovered: 2, duration_seconds: 1, started_at: '', completed_at: '2026-10-18T00:00:00Z', devices: [1, 2].map(n => ({ ip: `192.0.2.${n}`, status: 'up', latency_ms: 1, scanned_at: '' })) });
+    vi.mocked(apiClient.get).mockImplementation((async (url: string) => ({ data: { success: true, data: url === '/target-groups' ? [{ id: 'qa', name: 'QA', children: [] }] : url === '/scan-profiles' ? { items: [] } : { items: inventoryReady ? [1, 2].map(n => ({ id: `target-${n}`, group_id: 'qa', value: `192.0.2.${n}`, is_blacklisted: false })) : [], total: inventoryReady ? 2 : 0 } } })) as never);
+    vi.spyOn(discoveryApi, 'importTargets').mockImplementation(async () => {
+      inventoryReady = true;
+      return { group_id: 'qa', total_imported: 1, total_skipped: 0, imported: [{ id: 'target-1', value: '192.0.2.1', type: 'IP', group_id: 'qa', created_at: '' }] };
+    });
+    vi.spyOn(apiClient, 'post').mockImplementation((async (url: string, body: object) => ({ data: { success: true, data: url === '/scan-profiles' ? { ...body, id: 'profile' } : { id: 'scan' } } })) as never);
+    renderComponent();
+    fireEvent.click(within(await screen.findByRole('row', { name: /192\.0\.2\.1/ })).getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Scansiona selezionati (1)' }));
+    fireEvent.change(screen.getByLabelText('Cartella Scope (Gerarchia ad Albero)'), { target: { value: 'qa' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Importa e configura scansione' }));
+    const launch = await screen.findByRole('button', { name: 'Avvia scansione' });
+    await waitFor(() => expect((launch as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(launch);
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/scans', { target_id: 'target-1', profile_id: 'profile' }));
+    expect(vi.mocked(apiClient.post).mock.calls.filter(([url]) => url === '/scans')).toHaveLength(1);
+    expect(discoveryApi.importTargets).toHaveBeenCalledTimes(alreadyImported ? 0 : 1);
+  });
+
   it('renders initial state with default subnet and empty discovery message', async () => {
     renderComponent();
 
@@ -104,6 +131,31 @@ describe('NetworkDiscovery Live Real-Time SSE Integration', () => {
     await waitFor(() => {
       expect(screen.getByText('Nessuna scansione discovery eseguita')).toBeDefined();
     });
+  });
+
+  it('restores a partial persisted snapshot and reloads its completed version', async () => {
+    const snapshot = {
+      id: 'recovered-session', tenant_id: 'tenant', subnet: '192.168.2.0/24',
+      devices: [{ ip: '192.168.2.10', hostname: 'saved-device', latency_ms: 1, status: 'up', scanned_at: '2026-10-18T10:00:00Z' }],
+      total_discovered: 1, duration_seconds: 0, started_at: '2026-10-18T10:00:00Z', completed_at: '0001-01-01T00:00:00Z',
+    };
+    vi.mocked(discoveryApi.getLastResults).mockResolvedValueOnce(snapshot)
+      .mockResolvedValueOnce({ ...snapshot, completed_at: '2026-10-18T10:00:10Z', duration_seconds: 10 });
+    renderComponent();
+    expect(await screen.findByText('saved-device')).toBeDefined();
+    expect(screen.getByRole('status').textContent).toContain('Risultati parziali salvati');
+    expect(MockEventSource.instances).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Ricarica risultati' }));
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+    expect(screen.getByText('saved-device')).toBeDefined();
+  });
+
+  it('shows a recovery error and supports retry', async () => {
+    vi.mocked(discoveryApi.getLastResults).mockRejectedValueOnce(new Error('Database unavailable'));
+    renderComponent();
+    expect((await screen.findByRole('alert')).textContent).toContain('Impossibile recuperare');
+    fireEvent.click(screen.getByRole('button', { name: 'Ricarica risultati' }));
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
   });
 
   it('streams progressive progress and newly discovered devices into the table in real-time', async () => {

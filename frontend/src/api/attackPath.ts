@@ -1,8 +1,18 @@
 import { apiClient } from './client';
 import { ApiResponse } from '../types/auth';
-import { AttackGraph, AttackGraphFilterParams, Chokepoint } from '../types/attackPath';
+import { AttackGraph, AttackGraphFilterParams, Chokepoint, ChokepointRemediationResult } from '../types/attackPath';
 
 export const attackPathApi = {
+  previewRemediation: async (nodeId: string, serverId: string): Promise<ChokepointRemediationResult> => {
+    const res = await apiClient.post<ApiResponse<ChokepointRemediationResult>>(`/attack-paths/chokepoints/${encodeURIComponent(nodeId)}/preview`, { server_id: serverId });
+    if (!res.data.success || !res.data.data) throw new Error(res.data.error?.message || 'Preview non disponibile');
+    return res.data.data;
+  },
+  remediate: async (nodeId: string, serverId: string): Promise<ChokepointRemediationResult> => {
+    const res = await apiClient.post<ApiResponse<ChokepointRemediationResult>>(`/attack-paths/chokepoints/${encodeURIComponent(nodeId)}/remediate`, { server_id: serverId });
+    if (!res.data.success || !res.data.data) throw new Error(res.data.error?.message || 'Applicazione non confermata; verifica il firewall');
+    return res.data.data;
+  },
   /**
    * Recupera la topologia completa del grafo delle minacce e dei percorsi di attacco.
    * Accetta opzionalmente min_cvss per filtrare vulnerabilità a bassa criticità.

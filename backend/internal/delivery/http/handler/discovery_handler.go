@@ -101,6 +101,10 @@ func (h *DiscoveryHandler) Scan(w http.ResponseWriter, r *http.Request) {
 		SessionID:          req.SessionID,
 	})
 	if err != nil {
+		if errors.Is(err, domain.ErrConflict) {
+			response.Error(w, http.StatusConflict, "SESSION_CONFLICT", "Discovery session ID already used")
+			return
+		}
 		if errors.Is(err, domain.ErrTargetInternalRestricted) {
 			response.Error(w, http.StatusBadRequest, "TARGET_RESTRICTED", err.Error())
 			return
@@ -195,8 +199,23 @@ func (h *DiscoveryHandler) Stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Replay dispositivi già censiti per questa sessione (NFR-REL-05)
-	if existingResult, err := h.discoveryService.GetSessionResults(ctx, tenantID, sessionID); err == nil && existingResult != nil {
+	// Subscribe before replay to close the snapshot/subscription race. Device IPs
+	// may be replayed twice; clients deduplicate them.
+	topic := domain.TenantDiscoveryTopic(tenantID, sessionID)
+	ch, unsubscribe := h.broadcaster.Subscribe(ctx, topic)
+	defer unsubscribe()
+
+	existingResult, replayErr := h.discoveryService.GetSessionResults(ctx, tenantID, sessionID)
+	if replayErr != nil && !errors.Is(replayErr, domain.ErrNotFound) {
+		event := domain.SSEEvent{Event: domain.EventDiscoveryError, Data: domain.DiscoveryErrorPayload{SessionID: sessionID, Message: "Unable to recover discovery results"}}
+		if data, err := event.FormatBytes(); err == nil {
+			_, _ = w.Write(data)
+			flusher.Flush()
+		}
+		return
+	}
+	// Replay devices already committed for this tenant and session.
+	if replayErr == nil && existingResult != nil {
 		for _, dev := range existingResult.Devices {
 			devEvent := domain.SSEEvent{
 				Event: domain.EventDeviceDiscovered,
@@ -228,10 +247,6 @@ func (h *DiscoveryHandler) Stream(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-
-	topic := domain.DiscoveryTopic(sessionID)
-	ch, unsubscribe := h.broadcaster.Subscribe(ctx, topic)
-	defer unsubscribe()
 
 	for {
 		select {

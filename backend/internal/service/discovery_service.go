@@ -29,6 +29,7 @@ type discoveryService struct {
 	arpCache    scanner.ARPCache
 	logger      *slog.Logger
 	broadcaster EventBroadcaster
+	repository  domain.DiscoveryRepository
 
 	mu             sync.RWMutex
 	results        map[uuid.UUID]*domain.DiscoveryResult
@@ -37,7 +38,7 @@ type discoveryService struct {
 }
 
 // NewDiscoveryService inizializza il servizio per la ricognizione veloce della rete locale
-func NewDiscoveryService(runner scanner.Runner, ouiDB scanner.OUIDatabase, logger *slog.Logger, broadcaster EventBroadcaster) domain.DiscoveryService {
+func NewDiscoveryService(runner scanner.Runner, ouiDB scanner.OUIDatabase, logger *slog.Logger, broadcaster EventBroadcaster, repositories ...domain.DiscoveryRepository) domain.DiscoveryService {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -45,7 +46,12 @@ func NewDiscoveryService(runner scanner.Runner, ouiDB scanner.OUIDatabase, logge
 		ouiDB = scanner.NewOUIDatabase()
 	}
 
+	var repository domain.DiscoveryRepository
+	if len(repositories) > 0 {
+		repository = repositories[0]
+	}
 	return &discoveryService{
+		repository:     repository,
 		runner:         runner,
 		ouiDB:          ouiDB,
 		arpCache:       scanner.NewARPCache(),
@@ -97,7 +103,7 @@ func (s *discoveryService) DiscoverSubnet(ctx context.Context, tenantID uuid.UUI
 	if req.SessionID != nil && *req.SessionID != uuid.Nil {
 		sessionID = *req.SessionID
 	}
-	topic := domain.DiscoveryTopic(sessionID)
+	topic := domain.TenantDiscoveryTopic(tenantID, sessionID)
 
 	s.logger.Info("avvio scansione LAN discovery (Stage 1 Sweep)",
 		slog.String("tenant_id", tenantID.String()),
@@ -109,8 +115,7 @@ func (s *discoveryService) DiscoverSubnet(ctx context.Context, tenantID uuid.UUI
 	startTime := time.Now()
 
 	// Inizializza il record della sessione per persistenza incrementale
-	s.mu.Lock()
-	s.sessionResults[sessionID] = &domain.DiscoveryResult{
+	initial := &domain.DiscoveryResult{
 		ID:              sessionID,
 		TenantID:        tenantID,
 		Subnet:          targetInfo.CleanValue,
@@ -118,7 +123,19 @@ func (s *discoveryService) DiscoverSubnet(ctx context.Context, tenantID uuid.UUI
 		TotalDiscovered: 0,
 		StartedAt:       startTime,
 	}
-	s.mu.Unlock()
+	if s.repository != nil {
+		if err := s.repository.Create(ctx, initial); err != nil {
+			return nil, fmt.Errorf("create discovery snapshot: %w", err)
+		}
+	} else {
+		s.mu.Lock()
+		if _, exists := s.sessionResults[sessionID]; exists {
+			s.mu.Unlock()
+			return nil, domain.ErrConflict
+		}
+		s.sessionResults[sessionID] = initial
+		s.mu.Unlock()
+	}
 
 	// Notifica avvio scansione (0%)
 	s.publishEvent(topic, domain.SSEEvent{
@@ -133,6 +150,22 @@ func (s *discoveryService) DiscoverSubnet(ctx context.Context, tenantID uuid.UUI
 	})
 
 	// 4. Esecuzione Nmap Stage 1
+	profile.OnHost = func(host scanner.ParsedHost) error {
+		if host.Status != "up" || host.IP == "" || isNetworkOrBroadcast(host.IP, targetInfo.CleanValue) {
+			return nil
+		}
+		mac := scanner.NormalizeMAC(host.MAC)
+		vendor := host.Vendor
+		if mac != "" && (vendor == "" || vendor == "Unknown") {
+			vendor = s.ouiDB.Lookup(mac)
+		}
+		// Publish the observed identity immediately. DNS/HTTP/port enrichment
+		// updates the same persisted IP after the sweep, without delaying it.
+		return s.recordDevice(ctx, tenantID, sessionID, topic, domain.DiscoveredDevice{
+			IP: host.IP, MAC: mac, Vendor: vendor, Hostname: host.PrimaryHostname,
+			LatencyMs: host.LatencyMs, Status: "up", ScannedAt: time.Now().UTC(),
+		})
+	}
 	execResult, err := s.runner.RunScan(ctx, targetInfo.CleanValue, profile)
 	if err != nil {
 		s.logger.Error("esecuzione scansione LAN discovery fallita",
@@ -390,23 +423,9 @@ func (s *discoveryService) DiscoverSubnet(ctx context.Context, tenantID uuid.UUI
 			ScannedAt: scanTimestamp,
 		}
 		devices = append(devices, device)
-
-		// Salvataggio incrementale nel contesto di sessione
-		s.mu.Lock()
-		if sRes, ok := s.sessionResults[sessionID]; ok {
-			sRes.Devices = append(sRes.Devices, device)
-			sRes.TotalDiscovered = len(sRes.Devices)
+		if err := s.recordDevice(ctx, tenantID, sessionID, topic, device); err != nil {
+			return nil, err
 		}
-		s.mu.Unlock()
-
-		// Notifica push istantanea SSE del dispositivo identificato
-		s.publishEvent(topic, domain.SSEEvent{
-			Event: domain.EventDeviceDiscovered,
-			Data: domain.DeviceDiscoveredPayload{
-				SessionID: sessionID,
-				Device:    device,
-			},
-		})
 
 		// Avanzamento percentuale progressivo tra 50% e 99%
 		progressPct := 50.0 + (float64(idx+1)/float64(len(upHosts)))*49.0
@@ -442,12 +461,20 @@ func (s *discoveryService) DiscoverSubnet(ctx context.Context, tenantID uuid.UUI
 		StartedAt:       resultStarted,
 		CompletedAt:     scanTimestamp,
 	}
+	if s.repository != nil {
+		if err := s.repository.Complete(ctx, discoveryResult); err != nil {
+			s.publishPersistenceError(topic, sessionID)
+			return nil, fmt.Errorf("complete discovery snapshot: %w", err)
+		}
+	}
 
 	// 11. Salvataggio in cache in-memory per il tenant e la sessione
-	s.mu.Lock()
-	s.results[tenantID] = discoveryResult
-	s.sessionResults[sessionID] = discoveryResult
-	s.mu.Unlock()
+	if s.repository == nil {
+		s.mu.Lock()
+		s.results[tenantID] = discoveryResult
+		s.sessionResults[sessionID] = discoveryResult
+		s.mu.Unlock()
+	}
 
 	// Notifica evento di completamento finale SSE
 	s.publishEvent(topic, domain.SSEEvent{
@@ -502,6 +529,9 @@ func (s *discoveryService) GetLastResults(ctx context.Context, tenantID uuid.UUI
 	if tenantID == uuid.Nil {
 		return nil, fmt.Errorf("%w: tenant ID non valido", domain.ErrValidation)
 	}
+	if s.repository != nil {
+		return s.repository.GetLast(ctx, tenantID)
+	}
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -511,13 +541,16 @@ func (s *discoveryService) GetLastResults(ctx context.Context, tenantID uuid.UUI
 		return nil, domain.ErrNotFound
 	}
 
-	return res, nil
+	return cloneDiscoveryResult(res), nil
 }
 
 // GetSessionResults recupera i risultati parziali o completi di una specifica sessione di scansione
 func (s *discoveryService) GetSessionResults(ctx context.Context, tenantID, sessionID uuid.UUID) (*domain.DiscoveryResult, error) {
 	if tenantID == uuid.Nil || sessionID == uuid.Nil {
 		return nil, fmt.Errorf("%w: parametri identificativi non validi", domain.ErrValidation)
+	}
+	if s.repository != nil {
+		return s.repository.GetSession(ctx, tenantID, sessionID)
 	}
 
 	s.mu.RLock()
@@ -528,13 +561,64 @@ func (s *discoveryService) GetSessionResults(ctx context.Context, tenantID, sess
 		return nil, domain.ErrNotFound
 	}
 
-	// Restituisce una copia shallow sicura
+	return cloneDiscoveryResult(res), nil
+}
+
+func cloneDiscoveryResult(res *domain.DiscoveryResult) *domain.DiscoveryResult {
 	copied := *res
 	copied.Devices = make([]domain.DiscoveredDevice, len(res.Devices))
 	copy(copied.Devices, res.Devices)
-
-	return &copied, nil
+	for i := range copied.Devices {
+		copied.Devices[i].OpenPorts = append([]int(nil), copied.Devices[i].OpenPorts...)
+	}
+	return &copied
 }
+
+func (s *discoveryService) publishPersistenceError(topic string, sessionID uuid.UUID) {
+	s.publishEvent(topic, domain.SSEEvent{
+		Event: domain.EventDiscoveryError,
+		Data:  domain.DiscoveryErrorPayload{SessionID: sessionID, Message: "Unable to save discovery results"},
+	})
+}
+
+func (s *discoveryService) recordDevice(ctx context.Context, tenantID, sessionID uuid.UUID, topic string, device domain.DiscoveredDevice) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if s.repository != nil {
+		if err := s.repository.SaveDevice(ctx, tenantID, sessionID, device); err != nil {
+			s.publishPersistenceError(topic, sessionID)
+			return &discoveryPersistenceError{cause: err}
+		}
+	} else {
+		s.mu.Lock()
+		if result, ok := s.sessionResults[sessionID]; ok {
+			index := -1
+			for i := range result.Devices {
+				if result.Devices[i].IP == device.IP {
+					index = i
+					break
+				}
+			}
+			if index >= 0 {
+				result.Devices[index] = device
+			} else {
+				result.Devices = append(result.Devices, device)
+			}
+			result.TotalDiscovered = len(result.Devices)
+		}
+		s.mu.Unlock()
+	}
+	s.publishEvent(topic, domain.SSEEvent{Event: domain.EventDeviceDiscovered, Data: domain.DeviceDiscoveredPayload{SessionID: sessionID, Device: device}})
+	return nil
+}
+
+// Keep database diagnostics out of scanner/SSE error strings while preserving
+// errors.Is for cancellation and internal diagnostics.
+type discoveryPersistenceError struct{ cause error }
+
+func (e *discoveryPersistenceError) Error() string { return "unable to persist discovery device" }
+func (e *discoveryPersistenceError) Unwrap() error { return e.cause }
 
 func (s *discoveryService) publishEvent(topic string, event domain.SSEEvent) {
 	if s.broadcaster != nil {

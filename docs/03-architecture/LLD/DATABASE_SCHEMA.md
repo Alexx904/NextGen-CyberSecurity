@@ -1,9 +1,48 @@
 # Database Schema
 
+> Publication scope 2026-10-18: alert-channel / outbox / migration 000012 sections describe deferred T4/T5 design and local prototype evidence. Their code and routes are excluded from this release; published migration is 000011. Alert-specific commands are future gates.
+
+
 > Responsabile: Lead Developer; revisione Software Architect. Schema descrittivo migrato, non nuova verifica del database.
 > Fonte eseguibile: migrazioni versionate in `backend/internal/repository/migrations/`. Aggiornare questo documento con ogni modifica dello schema.
 
 ## 4. Schema Database (ERD Esteso)
+
+E28-S1-T4 · 2026-10-18 · working tree: `000012` adds `alert_channels`
+(tenant, optional root company, provider, enabled/events, encrypted config,
+created/updated/deleted timestamps), `alert_observations` (tenant/entity key,
+normalized identity signature) and `alert_jobs` (event payload, state, attempts,
+next attempt, lease/token and redacted result code). Composite tenant/channel
+and tenant/company foreign keys prevent cross-tenant references. Company FK
+uses deferred NO ACTION so a tenant cascade can remove all owned data; removing
+an in-use company alone fails. Guard triggers reject reparenting a company with
+non-deleted channels. Deleting a channel soft-deletes metadata, disables it,
+clears company/config and preserves delivery history. Pending old messages are
+cancelled on relevant configuration changes; in-flight requests may complete.
+
+Finding/discovery/scheduled terminal-status triggers enqueue in the source
+transaction. Observation locks serialize source writes per tenant, with no new
+messages for unchanged findings or latency/time/port-order-only updates. Existing
+history is baselined at migration time without notifications. Delivery is
+at-least-once with six attempts and 30-second leased claims; token/revision
+checks reject stale ownership. Claim index covers pending/sending due times.
+No automatic retention purge or production-scale migration benchmark is claimed.
+Down drops only alert tables/triggers/functions and its composite company index;
+it destroys alert config/observations/history, cannot recall sent messages and
+requires a backup of the three tables for application rollback. Up/down/up is
+tested only on the disposable local `nextgen_discovery_test` database.
+[Contract/evidence](../../04-development/plans/E28-S1-T4-alerting.md), ADR-26.
+
+M11-PERSIST-01 · 2026-10-18 · working tree: `000011` aggiunge
+`discovery_sessions` e `discovery_devices`. ID sessione globale univoco;
+FK composta `(tenant_id, session_id)` impedisce dispositivi di tenant diversi.
+Un dispositivo JSONB per IP (`INET`), upsert durante la scansione; metadati e
+dispositivi letti con un unico snapshot SQL. Indice tenant/data/ID per l'ultima
+sessione, anche parziale; nessuno stato COMPLETED inferito da un riavvio.
+CASCADE tenant→sessioni→dispositivi intenzionale per dati posseduti dal tenant.
+Down rimuove solo le due nuove tabelle e perde lo storico discovery: eseguire
+backup di entrambe prima di rollback applicativi. Prove solo sul DB sacrificabile
+`nextgen_discovery_test`, porta locale 55432; [piano](../../04-development/plans/M11-PERSIST-01.md).
 
 TEST-OPT-01 · Ultimo allineamento 2026-10-17 · working tree: schema e migrazioni invariati. Test repository PostgreSQL con tag `integration`, configurazione `TEST_DB_*` esclusiva su host locale e database dedicato `_test`/`_test_<id>`; nessun fallback su DB applicativo e indisponibilità = FAIL. Percorso rapido senza DB. Contratto operativo e comandi nel [Test Plan](../../05-qa/TEST_PLAN.md).
 
@@ -169,26 +208,17 @@ erDiagram
     DISCOVERY_SESSIONS {
         uuid id PK
         uuid tenant_id FK
-        string target_subnet
-        integer total_hosts
-        integer alive_hosts
-        string status "RUNNING, COMPLETED, FAILED"
+        string subnet
         timestamp started_at
         timestamp completed_at
-        timestamp created_at
+        float duration_seconds
     }
 
     DISCOVERY_DEVICES {
-        uuid id PK
-        uuid session_id FK
-        uuid tenant_id FK
-        string ip
-        string mac_address
-        string vendor
-        string hostname
-        float latency_ms
-        jsonb ports_open
-        timestamp created_at
+        uuid session_id PK,FK
+        uuid tenant_id PK,FK
+        inet ip PK
+        jsonb device
     }
 ```
 

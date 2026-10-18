@@ -389,11 +389,11 @@ func TestDiscoveryService_LiveStreamingEvents(t *testing.T) {
 	svc := NewDiscoveryService(runner, ouiDB, nil, broadcaster)
 
 	sessionID := uuid.New()
-	topic := domain.DiscoveryTopic(sessionID)
+	tenantID := uuid.New()
+	topic := domain.TenantDiscoveryTopic(tenantID, sessionID)
 	ch, unsub := broadcaster.Subscribe(context.Background(), topic)
 	defer unsub()
 
-	tenantID := uuid.New()
 	req := domain.DiscoveryRequest{
 		Subnet:    "192.168.1.0/24",
 		SessionID: &sessionID,
@@ -475,11 +475,11 @@ func TestDiscoveryService_ErrorEventEmission(t *testing.T) {
 	svc := NewDiscoveryService(runner, nil, nil, broadcaster)
 
 	sessionID := uuid.New()
-	topic := domain.DiscoveryTopic(sessionID)
+	tenantID := uuid.New()
+	topic := domain.TenantDiscoveryTopic(tenantID, sessionID)
 	ch, unsub := broadcaster.Subscribe(context.Background(), topic)
 	defer unsub()
 
-	tenantID := uuid.New()
 	_, err := svc.DiscoverSubnet(context.Background(), tenantID, domain.DiscoveryRequest{
 		Subnet:    "192.168.1.0/24",
 		SessionID: &sessionID,

@@ -64,7 +64,7 @@
   - Selezione multipla dispositivi con aggiunta diretta ai Target (con scelta della cartella nell'albero).
   - Lancio immediato di scansione approfondita di sicurezza Nmap sui nodi selezionati.
   - Esportazione elenco dispositivi in formato CSV / JSON.
-- **FR-10.5 (Profilo di Scansione):** Integrazione del profilo `LAN Device Discovery` anche nel flusso standard delle Scansioni e nello Scheduler.
+- **FR-10.5 (Historical scan profile, superseded):** The original LAN Device Discovery preset in the scan wizard was superseded by accepted FEAT-WORKFLOW-CLEANUP-02 and SCAN-UX-01: host-only discovery is centralized in `/network-discovery`; the standard wizard retains its eight port/service presets and custom command contract. Historical backend profiles remain compatible. Do not reintroduce a host-only preset to satisfy this obsolete UI requirement.
 
 ### FR-11: Gestione Remota Server SSH, Firewall GUI (`iptables`/`nftables`) & Web Terminal
 - **FR-11.1 (Gestione Host SSH):** Anagrafica server remoti per tenant: nome mnemonico, IP/FQDN, porta SSH (default 22), utente.
@@ -99,7 +99,7 @@
 - **FR-13.2 (Client-Side Full Interceptor):**
   - **Chiamate HTTP REST:** Intercettazione trasparente di richieste e risposte Axios (metodo HTTP, URL, query params, request body, status code HTTP, durata in millisecondi, response body o errore).
   - **Eventi Push SSE:** Registrazione automatica degli eventi in arrivo dagli stream Server-Sent Events (`device_discovered`, `phase`, `progress`, `finding_discovered`, `status_change`, `error`).
-  - **Frame WebSocket:** Tracciamento dei frame e dello stato di connessione del terminale remoto SSH.
+  - **Frame WebSocket:** Tracciamento di direzione e dimensione dei frame e dello stato di connessione del terminale SSH; contenuto libero del terminale e query del ticket esclusi dai log per evitare la conservazione di segreti non strutturati.
   - **Errori e Warning JS:** Cattura globale degli errori non gestiti (`window.onerror`, `unhandledrejection`) e delle chiamate a `console.error` / `console.warn`.
 - **FR-13.3 (Filtro e Ispezione Rapida degli Errori):**
   - Barra di filtraggio rapido per livello: `ALL`, `ERROR`, `WARN`, `INFO`.
@@ -209,6 +209,23 @@ Contratto e limiti nel [dominio Active Defense](../domains/active_defense_and_so
 - **FR-21.2 (AI Executive Summaries nei Report):** Sintesi narrativa intelligente generata dall'AI per l'Executive Report PDF: traduce l'impatto tecnico di CVE e porte aperte in scenari di rischio di business comprensibili a board direzionali e figure non tecniche.
 - **FR-21.3 (Conversational Assistant "Ask Infrastructure"):** Barra di ricerca e assistente conversazionale contestuale: l'analista può porre domande in linguaggio naturale (es. *"Quali host del reparto Vendite hanno versioni vulnerabili di Apache?"*, *"Come si propaga l'attaccante dal web server al database?"*) ricevendo risposte puntuali derivate dallo stato reale dell'inventario su PostgreSQL.
 
+### FR-22: Exploit Intelligence & Applicability (Milestone 6)
+- Correlare finding e servizi osservati con riferimenti a exploit/PoC pubblici e moduli Metasploit Framework, mostrando CVE, fonte/data, versione del catalogo, piattaforma, prerequisiti e motivazione della compatibilità.
+- Esplicitare dati mancanti, patch/backport e limiti del fingerprinting; distinguere associazione potenziale e vulnerabilità validata. Segnalare l'eventuale presenza nel catalogo CISA KEV senza dedurre vulnerabilità dell'host.
+- Consultazione senza esecuzione di moduli, download/esecuzione automatica di PoC o invio di inventario riservato a servizi esterni. Salvare i riferimenti nel report con provenienza e stato della verifica.
+
+### FR-23: Vulnerability Validation (Milestone 7)
+- Worker Metasploit separato, raggiungibile dal backend tramite API RPC autenticata e protetta; mai esposto direttamente al browser. Enforcement tenant/perimetro nel backend e nel worker; workspace del motore non sufficiente come isolamento.
+- Controlli selezionati e revisionati per modulo/versione, con indicazione di prerequisiti, impatto e disponibilità di `check`; nessuna classificazione automatica di `check` come innocuo.
+- Prima dell'esecuzione: autorizzazione registrata con asset ammessi, tecniche, finestra, operatore e condizioni di arresto; rivalidare destinazioni risolte, tenant e scadenza dell'autorizzazione.
+- Job tracciati con timeout, cancellazione, gestione disconnessioni, evidenze minimizzate e redatte, versione del modulo e risultati non confermati/inconcludenti distinti. Credenziali fuori da log e report.
+
+### FR-24: Controlled Penetration Testing & Retest (Milestone 8)
+- Eseguire soltanto prove di sfruttamento selezionate e autorizzate nel perimetro registrato; escludere dalla prima versione campagne autonome, persistenza, raccolta indiscriminata di dati, movimento laterale automatico e test distruttivi/DoS.
+- Gestire concorrenza, limiti operativi, job/sessioni, arresto e cleanup verificabile; dichiarare gli effetti residui quando non reversibili. La cancellazione del job non garantisce il ripristino del target.
+- Report con asset, autorizzazione, metodo, data, evidenze, impatto effettivamente osservato, limiti, remediation e retest collegato alla prova originale; un esito negativo non certifica sicurezza.
+- Stati separati: potenziale, validata, sfruttamento dimostrato, non confermata, inconcludente, corretta e riverificata. Retest entro nuova finestra valida; nessuna estensione implicita dell'autorizzazione originale.
+
 ## 3. Requisiti Non Funzionali (NFR) Dettagliati
 
 ### 3.1 Sicurezza Applicativa e Infrastrutturale (Security by Design)
@@ -254,6 +271,7 @@ Contratto e limiti nel [dominio Active Defense](../domains/active_defense_and_so
 ---
 
 ## 6. Decisioni Consolidate
+- **2026-10-18:** PO richiede l'inserimento delle milestone M6/M7/M8 per exploit intelligence, validazione con Metasploit e penetration testing controllato. Approvazione dello scope di roadmap; implementazione e prove reali non avviate.
 - **Approvazione:** Requisiti e casi d'uso aggiornati e approvati dal Product Owner in data 2026-10-11:
   - Approvata **Milestone 3** (Active Defense & SOAR Light: Chokepoint Remediation, Virtual Patching, Alerting Hub);
   - Approvata **Milestone 4** (Continuous Compliance: NIS2, DORA, ISO 27001, Scorecard, Dossier PDF);

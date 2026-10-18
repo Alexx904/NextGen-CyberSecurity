@@ -15,10 +15,12 @@ import {
 } from 'lucide-react';
 import { SSHServerItem } from '../types/ssh';
 import { getStoredAccessToken, getStreamTicket } from '../api/client';
+import { debugLogger } from '../utils/debugLogger';
 
 interface WebTerminalModalProps {
   server: SSHServerItem;
   onClose: () => void;
+  docked?: boolean;
 }
 
 type TerminalConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
@@ -26,6 +28,7 @@ type TerminalConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'e
 export const WebTerminalModal: React.FC<WebTerminalModalProps> = ({
   server,
   onClose,
+  docked = false,
 }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [status, setStatus] = useState<TerminalConnectionStatus>('connecting');
@@ -36,12 +39,18 @@ export const WebTerminalModal: React.FC<WebTerminalModalProps> = ({
   const fitAddonRef = useRef<FitAddon | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const sessionGenerationRef = useRef(0);
 
   const initTerminalSession = useCallback(async () => {
     if (!terminalContainerRef.current) return;
+    const generation = ++sessionGenerationRef.current;
+
+    resizeObserverRef.current?.disconnect();
+    resizeObserverRef.current = null;
 
     // Teardown precedente se presente
     if (wsRef.current) {
+      debugLogger.logWSEvent({ direction: 'out', eventType: 'disconnect-requested', data: { state: 'reconnecting' } });
       wsRef.current.close();
       wsRef.current = null;
     }
@@ -112,14 +121,21 @@ export const WebTerminalModal: React.FC<WebTerminalModalProps> = ({
       const ticket = await getStreamTicket();
       wsUrl = `${protocol}//${host}/ws/v1/ssh/servers/${server.id}/terminal?ticket=${encodeURIComponent(ticket)}`;
     } catch {
+      if (sessionGenerationRef.current !== generation) return;
       const token = getStoredAccessToken() || '';
       wsUrl = `${protocol}//${host}/ws/v1/ssh/servers/${server.id}/terminal?token=${encodeURIComponent(token)}`;
     }
 
+    if (sessionGenerationRef.current !== generation) return;
+
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
+    const diagnosticUrl = wsUrl.split('?')[0];
+    debugLogger.logWSEvent({ direction: 'out', eventType: 'connecting', url: diagnosticUrl, data: { state: 'connecting' } });
 
     ws.onopen = () => {
+      if (wsRef.current !== ws) return;
+      debugLogger.logWSEvent({ direction: 'in', eventType: 'open', url: diagnosticUrl, data: { state: 'connected' } });
       setStatus('connected');
       term.focus();
       // Notifica dimensioni iniziali della finestra PTY
@@ -135,12 +151,16 @@ export const WebTerminalModal: React.FC<WebTerminalModalProps> = ({
     };
 
     ws.onmessage = (event: MessageEvent) => {
+      if (wsRef.current !== ws) return;
+      // Terminal text can contain secrets which cannot be reliably redacted.
+      // Record transport metadata only, never terminal input/output content.
+      debugLogger.logWSEvent({ direction: 'in', eventType: 'frame', url: diagnosticUrl, data: typeof event.data === 'string' ? { characters: event.data.length } : { bytes: event.data instanceof Blob ? event.data.size : 0 } });
       if (typeof event.data === 'string') {
         term.write(event.data);
       } else if (event.data instanceof Blob) {
         const reader = new FileReader();
         reader.onload = () => {
-          if (reader.result) {
+          if (reader.result && wsRef.current === ws) {
             term.write(reader.result as string);
           }
         };
@@ -149,11 +169,15 @@ export const WebTerminalModal: React.FC<WebTerminalModalProps> = ({
     };
 
     ws.onerror = () => {
+      if (wsRef.current !== ws) return;
+      debugLogger.log({ level: 'error', source: 'ws', title: 'WS connection error', url: diagnosticUrl });
       setStatus('error');
       setErrorMessage('Errore di connessione WebSocket al gateway SSH.');
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event: CloseEvent) => {
+      if (wsRef.current !== ws) return;
+      debugLogger.logWSEvent({ direction: 'in', eventType: 'close', url: diagnosticUrl, data: { code: event.code, clean: event.wasClean } });
       setStatus('disconnected');
       term.write('\r\n\x1b[33m[Sessione SSH chiusa dal gateway o dall\'host remoto]\x1b[0m\r\n');
     };
@@ -161,6 +185,7 @@ export const WebTerminalModal: React.FC<WebTerminalModalProps> = ({
     // Inoltro input tastiera da xterm a WebSocket
     term.onData((data: string) => {
       if (ws.readyState === WebSocket.OPEN) {
+        debugLogger.logWSEvent({ direction: 'out', eventType: 'frame', url: diagnosticUrl, data: { characters: data.length } });
         ws.send(data);
       }
     });
@@ -207,11 +232,13 @@ export const WebTerminalModal: React.FC<WebTerminalModalProps> = ({
     void initTerminalSession();
 
     return () => {
+      ++sessionGenerationRef.current;
       if (resizeObserverRef.current) {
         resizeObserverRef.current.disconnect();
         resizeObserverRef.current = null;
       }
       if (wsRef.current) {
+        debugLogger.logWSEvent({ direction: 'out', eventType: 'disconnect-requested', data: { state: 'closed-by-user' } });
         wsRef.current.close();
         wsRef.current = null;
       }
@@ -255,12 +282,12 @@ export const WebTerminalModal: React.FC<WebTerminalModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+    <div role={docked && !isFullscreen ? 'region' : 'dialog'} aria-label={`Terminale SSH ${server.name}`} className={docked && !isFullscreen ? 'relative w-full h-[320px] min-h-[260px] flex mt-3' : 'fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4'}>
       <div
         className={`bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl flex flex-col overflow-hidden transition-all duration-200 ${
           isFullscreen
             ? 'w-full h-full rounded-none border-none'
-            : 'w-full max-w-5xl h-[700px] max-h-[92vh]'
+            : docked ? 'w-full h-full' : 'w-full max-w-5xl h-[700px] max-h-[92vh]'
         }`}
       >
         {/* Header Terminale */}

@@ -415,6 +415,124 @@ func (o *ScanOrchestrator) processJob(job *ScanJob, workerID int) {
 		},
 	})
 
+	// Persist each completed XML host while Nmap is still running. The final
+	// parse supports legacy runners without replaying hosts already committed.
+	var findings []*domain.Finding
+	seenHosts := make(map[string]bool)
+	profileConfig.OnHost = func(h scanner.ParsedHost) error {
+		if h.Status != "up" || seenHosts[h.IP] {
+			return nil
+		}
+		now := time.Now().UTC()
+		for _, p := range h.Ports {
+			isRelevantPort := strings.EqualFold(p.State, "open") ||
+				strings.EqualFold(p.State, "unfiltered") ||
+				strings.EqualFold(p.State, "open|filtered")
+
+			if isRelevantPort {
+				var portFindings []*domain.Finding
+				if o.correlator != nil {
+					pFindings, err := o.correlator.CorrelatePort(scanCtx, scan.ID, scan.TenantID, h, p)
+					if err != nil {
+						o.logger.Warn("Errore durante correlazione CVE porta", "port", p.PortID, "error", err)
+					}
+					portFindings = pFindings
+				} else {
+					portState := p.State
+					if portState == "" {
+						portState = "open"
+					}
+					f := &domain.Finding{
+						ID:              uuid.New(),
+						ScanID:          scan.ID,
+						TenantID:        scan.TenantID,
+						HostIP:          h.IP,
+						Port:            p.PortID,
+						Protocol:        p.Protocol,
+						PortState:       portState,
+						Severity:        domain.SeverityInfo,
+						Confidence:      domain.ConfidenceConfirmed,
+						DetectionMethod: domain.DetectionMethodPortState,
+						CreatedAt:       now,
+					}
+					if h.PrimaryHostname != "" {
+						hn := h.PrimaryHostname
+						f.Hostname = &hn
+					}
+					if p.Service != nil {
+						f.DetectionMethod = domain.DetectionMethodBanner
+						if p.Service.Name != "" {
+							sName := p.Service.Name
+							f.ServiceName = &sName
+						}
+						if p.Service.Version != "" {
+							sVer := p.Service.Version
+							f.ServiceVersion = &sVer
+						}
+						if p.Service.RawBanner != "" {
+							sBanner := p.Service.RawBanner
+							f.RawBanner = &sBanner
+						}
+						if len(p.Service.CPEs) > 0 {
+							cpe := p.Service.CPEs[0]
+							f.CPE = &cpe
+						}
+					}
+					portFindings = []*domain.Finding{f}
+				}
+
+				if len(portFindings) > 0 {
+					findings = append(findings, portFindings...)
+
+					// Salvataggio incrementale immediato su PostgreSQL (NFR-REL-02)
+					if o.findingRepo != nil {
+						if err := o.findingRepo.CreateBatch(scanCtx, portFindings); err != nil {
+							return fmt.Errorf("unable to persist scan findings")
+						}
+					}
+
+					// Notifica push istantanea per ciascun finding (SSE)
+					for _, pf := range portFindings {
+						o.publishEvent(topic, domain.SSEEvent{
+							Event: domain.EventScanFinding,
+							Data: domain.ScanFindingPayload{
+								ScanID:  scan.ID,
+								Finding: *pf,
+							},
+						})
+					}
+				}
+			}
+		}
+
+		// Correlazione vulnerabilità script a livello di host (es. SMB EternalBlue, SSL, ecc.) (FR-17)
+		if o.correlator != nil && len(h.HostScripts) > 0 {
+			hostFindings, err := o.correlator.CorrelateHostScripts(scanCtx, scan.ID, scan.TenantID, h)
+			if err != nil {
+				o.logger.Warn("Errore durante correlazione script host Nmap", "host", h.IP, "error", err)
+			}
+			if len(hostFindings) > 0 {
+				findings = append(findings, hostFindings...)
+				if o.findingRepo != nil {
+					if err := o.findingRepo.CreateBatch(scanCtx, hostFindings); err != nil {
+						return fmt.Errorf("unable to persist host findings")
+					}
+				}
+				for _, hf := range hostFindings {
+					o.publishEvent(topic, domain.SSEEvent{
+						Event: domain.EventScanFinding,
+						Data: domain.ScanFindingPayload{
+							ScanID:  scan.ID,
+							Finding: *hf,
+						},
+					})
+				}
+			}
+		}
+		seenHosts[h.IP] = true
+		return nil
+	}
+
 	// 6. Esecuzione del comando Nmap tramite il Runner
 	execResult, runErr := o.runner.RunScan(scanCtx, target.Value, profileConfig)
 
@@ -476,114 +594,11 @@ func (o *ScanOrchestrator) processJob(job *ScanJob, workerID int) {
 		},
 	})
 
-	// 9. Persistenza incrementale dei finding rilevati su DB ed emissione SSE (NFR-REL-02)
-	var findings []*domain.Finding
-	now := time.Now().UTC()
+	// Process hosts only when a legacy runner did not stream them.
 	for _, h := range report.GetUpHosts() {
-		for _, p := range h.Ports {
-			isRelevantPort := strings.EqualFold(p.State, "open") ||
-				strings.EqualFold(p.State, "unfiltered") ||
-				strings.EqualFold(p.State, "open|filtered")
-
-			if isRelevantPort {
-				var portFindings []*domain.Finding
-				if o.correlator != nil {
-					pFindings, err := o.correlator.CorrelatePort(ctx, scan.ID, scan.TenantID, h, p)
-					if err != nil {
-						o.logger.Warn("Errore durante correlazione CVE porta", "port", p.PortID, "error", err)
-					}
-					portFindings = pFindings
-				} else {
-					portState := p.State
-					if portState == "" {
-						portState = "open"
-					}
-					f := &domain.Finding{
-						ID:              uuid.New(),
-						ScanID:          scan.ID,
-						TenantID:        scan.TenantID,
-						HostIP:          h.IP,
-						Port:            p.PortID,
-						Protocol:        p.Protocol,
-						PortState:       portState,
-						Severity:        domain.SeverityInfo,
-						Confidence:      domain.ConfidenceConfirmed,
-						DetectionMethod: domain.DetectionMethodPortState,
-						CreatedAt:       now,
-					}
-					if h.PrimaryHostname != "" {
-						hn := h.PrimaryHostname
-						f.Hostname = &hn
-					}
-					if p.Service != nil {
-						f.DetectionMethod = domain.DetectionMethodBanner
-						if p.Service.Name != "" {
-							sName := p.Service.Name
-							f.ServiceName = &sName
-						}
-						if p.Service.Version != "" {
-							sVer := p.Service.Version
-							f.ServiceVersion = &sVer
-						}
-						if p.Service.RawBanner != "" {
-							sBanner := p.Service.RawBanner
-							f.RawBanner = &sBanner
-						}
-						if len(p.Service.CPEs) > 0 {
-							cpe := p.Service.CPEs[0]
-							f.CPE = &cpe
-						}
-					}
-					portFindings = []*domain.Finding{f}
-				}
-
-				if len(portFindings) > 0 {
-					findings = append(findings, portFindings...)
-
-					// Salvataggio incrementale immediato su PostgreSQL (NFR-REL-02)
-					if o.findingRepo != nil {
-						if err := o.findingRepo.CreateBatch(context.Background(), portFindings); err != nil {
-							o.logger.Error("Salvataggio incrementale findings su DB fallito", "scan_id", scan.ID, "error", err)
-						}
-					}
-
-					// Notifica push istantanea per ciascun finding (SSE)
-					for _, pf := range portFindings {
-						o.publishEvent(topic, domain.SSEEvent{
-							Event: domain.EventScanFinding,
-							Data: domain.ScanFindingPayload{
-								ScanID:  scan.ID,
-								Finding: *pf,
-							},
-						})
-					}
-				}
-			}
-		}
-
-		// Correlazione vulnerabilità script a livello di host (es. SMB EternalBlue, SSL, ecc.) (FR-17)
-		if o.correlator != nil && len(h.HostScripts) > 0 {
-			hostFindings, err := o.correlator.CorrelateHostScripts(ctx, scan.ID, scan.TenantID, h)
-			if err != nil {
-				o.logger.Warn("Errore durante correlazione script host Nmap", "host", h.IP, "error", err)
-			}
-			if len(hostFindings) > 0 {
-				findings = append(findings, hostFindings...)
-				if o.findingRepo != nil {
-					if err := o.findingRepo.CreateBatch(context.Background(), hostFindings); err != nil {
-						o.logger.Error("Salvataggio incrementale host findings su DB fallito", "scan_id", scan.ID, "error", err)
-					}
-				}
-				for _, hf := range hostFindings {
-					o.publishEvent(topic, domain.SSEEvent{
-						Event: domain.EventScanFinding,
-						Data: domain.ScanFindingPayload{
-							ScanID:  scan.ID,
-							Finding: *hf,
-						},
-					})
-				}
-			}
+		if err := profileConfig.OnHost(h); err != nil {
+			o.failScan(scan, err.Error())
+			return
 		}
 	}
 

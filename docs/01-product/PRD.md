@@ -41,6 +41,18 @@ Piattaforma di CyberSecurity moderna e modulare concepita per trasformare il vul
 
 ---
 
+### 1.3 Estensione approvata 2026-10-18: validazione e penetration testing
+
+Le nuove milestone seguono M5 senza riordinare le priorità esistenti. Sono pianificate, non implementate; l'inserimento in roadmap non autorizza installazioni, acquisti o test su sistemi reali.
+
+- **Milestone 6 (Exploit Intelligence & Applicability):** correlare asset, servizi, versioni e CVE con riferimenti pubblici e catalogo moduli Metasploit Framework. Mostrare prerequisiti, fonti e incertezza; nessuna esecuzione di moduli o codice pubblico.
+- **Milestone 7 (Vulnerability Validation):** integrare un worker Metasploit separato attraverso API RPC per controlli selezionati, con perimetro autorizzato, permessi, timeout, audit ed evidenze. Un controllo `check` non è disponibile per ogni modulo né automaticamente innocuo.
+- **Milestone 8 (Controlled Penetration Testing & Retest):** prove di sfruttamento esplicitamente autorizzate e selezionate dall'operatore, gestione job/sessioni, arresto, cleanup e report con impatto osservato, remediation e retest. Nessuno sfruttamento automatico derivato dalla sola correlazione CVE.
+
+Flusso: azienda/asset/finding → candidati e prerequisiti (M6) → verifica autorizzata ed evidenze (M7) → eventuale prova di sfruttamento autorizzata (M8) → report → correzione → retest. Esiti distinti: potenziale, validata, sfruttamento dimostrato, non confermata, inconcludente, corretta e riverificata. Fallimento della prova non equivale ad assenza di vulnerabilità; l'Attack Path resta euristico fuori dalle evidenze puntualmente raccolte.
+
+Scope, task e gate: [TASK_LIST](../04-development/TASK_LIST.md); contratti: FR-22..FR-24 in [REQUIREMENTS](REQUIREMENTS.md). Architettura definitiva, versione/licenze delle dipendenze, API/DTO e schema con migrazioni up/down saranno definiti prima dell'implementazione. Nessuna nuova API o dipendenza è introdotta da questa pianificazione.
+
 ## 2. Modello di Tenancy e Attori del Sistema
 
 ### 2.1 Architettura Multi-Tenant Ibrida

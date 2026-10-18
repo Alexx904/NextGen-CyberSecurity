@@ -1,5 +1,8 @@
 # Test Plan
 
+> Publication scope 2026-10-18: alert-channel / outbox / migration 000012 sections describe deferred T4/T5 design and local prototype evidence. Their code and routes are excluded from this release; published migration is 000011. Alert-specific commands are future gates.
+
+
 Ultimo allineamento governance: 2026-10-18 · working tree · AGENT-HARNESS-01. Evidenze applicative datate sotto non rieseguite da questa revisione.
 
 COMPANY-UX-02 · 2026-10-17: [evidenze flussi aziendali e clienti SSH](COMPANY_WORKFLOW_QA.md); 164 test frontend, suite backend e integrazioni su DB test separato, migrazioni up/down e trigger. Gate browser e rendering PDF aperti, nessuna validazione visuale presunta.
@@ -62,6 +65,25 @@ Salvare le evidenze visuali temporanee in `.agent/artifacts/<task-id>/` (ignorat
 AGENT-HARNESS-01: `scripts/test-agent-harness.ps1` esegue fixture isolate per glob, copertura/ambiguità, manifest, limiti dello stato e inclusione/esclusione dei documenti. `scripts/verify-agent-docs.ps1` controlla il repository corrente. [Piano e limiti](../04-development/plans/AGENT-HARNESS-01.md); nessuna attestazione di qualità/routing Sol da un PASS strutturale.
 
 ## Test case per feature
+
+### E28-S1-T4/T5 · 2026-10-18 · working tree
+
+Alerting affects auth/tenant, settings and DB: final gate `-Profile Final -Scope
+All -Integration` with explicit dedicated local TEST_DB_* environment. Additional
+targeted suites: backend `go test ./internal/service ./internal/delivery/http/handler
+-run '^TestAlert|^TestTargetGroupDeleteAlertConflict$' -count=1`, tagged PostgreSQL
+`go test -tags=integration -count=1 ./internal/repository/postgres -run Alert -v`.
+Includes migration 000012 up/down/up, source transaction rollback, company/tenant
+scope, dedup/escalation, concurrent claims and stale tokens/configuration. SMTP
+fixture uses real implicit TLS/STARTTLS; HTTP payload/status and SSRF/redirect/DNS
+refusals tested separately. No real provider/account test implied.
+
+Frontend: channel form/config omission/revision, explicit test consent/reset,
+no send on save, redacted errors and diagnostic config-path regression. Browser
+against actual authorized QA backend/DB, desktop/mobile and keyboard; external
+message needs a named authorized destination. Private-target refusal is negative
+evidence, not provider delivery. [T4](../04-development/plans/E28-S1-T4-alerting.md),
+[T5](../04-development/plans/E28-S1-T5-alert-settings.md).
 
 ### TEST-OPT-01 · 2026-10-17 · working tree
 

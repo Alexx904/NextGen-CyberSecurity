@@ -23,6 +23,14 @@ func TestHelperProcess(t *testing.T) {
 
 	mode := os.Getenv("HELPER_MODE")
 	switch mode {
+	case "live_hosts":
+		fmt.Print(`<nmaprun><host><status state="up"/><address addr="192.168.1.10" addrtype="ipv4"/></host>`)
+		var ack [1]byte
+		if _, err := io.ReadFull(os.Stdin, ack[:]); err != nil {
+			os.Exit(3)
+		}
+		fmt.Print(`<runstats><finished elapsed="1"/></runstats></nmaprun>`)
+		os.Exit(0)
 	case "progress":
 		if !strings.Contains(strings.Join(os.Args, " "), "--stats-every 5s -- 192.168.1.10") {
 			os.Exit(2)

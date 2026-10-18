@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ShieldAlert,
   ShieldCheck,
@@ -9,6 +9,10 @@ import {
   RotateCcw,
   CheckCircle2,
   X,
+  ArrowUp,
+  ArrowDown,
+  Pencil,
+  Terminal,
 } from 'lucide-react';
 import { sshApi } from '../api/ssh';
 import {
@@ -17,7 +21,10 @@ import {
   ChainName,
   RuleAction,
   AddFirewallRulePayload,
+  FirewallRule,
 } from '../types/ssh';
+
+const DockedTerminal = React.lazy(() => import('./WebTerminalModal').then(module => ({ default: module.WebTerminalModal })));
 
 interface FirewallManagerProps {
   server: SSHServerItem;
@@ -27,6 +34,11 @@ interface FirewallManagerProps {
 function firewallErrorMessage(error: unknown, fallback: string): string {
   const err = error as { response?: { data?: { error?: { message?: string } } }; message?: string } | null;
   return err?.response?.data?.error?.message || err?.message || fallback;
+}
+
+function safetySecondsRemaining(expiry?: string | null): number {
+  const remaining = Math.floor((Date.parse(expiry || '') - Date.now()) / 1000);
+  return Number.isFinite(remaining) ? Math.max(0, remaining) : 0;
 }
 
 export const FirewallManager: React.FC<FirewallManagerProps> = ({
@@ -52,6 +64,51 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
   const [newComment, setNewComment] = useState('');
   const [newPosition, setNewPosition] = useState<number>(0); // 0 = append, >0 = insert at position
   const [newTimeoutSec, setNewTimeoutSec] = useState(60);
+  const [newInInterface, setNewInInterface] = useState('');
+  const [newOutInterface, setNewOutInterface] = useState('');
+  const [editingLine, setEditingLine] = useState<number | null>(null);
+  const [policyChoice, setPolicyChoice] = useState<'ACCEPT' | 'DROP'>('ACCEPT');
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const ruleOpener = useRef<HTMLButtonElement | null>(null);
+  const canMutate = !loading && !actionLoading && !status?.active_safety_timer && Boolean(status?.revision);
+
+  useEffect(() => {
+    const policy = status?.chains[activeChain]?.default_policy;
+    if (policy === 'ACCEPT' || policy === 'DROP') setPolicyChoice(policy);
+  }, [status, activeChain]);
+
+  const closeRuleForm = () => {
+    setIsAddRuleOpen(false);
+    queueMicrotask(() => ruleOpener.current?.focus());
+  };
+
+  const openRuleForm = (button: HTMLButtonElement, rule?: FirewallRule) => {
+    ruleOpener.current = button;
+    setEditingLine(rule?.line_number ?? null);
+    setNewAction(rule?.target ?? 'ACCEPT'); setNewProtocol(rule?.protocol || 'tcp');
+    setNewSource(rule?.source || ''); setNewDestination(rule?.destination || '');
+    setNewInInterface(rule?.in_interface || ''); setNewOutInterface(rule?.out_interface || '');
+    setNewPort(rule?.options.match(/\bdpts?:(\d+(?::\d+)?)/)?.[1] || '');
+    setNewComment(rule?.options.match(/\/\* (.*?) \*\//)?.[1] || '');
+    setNewPosition(0); setNewTimeoutSec(60); setIsAddRuleOpen(true);
+  };
+
+  const handlePolicy = async () => {
+    if (!canMutate || !status?.revision) return;
+    if (!window.confirm(`Impostare la policy ${policyChoice} sulla catena ${activeChain}?`)) return;
+    setActionLoading(true);
+    try { setStatus(await sshApi.setFirewallPolicy(server.id, activeChain, policyChoice, status.revision)); }
+    catch (err) { setError(firewallErrorMessage(err, 'Cambio policy fallito')); }
+    finally { setActionLoading(false); }
+  };
+
+  const handleMove = async (from: number, to: number) => {
+    if (!canMutate || !status?.revision) return;
+    setActionLoading(true);
+    try { setStatus(await sshApi.moveFirewallRule(server.id, activeChain, from, to, status.revision)); }
+    catch (err) { setError(firewallErrorMessage(err, 'Riordino regola fallito')); }
+    finally { setActionLoading(false); }
+  };
 
   const fetchStatus = useCallback(async () => {
     setLoading(true);
@@ -60,11 +117,7 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
       const res = await sshApi.getFirewallStatus(server.id);
       setStatus(res);
       if (res.active_safety_timer && res.safety_timer_expires_at) {
-        const left = Math.max(
-          0,
-          Math.floor((new Date(res.safety_timer_expires_at).getTime() - Date.now()) / 1000)
-        );
-        setCountdown(left > 0 ? left : res.safety_timeout_seconds || 60);
+        setCountdown(safetySecondsRemaining(res.safety_timer_expires_at));
       } else {
         setCountdown(0);
       }
@@ -81,22 +134,18 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
 
   // Gestione conto alla rovescia Safety Rollback Timer
   useEffect(() => {
-    if (!status?.active_safety_timer || countdown <= 0) return;
-
-    const interval = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          // Ricarica lo stato dopo lo scadere del timer
-          fetchStatus();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
+    if (!status?.active_safety_timer || !status.safety_timer_expires_at) return;
+    const expiry = status.safety_timer_expires_at;
+    setCountdown(safetySecondsRemaining(expiry));
+    const interval = setInterval(() => setCountdown(safetySecondsRemaining(expiry)), 1000);
     return () => clearInterval(interval);
-  }, [status?.active_safety_timer, countdown, fetchStatus]);
+  }, [status?.active_safety_timer, status?.safety_timer_expires_at]);
+
+  useEffect(() => {
+    if (!status?.active_safety_timer || countdown > 0) return;
+    const poll = setTimeout(() => { void fetchStatus(); }, 2000);
+    return () => clearTimeout(poll);
+  }, [status, countdown, fetchStatus]);
 
   // Conferma configurazione (disattiva Safety Timer)
   const handleConfirm = async () => {
@@ -129,15 +178,16 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
 
   // Cancellazione regola
   const handleDeleteRule = async (lineNum: number) => {
+    if (!canMutate || !status?.revision) return;
     if (!window.confirm(`Eliminare la regola #${lineNum} dalla catena ${activeChain}?`)) {
       return;
     }
     setActionLoading(true);
     try {
-      const updated = await sshApi.deleteFirewallRule(server.id, lineNum, activeChain, true, 60);
+      const updated = await sshApi.deleteFirewallRule(server.id, lineNum, activeChain, true, 60, status.revision);
       setStatus(updated);
       if (updated.active_safety_timer) {
-        setCountdown(updated.safety_timeout_seconds || 60);
+        setCountdown(safetySecondsRemaining(updated.safety_timer_expires_at));
       }
     } catch (err: unknown) {
       setError(firewallErrorMessage(err, 'Errore durante l\'eliminazione della regola firewall'));
@@ -149,6 +199,7 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
   // Inserimento nuova regola
   const handleAddRuleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canMutate || !status?.revision) return;
     setActionLoading(true);
 
     const payload: AddFirewallRulePayload = {
@@ -162,15 +213,20 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
       position: newPosition,
       with_safety_timer: true,
       safety_timeout_seconds: newTimeoutSec,
+      expected_revision: status.revision,
+      in_interface: newInInterface.trim(),
+      out_interface: newOutInterface.trim(),
     };
 
     try {
-      const updated = await sshApi.addFirewallRule(server.id, payload);
+      const updated = editingLine === null
+        ? await sshApi.addFirewallRule(server.id, payload)
+        : await sshApi.replaceFirewallRule(server.id, editingLine, payload);
       setStatus(updated);
       if (updated.active_safety_timer) {
-        setCountdown(updated.safety_timeout_seconds || 60);
+        setCountdown(safetySecondsRemaining(updated.safety_timer_expires_at));
       }
-      setIsAddRuleOpen(false);
+      closeRuleForm();
       // Reset campi
       setNewPort('');
       setNewComment('');
@@ -226,19 +282,19 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
         </div>
 
         {/* Anti-Lockout Safety Timer Banner */}
-        {status?.active_safety_timer && countdown > 0 && (
+        {status?.active_safety_timer && (
           <div className="mt-4 p-4 rounded-xl border border-amber-500/50 bg-amber-950/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-pulse shadow-lg">
             <div className="flex items-center space-x-3">
               <AlertTriangle className="w-6 h-6 text-amber-400 flex-shrink-0 animate-bounce" />
               <div>
                 <div className="text-xs sm:text-sm font-bold text-amber-300 flex items-center gap-2">
-                  <span>Safety Rollback Timer ATTIVO!</span>
+                  <span>{countdown > 0 ? 'Safety Rollback Timer ATTIVO!' : 'Scadenza raggiunta: ripristino da verificare.'}</span>
                   <span className="px-2 py-0.5 rounded bg-amber-900/60 border border-amber-500/60 font-mono text-white text-xs">
-                    {countdown}s rimanenti
+                    {countdown > 0 ? `${countdown}s rimanenti` : 'Verifica stato remoto'}
                   </span>
                 </div>
                 <p className="text-[11px] text-amber-200/80 mt-0.5 font-sans">
-                  Se non confermi la sessione, il backend ripristinerà automaticamente le regole precedenti per evitare lockout SSH.
+                  Il server remoto avvia il ripristino delle regole precedenti alla scadenza. Lo stato viene verificato anche dopo la scadenza.
                 </p>
               </div>
             </div>
@@ -256,7 +312,7 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
               <button
                 type="button"
                 onClick={handleConfirm}
-                disabled={actionLoading}
+                disabled={actionLoading || countdown <= 0}
                 className="flex items-center space-x-1.5 px-4 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-md transition-all"
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
@@ -274,6 +330,10 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
               <X className="w-4 h-4" />
             </button>
           </div>
+        )}
+
+        {status && !status.revision && !loading && (
+          <p role="status" className="mt-3 text-xs text-amber-300">Revisione delle regole non disponibile. Aggiorna lo stato prima di modificare il firewall.</p>
         )}
 
         {/* Barra di Navigazione Catene & Pulsante Nuova Regola */}
@@ -317,7 +377,8 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
 
             <button
               type="button"
-              onClick={() => setIsAddRuleOpen(true)}
+              onClick={event => openRuleForm(event.currentTarget)}
+              disabled={!canMutate}
               className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow transition-all"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -406,10 +467,13 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
                       </td>
 
                       <td className="py-2.5 px-3 text-right">
+                        <button type="button" aria-label={`Sposta regola ${rule.line_number} su`} disabled={!canMutate || rule.line_number <= 1} onClick={() => handleMove(rule.line_number, rule.line_number - 1)} className="p-1.5 text-slate-400 hover:text-cyan-300 disabled:opacity-30"><ArrowUp className="w-3.5 h-3.5" /></button>
+                        <button type="button" aria-label={`Sposta regola ${rule.line_number} giù`} disabled={!canMutate || rule.line_number >= (currentChainData?.rules.length || 0)} onClick={() => handleMove(rule.line_number, rule.line_number + 1)} className="p-1.5 text-slate-400 hover:text-cyan-300 disabled:opacity-30"><ArrowDown className="w-3.5 h-3.5" /></button>
+                        <button type="button" aria-label={`Sostituisci regola ${rule.line_number}`} disabled={!canMutate || !['ACCEPT', 'DROP', 'REJECT', 'LOG'].includes(rule.target) || !['all', 'tcp', 'udp', 'icmp'].includes(rule.protocol)} onClick={event => openRuleForm(event.currentTarget, rule)} className="p-1.5 text-slate-400 hover:text-cyan-300 disabled:opacity-30"><Pencil className="w-3.5 h-3.5" /></button>
                         <button
                           type="button"
                           onClick={() => handleDeleteRule(rule.line_number)}
-                          disabled={actionLoading}
+                          disabled={!canMutate}
                           className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 transition-colors"
                           title={`Elimina regola #${rule.line_number}`}
                         >
@@ -425,13 +489,18 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
         </div>
 
         {/* Footer Informativo */}
-        <div className="mt-4 pt-3 border-t border-cyber-border flex items-center justify-between text-xs text-slate-500 font-sans">
-          <div className="flex items-center space-x-2">
+        <div className="mt-4 pt-3 border-t border-cyber-border flex flex-wrap gap-3 items-center justify-between text-xs text-slate-500 font-sans">
+          <div className="flex flex-wrap items-center gap-2">
             <span>Catena attiva:</span>
             <strong className="text-white font-mono">{activeChain}</strong>
             <span className="mx-1">•</span>
             <span>Policy default:</span>
             <strong className="text-cyan-400 font-mono">{currentChainData?.default_policy || 'ACCEPT'}</strong>
+            <select aria-label={`Nuova policy ${activeChain}`} value={policyChoice} onChange={event => setPolicyChoice(event.target.value as 'ACCEPT' | 'DROP')} disabled={!canMutate} className="bg-slate-950 border border-slate-700 rounded p-1 text-slate-200">
+              <option value="ACCEPT">ACCEPT</option><option value="DROP">DROP</option>
+            </select>
+            <button type="button" onClick={handlePolicy} disabled={!canMutate || policyChoice === currentChainData?.default_policy} className="px-2 py-1 border border-slate-700 rounded text-cyan-300 disabled:opacity-30">Applica policy</button>
+            <button type="button" onClick={() => setTerminalOpen(open => !open)} className="px-2 py-1 border border-slate-700 rounded text-cyan-300 inline-flex items-center gap-1"><Terminal className="w-3.5 h-3.5" />{terminalOpen ? 'Chiudi terminale' : 'Apri terminale'}</button>
           </div>
 
           <div>
@@ -441,17 +510,27 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
         </div>
 
         {/* Modal Inserimento Nuova Regola */}
+        {terminalOpen && <React.Suspense fallback={<p role="status">Caricamento terminale...</p>}><DockedTerminal server={server} docked onClose={() => setTerminalOpen(false)} /></React.Suspense>}
+
         {isAddRuleOpen && (
           <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-[#0d121f] border border-cyber-border rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
+            <div role="dialog" aria-modal="true" aria-label={editingLine === null ? 'Nuova regola firewall' : `Sostituisci regola ${editingLine}`} onKeyDown={event => {
+              if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeRuleForm(); }
+              if (event.key === 'Tab') {
+                const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])'));
+                const first = controls[0], last = controls[controls.length - 1];
+                if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+                if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+              }
+            }} className="bg-[#0d121f] border border-cyber-border rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
               <div className="flex items-center justify-between border-b border-cyber-border pb-3">
                 <div className="flex items-center space-x-2 text-white font-bold text-base">
                   <Plus className="w-5 h-5 text-cyan-400" />
-                  <span>Nuova Regola Firewall ({activeChain})</span>
+                  <span>{editingLine === null ? 'Nuova Regola Firewall' : `Sostituisci regola #${editingLine}`} ({activeChain})</span>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setIsAddRuleOpen(false)}
+                  onClick={closeRuleForm}
                   className="text-slate-400 hover:text-white p-1 rounded-lg"
                 >
                   <X className="w-5 h-5" />
@@ -459,10 +538,13 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
               </div>
 
               <form onSubmit={handleAddRuleSubmit} className="space-y-3.5 text-xs">
+                {editingLine !== null && <p role="note" className="p-2 text-amber-200 border border-amber-900 rounded">La regola viene sostituita con i campi di questo modulo. Eventuali opzioni avanzate mostrate nella tabella non vengono conservate; lo spostamento mantiene invece la regola completa.</p>}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-slate-400 mb-1 font-medium">Azione Target</label>
                     <select
+                      aria-label="Azione Target"
+                      autoFocus
                       value={newAction}
                       onChange={(e) => setNewAction(e.target.value as RuleAction)}
                       className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-white focus:outline-none focus:border-cyan-500"
@@ -478,7 +560,11 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
                     <label className="block text-slate-400 mb-1 font-medium">Protocollo</label>
                     <select
                       value={newProtocol}
-                      onChange={(e) => setNewProtocol(e.target.value)}
+                      aria-label="Protocollo"
+                      onChange={(e) => {
+                        setNewProtocol(e.target.value);
+                        if (!['tcp', 'udp'].includes(e.target.value)) setNewPort('');
+                      }}
                       className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-white focus:outline-none focus:border-cyan-500 uppercase font-mono"
                     >
                       <option value="tcp">TCP</option>
@@ -495,6 +581,7 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
                     <input
                       type="text"
                       value={newSource}
+                      aria-label="IP o CIDR Sorgente"
                       onChange={(e) => setNewSource(e.target.value)}
                       placeholder="0.0.0.0/0 oppure 192.168.1.0/24"
                       className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-white font-mono focus:outline-none focus:border-cyan-500"
@@ -506,6 +593,7 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
                     <input
                       type="text"
                       value={newPort}
+                      aria-label="Porta o Range"
                       onChange={(e) => setNewPort(e.target.value)}
                       disabled={newProtocol !== 'tcp' && newProtocol !== 'udp'}
                       placeholder="es. 22 oppure 80:443"
@@ -519,6 +607,7 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
                   <input
                     type="text"
                     value={newDestination}
+                    aria-label="IP o CIDR Destinazione"
                     onChange={(e) => setNewDestination(e.target.value)}
                     placeholder="0.0.0.0/0 oppure lasciare vuoto"
                     className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-white font-mono focus:outline-none focus:border-cyan-500"
@@ -529,6 +618,8 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
                   <label className="block text-slate-400 mb-1 font-medium">Posizione nella Catena</label>
                   <select
                     value={newPosition}
+                    aria-label="Posizione nella Catena"
+                    disabled={editingLine !== null}
                     onChange={(e) => setNewPosition(parseInt(e.target.value, 10))}
                     className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-white focus:outline-none focus:border-cyan-500 font-sans"
                   >
@@ -542,10 +633,16 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
                   <input
                     type="text"
                     value={newComment}
+                    aria-label="Commento Descrittivo"
                     onChange={(e) => setNewComment(e.target.value)}
                     placeholder="es. Allow Web HTTPS from Office"
                     className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-white focus:outline-none focus:border-cyan-500 font-sans"
                   />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="text-slate-400">Interfaccia ingresso<input aria-label="Interfaccia ingresso" value={newInInterface} maxLength={15} onChange={event => setNewInInterface(event.target.value)} className="block w-full p-2 mt-1 bg-slate-950 border border-slate-700 rounded text-white" /></label>
+                  <label className="text-slate-400">Interfaccia uscita<input aria-label="Interfaccia uscita" value={newOutInterface} maxLength={15} onChange={event => setNewOutInterface(event.target.value)} className="block w-full p-2 mt-1 bg-slate-950 border border-slate-700 rounded text-white" /></label>
                 </div>
 
                 <div className="p-3 rounded-lg border border-cyan-800/40 bg-cyan-950/20 space-y-2">
@@ -558,6 +655,7 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
                       <label className="text-slate-300 text-xs">Secondi prima del rollback:</label>
                       <input
                         type="number"
+                        aria-label="Secondi prima del rollback"
                         min={10}
                         max={300}
                         value={newTimeoutSec}
@@ -571,7 +669,7 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
                 <div className="flex items-center justify-end space-x-3 pt-3 border-t border-cyber-border">
                   <button
                     type="button"
-                    onClick={() => setIsAddRuleOpen(false)}
+                    onClick={closeRuleForm}
                     className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-medium"
                   >
                     Annulla
@@ -589,7 +687,7 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
                     ) : (
                       <>
                         <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Applica Regola</span>
+                        <span>{editingLine === null ? 'Applica Regola' : 'Sostituisci Regola'}</span>
                       </>
                     )}
                   </button>

@@ -25,8 +25,16 @@ import { AttackPathGraph } from '../components/graph/AttackPathGraph';
 import { useCompany } from '../context/CompanyContext';
 import { scopeAttackGraph } from '../components/graph/attackPathModel';
 import { AttackPathGuide } from '../components/graph/AttackPathGuide';
+import { useAuth } from '../context/AuthContext';
+import { ChokepointRemediationModal, supportsChokepointMitigation } from '../components/ChokepointRemediationModal';
+import { FirewallManager } from '../components/FirewallManager';
+import type { SSHServerItem } from '../types/ssh';
 
 export const AttackPath: React.FC = () => {
+  const { user } = useAuth();
+  const canRemediate = Boolean(user && ['SuperAdmin', 'TenantAdmin', 'SecOps'].includes(user.role));
+  const [remediationNode, setRemediationNode] = useState<AttackNode | null>(null);
+  const [firewallServer, setFirewallServer] = useState<SSHServerItem | null>(null);
   const {
     selectedCompanyId,
     selectedCompany,
@@ -60,7 +68,8 @@ export const AttackPath: React.FC = () => {
     setSelectedPathId(graph?.paths[0]?.id || null);
     setSelectedNode(null);
     setActiveTab('paths');
-  }, [graph]);
+    setRemediationNode(null);
+  }, [graph, canRemediate]);
 
   const fetchGraph = useCallback(async () => {
     const version = ++requestVersion.current;
@@ -111,6 +120,12 @@ export const AttackPath: React.FC = () => {
       setError('Copia non disponibile: seleziona e copia il testo della raccomandazione.');
     }
   };
+
+  const mitigationAction = (node?: AttackNode) => canRemediate && node ? <button type="button"
+    disabled={!supportsChokepointMitigation(node)}
+    title={supportsChokepointMitigation(node) ? 'Valuta un blocco porta sul server SSH del servizio' : 'Solo servizi IPv4 TCP/UDP; per altri nodi serve una verifica manuale'}
+    onClick={() => setRemediationNode(node)} aria-label={`Neutralizza Chokepoint ${node.label}`}
+    className="mt-3 rounded-lg border border-amber-600 px-3 py-2 text-xs font-semibold text-amber-300 disabled:opacity-40">Neutralizza Chokepoint</button> : null;
 
   return (
     <div className="space-y-6">
@@ -565,6 +580,7 @@ export const AttackPath: React.FC = () => {
                             )}
                           </button>
                         </div>
+                        {mitigationAction(node)}
                       </div>
                     </div>
                   );
@@ -644,6 +660,7 @@ export const AttackPath: React.FC = () => {
                           ?.remediation
                       }
                     </p>
+                    {mitigationAction(selectedNode)}
                   </div>
                 )}
 
@@ -666,6 +683,8 @@ export const AttackPath: React.FC = () => {
           </div>
         </div>
       )}
+      {remediationNode && <ChokepointRemediationModal key={remediationNode.id} node={remediationNode} onClose={() => setRemediationNode(null)} onCheckFirewall={server => { setRemediationNode(null); setFirewallServer(server); }} />}
+      {firewallServer && <FirewallManager server={firewallServer} onClose={() => { setFirewallServer(null); void fetchGraph(); }} />}
     </div>
   );
 };

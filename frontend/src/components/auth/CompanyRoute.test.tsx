@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { CompanyRoute } from './CompanyRoute';
@@ -14,6 +14,17 @@ function mount(path: string) {
   </Routes></MemoryRouter>);
 }
 describe('Company navigation boundary', () => {
+  it('preserves the current page and its draft during refresh of a valid company', () => {
+    state.selectedCompanyId = 'company'; state.loading = false;
+    const App = () => <MemoryRouter initialEntries={['/targets']}><Routes><Route element={<CompanyRoute />}><Route path="/targets" element={<input aria-label="Page draft" />} /></Route></Routes></MemoryRouter>;
+    const view = render(<App />);
+    const draft = screen.getByLabelText('Page draft');
+    fireEvent.change(draft, { target: { value: 'pending scan configuration' } });
+    state.loading = true;
+    view.rerender(<App />);
+    expect(screen.getByLabelText('Page draft')).toBe(draft);
+    expect((draft as HTMLInputElement).value).toBe('pending scan configuration');
+  });
   beforeEach(() => { state.selectedCompanyId = null; state.loading = false; });
   it('blocks a direct operational URL without a company', () => { mount('/targets'); expect(screen.getByText('Dashboard unica')).toBeDefined(); expect(screen.queryByText('Target aziendali')).toBeNull(); });
   it('blocks stale company IDs', () => { state.selectedCompanyId = 'removed'; mount('/targets'); expect(screen.getByText('Dashboard unica')).toBeDefined(); });

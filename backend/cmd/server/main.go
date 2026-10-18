@@ -133,7 +133,7 @@ func main() {
 	reportService := service.NewReportService(reportRepo, scanRepo, scanProfileRepo, targetRepo, findingRepo, tenantRepo, nil, targetGroupRepo)
 
 	ouiDB := scanner.NewOUIDatabase()
-	discoveryService := service.NewDiscoveryService(scannerRunner, ouiDB, logger, eventBroadcaster)
+	discoveryService := service.NewDiscoveryService(scannerRunner, ouiDB, logger, eventBroadcaster, postgres.NewDiscoveryRepo(db.Pool))
 
 	sshServerRepo := postgres.NewSSHServerRepo(db.Pool)
 	sshService := service.NewSSHService(sshServerRepo, cfg.SSHMasterKey)
@@ -167,6 +167,7 @@ func main() {
 	cveHandler := handler.NewCVEHandler(cveRepo, cveSyncService)
 	attackPathHandler := handler.NewAttackPathHandler(attackPathService)
 	defenseHandler := handler.NewDefenseHandler(defenseService)
+	virtualPatchingHandler := handler.NewVirtualPatchingHandler(service.NewVirtualPatchingService(findingRepo))
 
 	r.Get("/healthz", healthHandler.HealthCheck)
 	r.Route("/api/v1", func(api chi.Router) {
@@ -320,6 +321,8 @@ func main() {
 			})
 		})
 
+		api.With(authMiddleware, appmw.RequireTenant()).Get("/findings/{id}/virtual-patches", virtualPatchingHandler.Generate)
+
 		api.Route("/ssh/servers", func(sshRouter chi.Router) {
 			sshRouter.Use(authMiddleware)
 			sshRouter.Use(appmw.RequireTenant())
@@ -339,6 +342,9 @@ func main() {
 				// Gestione Firewall iptables con Anti-Lockout Safety Timer
 				secOpsRouter.Get("/{id}/firewall", sshFirewallHandler.GetFirewallStatus)
 				secOpsRouter.Post("/{id}/firewall/rules", sshFirewallHandler.AddFirewallRule)
+				secOpsRouter.Put("/{id}/firewall/rules/{line}", sshFirewallHandler.ReplaceFirewallRule)
+				secOpsRouter.Post("/{id}/firewall/rules/move", sshFirewallHandler.MoveFirewallRule)
+				secOpsRouter.Put("/{id}/firewall/policy", sshFirewallHandler.SetFirewallPolicy)
 				secOpsRouter.Delete("/{id}/firewall/rules/{line}", sshFirewallHandler.DeleteFirewallRule)
 				secOpsRouter.Post("/{id}/firewall/apply", sshFirewallHandler.ApplyWithSafetyTimer)
 				secOpsRouter.Post("/{id}/firewall/confirm", sshFirewallHandler.ConfirmFirewall)

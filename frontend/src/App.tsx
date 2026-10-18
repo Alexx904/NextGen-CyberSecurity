@@ -38,7 +38,6 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <DebugProvider>
-          <CompanyProvider>
             <Suspense fallback={<PageLoadingFallback />}>
               <Routes>
                 {/* Rotta Pubblica: Autenticazione */}
@@ -46,7 +45,7 @@ export default function App() {
 
                 {/* Rotte Protette: Accessibili solo con sessione valida */}
                 <Route element={<ProtectedRoute />}>
-                  <Route element={<AppLayout />}>
+                  <Route element={<CompanyProvider><AppLayout /></CompanyProvider>}>
                     <Route path="/" element={<Dashboard />} />
                     <Route path="/companies" element={<Navigate to="/" replace />} />
                     <Route path="/dashboard" element={<Navigate to="/" replace />} />
@@ -72,7 +71,6 @@ export default function App() {
             {/* Console di Debug e Pulsante Fluttuante Globale (attivi su qualsiasi pagina, incluso Login) */}
             <DebugFloatingToggle />
             <DebugConsoleDrawer />
-          </CompanyProvider>
         </DebugProvider>
       </AuthProvider>
     </BrowserRouter>

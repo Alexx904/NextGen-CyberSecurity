@@ -46,3 +46,16 @@ type DiscoveryService interface {
 	LookupVendor(mac string) string
 }
 
+// DiscoveryRepository stores snapshots before they are acknowledged over SSE.
+type DiscoveryRepository interface {
+	Create(ctx context.Context, result *DiscoveryResult) error
+	SaveDevice(ctx context.Context, tenantID, sessionID uuid.UUID, device DiscoveredDevice) error
+	Complete(ctx context.Context, result *DiscoveryResult) error
+	GetLast(ctx context.Context, tenantID uuid.UUID) (*DiscoveryResult, error)
+	GetSession(ctx context.Context, tenantID, sessionID uuid.UUID) (*DiscoveryResult, error)
+}
+
+// TenantDiscoveryTopic also isolates subscriptions made before session creation.
+func TenantDiscoveryTopic(tenantID, sessionID uuid.UUID) string {
+	return "discovery:" + tenantID.String() + ":" + sessionID.String()
+}

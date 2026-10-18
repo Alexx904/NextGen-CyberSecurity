@@ -59,6 +59,15 @@ export const Targets: React.FC = () => {
   // Feedback copia
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  useEffect(() => {
+    setSelectedGroupId(null);
+    setSelectedGroupNode(null);
+    setSelectedTargetIds(new Set());
+    setTargetToDelete(null);
+    setIsBulkDeleteModalOpen(false);
+    setIsCreateModalOpen(false);
+  }, [selectedCompanyId]);
+
   const fetchTargets = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -164,8 +173,9 @@ export const Targets: React.FC = () => {
       let matchesGroup = true;
       if (activeSubtreeGroupIds) {
         matchesGroup = t.group_id ? activeSubtreeGroupIds.has(t.group_id) : false;
-      } else if (selectedCompanyId) {
-        matchesGroup = t.group_id ? companyGroupIds.has(t.group_id) : false;
+      }
+      if (selectedCompanyId) {
+        matchesGroup = matchesGroup && Boolean(t.group_id && companyGroupIds.has(t.group_id));
       }
 
       return matchesSearch && matchesType && matchesStatus && matchesGroup;

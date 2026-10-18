@@ -51,10 +51,36 @@ Creare `docs/domains/active_defense_and_soar.md` con il contratto confermato. Ag
 
 - Ready for design: sì, scelta PO ricevuta.
 - Ready for implementation: sì; contratti e test predisposti, implementazione effettuata.
-- Verified: no; gate operativo ancora aperto (TECH-DEBT-06/07).
+- Verified: yes, 2026-10-18; shared watchdog and task-specific real SSH/TCP gate PASS.
 - Accepted: no.
 
 ## Evidenze e self-review
+
+### Resumed operational gate · 2026-10-18
+
+M11-FIREWALL-01 now verifies the shared lifecycle on nft/legacy and real pinned
+OpenSSH. The original PID/local-lock findings below are historical, superseded
+by ADR-25. Host reboot/state deletion/other accounts remain explicit limitations.
+To verify this task's own orchestration, run a tagged Linux test only inside the
+named SSH fixture: deterministic tenant graph fixture + production DefenseService,
+SSHService and FirewallService. Start a loopback HTTP endpoint on a synthetic
+non-management port, prove reachable → DROP blocks fresh connections → confirmation
+from a fresh service → explicit rollback restores reachability. Verify preview,
+foreign tenant and stale chokepoint do not mutate rules. Backup repository remains
+an in-memory test fixture; this is real SSH/firewall/TCP integration, not a new
+PostgreSQL/full-graph E2E claim. No customer-host action or application code change.
+
+Preparation: backend `GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go test -c -tags=integration -o ../.agent/artifacts/M11-FIREWALL-01/service-linux.test ./internal/service`
+PASS exit 0, 1.428s wall; Docker copy PASS. Inside `nextgen-ssh-lab-20261018`,
+explicit TEST_FIREWALL_SSH_CONTAINER/PORT=22/IN_CONTAINER=1:
+`/tmp/service-linux.test -test.run=^TestDefenseSSH -test.v -test.count=1`
+PASS exit 0, test 3.01s; root Docker command 7.048s wall. Actual HTTP baseline,
+block, confirmed block and restored connection all asserted. Final revision matches
+baseline, pending marker absent. Test listener closes; fixture rules restored.
+Default backend gate inputs unchanged: only a new integration-tagged test added,
+excluded from default build; prior All backend suite/vet/build remains applicable.
+No new application deploy/schema/source change for this gate. Self-review in first
+person, no independent review. Historical gaps below are superseded by this result.
 
 - `go test ./...` baseline PASS exit 0 con cache locale ignorata.
 - Riproduzione PID watchdog invalido: test mirato FAIL exit 1 prima del fix; PASS exit 0 dopo.

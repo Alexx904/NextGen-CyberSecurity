@@ -7,6 +7,198 @@
 
 ---
 
+## Accepted tasks and priority reorganization · 2026-10-18
+
+The PO accepted all `[~]` deliveries and authorized publication on main. Existing accepted tasks are archived with evidence. T4/T5 remain incomplete and deferred until project end; their prepared code is excluded from publication. ROADMAP-PENTEST-01 is accepted as planning only. Acceptance does not convert missing tests into PASS.
+
+- [x] AGENT-HARNESS-01 · Ottimizzare contesto, skill e verificatori della governance
+  - PO acceptance: 2026-10-18, explicit approval of all `[~]` tasks. Declared test limits remain unchanged.
+  - File: AGENTS.md, .agent/, .agents/skills/, scripts/*agent*, documenti di indice/stato/mapping.
+  - Dipende da: nessuno; modifiche applicative M1.1 preesistenti preservate.
+  - Test: controlli documentali, mapping completo, manifest skill e fixture negative; preservazione ID/stati.
+  - Docs: [piano/fonti](docs/04-development/plans/AGENT-HARNESS-01.md), ADR-23, PROJECT_STATE, DOMAIN_MAP e indice.
+  - DoD: controlli PASS exit 0; snapshot preservato; self-review e Doc Sync; benchmark Sol non eseguito e non inferito dal risparmio caratteri.
+  - Evidenze 2026-10-18: Docs PASS exit 0 (report 20261018-114735-c1bb6cad); 22 fixture/check PASS exit 0 (2,276s); snapshot e 26 stati task preesistenti preservati. Nessun sorgente applicativo modificato da questo task; accettazione PO separata.
+
+- [x] M11-CLOSE-01 · Completamento M1.1 senza riordino milestone
+  - PO acceptance: 2026-10-18, explicit approval of all `[~]` tasks. Declared test limits remain unchanged.
+  - File: backend/internal/domain/firewall*, backend/internal/service/firewall*, frontend/src/components/FirewallManager*.
+  - Dipende da: accettazioni M1.1 preservate; gate SSH-HARDEN-01 e TECH-DEBT-07.
+  - Test: input ostili rosso/verde, timer obbligatorio, regressione All, collaudi Linux/UI e matrice FR-07..FR-13.
+  - Docs: [piano](docs/04-development/plans/M11-CLOSE-01.md), dominio SSH, API_SPEC, PROJECT_STATE.
+  - DoD: test e build/vet PASS; collaudi obbligatori eseguiti; Doc Sync e self-review; accettazione PO separata.
+  - Avanzamento 2026-10-18: fix input/commenti/timer e gate automatico All PASS (frontend ripetuto dopo correzione fixture); milestone non conclusa. Matrice [QA](docs/05-qa/M11_CLOSURE_QA.md). PO conferma iptables/iptables-nft, modello attuale.
+  - Esito finale 2026-10-18: tutti i gate FR-07..13 pertinenti PASS nella matrice; Final frontend 204 test/build PASS, backend All e PostgreSQL riutilizzati con sorgenti pertinenti invariati. Browser/PDF/Linux/OpenSSH reali su laboratorio isolato, self-review/audit mirato e Doc Sync completati. Nessuna accettazione PO implicita.
+
+- [x] M11-DISCOVERY-UI-01 · Completare azioni discovery FR-10
+  - PO acceptance: 2026-10-18, explicit approval of all `[~]` tasks. Declared test limits remain unchanged.
+  - File: NetworkDiscovery, NewScanModal, utils/discoveryExport e test frontend.
+  - Dipende da: M11-PERSIST-01; mantiene le decisioni accettate sui profili scanner.
+  - Test: CSV ostile/JSON parziale, handoff ristretto, blacklist/duplicati, retry parziale e blocco su esito incerto; Final Frontend e browser isolato.
+  - Docs: [piano](docs/04-development/plans/M11-DISCOVERY-UI-01.md), dominio scanner, UI_SPECIFICATIONS, matrice M1.1 e PROJECT_STATE.
+  - DoD: export/avvio selezionati verificati nel browser, test/build PASS, Doc Sync e self-review; FR-10.5 storico superato, nessun nuovo preset host-only.
+  - Evidenze: Final Frontend 204 test PASS, report 20261018-175253-fd10722f; deploy frontend esplicitamente autorizzato. Browser CSV due visibili/JSON uno selezionato, job unico .4 nel gruppo con tre target, mobile 390px senza overflow; WS reale con 64 eventi senza payload/ticket. Accettazione PO separata.
+
+- [x] M11-REPORT-01 · Completare filtri e collaudo archivio report FR-08
+  - PO acceptance: 2026-10-18, explicit approval of all `[~]` tasks. Declared test limits remain unchanged.
+  - Evidenze 2026-10-18: browser 3080, 21 report/tre pagine, periodo invertito, filtri combinati e isolamento aziende. Executive A4 quattro pagine renderizzato/ispezionato. Gate Final All/Integration PASS, 184 test frontend/build; report 20261018-124105-426c02b0. Self-review e Doc Sync completati; accettazione PO separata.
+  - File: frontend/src/pages/Reports*, frontend/src/types/report.ts, backend/internal/domain/report.go e percorsi report se necessario.
+  - Dipende da: M11-CLOSE-01 (ricognizione).
+  - Test: date/profilo/target/cartella, paginazione, isolamento aziende, PDF renderizzato; DB esplicito se cambia repository.
+  - Docs: reporting_and_assets, API_SPEC e matrice M1.1.
+  - DoD: mirati/regressione PASS; UI/PDF verificati; build/typecheck/vet PASS; Doc Sync e self-review.
+
+- [x] M11-FIREWALL-01 · Completare operazioni e resilienza firewall FR-11
+  - PO acceptance: 2026-10-18, explicit approval of all `[~]` tasks. Declared test limits remain unchanged.
+  - Evidenze 2026-10-18: transazione remota/editor revisionato; quattro prove nft e quattro legacy PASS, due OpenSSH PASS incluso comando tardivo. Final All PASS (192 test frontend), report 20261018-172209-43bb2250. Deploy locale e inventario SSH lab autorizzati. Browser PASS expiry/conferma/policy/riordino/sostituzione e terminale con I/O reale. Fix protocolli numerici e cambio azienda rosso→verde/browser PASS. [Piano](docs/04-development/plans/M11-FIREWALL-01.md); self-review e Doc Sync, accettazione PO separata.
+  - File: backend/internal/domain/firewall*, backend/internal/service/firewall*, handler SSH, frontend/src/components/FirewallManager*.
+  - Dipende da: TECH-DEBT-07, SSH-HARDEN-01. Decisione PO acquisita: iptables/iptables-nft, modello corrente, niente nft nativo.
+  - Test: policy, modifica/riordino, conferma/rollback, disconnessione, timeout e multiistanza su laboratorio Linux isolato; UI terminale docked.
+  - Docs: ssh_and_firewall, API_SPEC, UI_SPECIFICATIONS, matrice M1.1.
+  - DoD: test mirati PASS; laboratorio/UI PASS; build/typecheck/vet PASS; Doc Sync e self-review.
+
+- [x] M11-PERSIST-01 · Persistenza e recupero risultati progressivi FR-12
+  - PO acceptance: 2026-10-18, explicit approval of all `[~]` tasks. Declared test limits remain unchanged.
+  - Evidenze 2026-10-18: migrazione 000011, repository tenant/up-down-up PASS; callback stdout host/finding e no publish su errore DB. Gate Final All/Integration PASS, report 20261018-124105-426c02b0. Deploy locale esplicitamente autorizzato dal PO. Browser su host Docker sintetico 172.30.77.3: risultato completo/parziale recuperato dopo refresh e restart backend; niente target reali. Self-review e Doc Sync completati; nessuna ripresa automatica o pub/sub distribuito dichiarati.
+  - File: backend/internal/service/discovery*, scan_orchestrator*, repository/migrations e handler streaming secondo contratto da definire.
+  - Dipende da: contratto PostgreSQL prima dell'implementazione.
+  - Test: scrittura incrementale, refresh/riconnessione, riavvio, tenant; integrazione PostgreSQL e migrazioni up/down, eventi durante Nmap.
+  - Docs: [piano/evidenze](docs/04-development/plans/M11-PERSIST-01.md), scanning_and_discovery, DATABASE_SCHEMA, API_SPEC, ADR-24 e matrice M1.1.
+  - DoD: mirati PASS; DB/rollback/streaming PASS; gate All PASS; Doc Sync e self-review.
+
+- [x] CI-CONTEXT-01 · Correggere contesto porta dinamica PostgreSQL in Actions
+  - PO acceptance: 2026-10-18, explicit approval of all `[~]` tasks. Declared test limits remain unchanged.
+  - File: .github/workflows/ci.yml.
+  - Dipende da: nessuno.
+  - Test: actionlint rosso/verde, verificatore documentale e diff check. Codice e schema DB invariati; esecuzione job GitHub da verificare.
+  - Evidenze: actionlint v1.7.7 riproduzione exit 1, corretto PASS exit 0; validazione GitHub remota non ancora eseguita.
+  - Docs: CI_CD_PIPELINE e PROJECT_STATE.
+  - DoD: validazione workflow PASS, gate integrazione preservato, Doc Sync e self-review; accettazione PO separata.
+
+- [x] README-GH-01 · README completo per GitHub
+  - PO acceptance: 2026-10-18, explicit approval of all `[~]` tasks. Declared test limits remain unchanged.
+  - Feedback PO: URL Docker corretto a localhost:3080; quickstart/artifact con FRONTEND_PORT esplicita, Vite nativo invariato a 3000.
+  - File: README.md.
+  - Dipende da: nessuno.
+  - Test: verificatore documentale e git diff --check; nessuna suite applicativa per soli Markdown.
+  - Evidenze: dalla root verificatore PASS exit 0 (1,143 s; 64 Markdown, 224 link/ancore), diff check PASS exit 0 (controllo e inventario 0,148 s); self-review completata, nessun cambiamento applicativo.
+  - Docs: PROJECT_STATE e questo registro; contratti e domini invariati.
+  - DoD: contenuti aderenti alle fonti, riferimenti validi, self-review e controlli PASS. Commit e push main esplicitamente richiesti dal PO; accettazione editoriale separata.
+
+- [x] DOCKER-CI-01 · Immagini Docker scaricabili da GitHub Actions
+  - Accettazione PO: 2026-10-17, «OK». Prima esecuzione GitHub ancora da verificare; nessuna autorizzazione implicita a commit/push/deploy.
+  - File: .github/workflows/ci.yml, compose.images.yml, backend/.dockerignore, frontend/.dockerignore, frontend/Dockerfile.
+  - Dipende da: nessuno; riusa i tre job CI esistenti come gate.
+  - Test: build immagini, Nmap/Nginx isolati, archivio load e Compose config; docs/diff. Prima esecuzione remota non eseguita.
+  - Evidenze: entrambe le build, Nmap --version, nginx -t, docker save/load compresso, Compose config e docs/diff PASS exit 0; dettaglio in CI_CD_PIPELINE. Nessuna suite applicativa locale rieseguita: sorgenti invariati, controlli applicativi conservati nel workflow.
+  - Docs: CI_CD_PIPELINE, DEPLOYMENT e PROJECT_STATE; nessuna modifica ai domini/API/DB.
+  - DoD: (1) verifiche locali PASS; (2) limiti CI remota dichiarati; (3) build immagini PASS; (4) Doc Sync e self-review.
+
+- [x] SSH-TOOLS-01 · Terminale WebSocket e lettura iptables
+  - Accettazione PO: 2026-10-17, «Ok perfetto è funzionante» dopo la diagnosi del 502. Nessuna chiusura implicita del gate watchdog/Linux.
+  - File: frontend/nginx.conf, frontend/vite.config.ts, FirewallManager e test; backend domain/service/handler firewall e test.
+  - Dipende da: SSH-CONNECT-02, accettato dal PO per la connessione.
+  - Test: proxy WebSocket isolato, sudo non interattivo/root, errori prerequisiti/privilegi, visualizzazione API; gate finale All senza DB (nessun repository/schema modificato).
+  - Docs: dominio SSH, API_SPEC, DOMAIN_MAP, DEPLOYMENT, [QA](docs/05-qa/SSH_TOOLS_QA.md) e PROJECT_STATE.
+  - Evidenze: proxy Vite/Nginx bidirezionale PASS; gate Final All suite backend/vet/build, 175 test frontend/build e documenti/diff PASS exit 0. Nessun DB o target modificato.
+  - Feedback successivo: PO riferisce ancora 502 generico. Check runtime 2026-10-17: bundle SSHServers-BeM5cCm3.js servito, diagnostica FIREWALL_PRIVILEGES_REQUIRED presente nel binario, proxy API → 401 JSON senza autenticazione (atteso). Causa target e cache browser non provate; richiesti verifica pacchetto/lettura sudo sul Debian e refresh forzato. Nessun nuovo fix o PASS reale dichiarato.
+  - DoD: riproduzione rossa→verde, gate finale, Doc Sync e self-review; prova Debian reale al PO.
+
+- [x] SSH-CONNECT-02 · Negoziazione host con più chiavi e pin SHA256
+  - File: backend/internal/service/ssh_service.go, ssh_hardening_test.go.
+  - Dipende da: nessuno.
+  - Test: loopback multi-key Ed25519/RSA rosso→verde, ECDSA e pin sconosciuto senza autenticazione PASS; errore login non ritentato e cancellazione PASS. Gate Final Backend: suite 17,840s/vet 0,871s/build 1,470s, documenti/diff PASS exit 0.
+  - Docs: ssh_and_firewall, piano SSH-HARDEN-01, PROJECT_STATE.
+  - DoD: riproduzione rossa→verde, regressione backend, Doc Sync e self-review; connessione Debian reale da confermare dal PO.
+
+- [x] SSH-HARDEN-01 · Pinning host SSH e deadline connessioni/comandi
+  - PO acceptance: 2026-10-18, explicit approval of all `[~]` tasks. Declared test limits remain unchanged.
+  - Scope PO: avvio TECH-DEBT-06/07, 2026-10-17 “Procedi”; primo incremento implementato, nessuna chiusura implicita del watchdog o degli altri debiti.
+  - File: domain/service SSH, repository/handler, migrazione 000010 up/down, tipi e modale SSH e test.
+  - Dipende da: nessuno; modifiche DISCOVERY-01 preesistenti preservate.
+  - Test: pin assente rosso→verde; mismatch/pin fidato, rotazione/reset endpoint, cancellazione handshake/comando bloccato, persistenza/tenant e up/down/up PostgreSQL PASS. Gate finale backend suite/vet/build, frontend 166 test/build e DB PASS exit 0.
+  - Docs: [piano e QA](docs/04-development/plans/SSH-HARDEN-01.md), ssh_and_firewall, REQUIREMENTS, UI_SPECIFICATIONS, DATABASE_SCHEMA, ADR-20, DEPLOYMENT, PROJECT_STATE.
+  - DoD: (1) mirati PASS; (2) PostgreSQL e rollback PASS, visuale NON ESEGUITO; (3) suite/build/vet PASS; (4) Doc Sync e self-review completati.
+  - Visuale 2026-10-18: modale creazione/modifica e reset pin al cambio host verificati, poi Annulla senza salvare. Gate Final All/Integration PASS, report 20261018-124105-426c02b0; self-review/Doc Sync completati, accettazione separata. TECH-DEBT-07 ed E28-S1-T1 restano aperti: non dedurre collaudo firewall/SSH reale dalle prove discovery.
+
+- [x] DISCOVERY-01 · Precisione identità e probe HTTP Network Discovery
+  - Accettazione PO: 2026-10-17, “OK”; limiti dichiarati preservati, nessuna autorizzazione implicita a commit/push/deploy.
+  - File: backend/internal/scanner/{arp_cache,http_grabber,vendor_infer} e test, backend/internal/service/discovery_service.go e test.
+  - Dipende da: nessuno.
+  - Test: MAC invalidi/software rosso→verde; cache cambio MAC, /31-/32, HTTP redirect/titolo, suite backend/vet/build.
+  - Evidenze: backend `go test ./...` 29,632s, `go vet ./...` 3,237s, `go build ./...` 1,376s PASS exit 0; documenti/diff PASS. Nessun collaudo LAN reale; API/DB/UI invariati.
+  - Docs: [analisi](docs/04-development/NETWORK_DISCOVERY_REVIEW.md), dominio scanning_and_discovery, PROJECT_STATE.
+  - DoD: test mirati e regressione PASS; limite LAN reale dichiarato; suite/build/vet PASS; Doc Sync e self-review.
+
+- [x] TEST-OPT-01 · Test proporzionati, integrazioni esplicite e durate misurate
+  - Accettazione PO: 2026-10-17, “Approvo tutto”, commit e push su main esplicitamente autorizzati.
+  - File: AGENTS.md, playbook feature/feedback/fix/refactor/verify, scripts/verify.ps1, test PostgreSQL, .github/workflows/ci.yml.
+  - Dipende da: nessuno; modifiche applicative preesistenti preservate.
+  - Test: percorso rapido, backend suite/build/vet, integrazione reale e configurazione (12 casi) PASS exit 0; DB/config assenti FAIL atteso exit 1 senza skip; runner happy/rejection/fail-fast/report PASS; frontend smoke 30 test PASS. Documenti/diff PASS; CI GitHub non eseguita. Container effimero arrestato/rimosso, container applicativi preservati.
+  - Docs: Test Plan, CI/CD, schema DB (contratto test), ADR-19, registry e PROJECT_STATE.
+  - DoD: (1) verifiche mirate PASS; (2) integration reale PASS, CI remota non eseguita dichiarata; (3) backend suite/build/vet e runner PASS; (4) Doc Sync e self-review completati.
+
+- [x] COMPANY-PDF-03 · CVE nei PDF aziendali separate per reparto
+  - Accettazione PO: 2026-10-17, “Approvo tutto”. Limite visuale dichiarato accettato, nessun PASS render inventato.
+  - File: service report/departments e test, pkg/report/pdf_generator.go e test.
+  - Dipende da: COMPANY-UX-02; preserva modifiche AP/TEST-OPT preesistenti.
+  - Test: mirati service/generatore PASS; gate finale backend 2026-10-17 suite (16,296 s), vet (1,034 s), build (1,340 s), documenti/diff PASS exit 0. PDF contenuto/paginazione PASS, visuale da verificare.
+  - Docs: reporting_and_assets, REQUIREMENTS, UI_SPECIFICATIONS, piano COMPANY-UX-02, COMPANY_WORKFLOW_QA, PROJECT_STATE.
+  - DoD: attribuzione target/scan corretta; schede per reparto nei due modelli, riepilogo consolidato; suite/build/vet e Doc Sync; PDF renderizzato.
+  - Limite residuo: renderer PDF indisponibile, nessun PASS visivo né PDF autonomo consegnato. Self-review e Doc Sync completati. PO autorizza pubblicazione su main con questo limite.
+
+- [x] COMPANY-UX-02 · Dashboard unica, gerarchia due livelli, report per reparto e clienti SSH
+  - Accettazione PO: 2026-10-17, “Approvo tutto”; limiti visuali dichiarati accettati per pubblicazione.
+  - File: App/layout/CompanyRoute, Dashboard/Targets/GroupModal/TreeExplorer, CompanyContext, AttackPath e guida, SSH modal/page/types; service gruppi/report/SSH, generatori PDF/CSV, repository SSH/gruppi, migrazioni 000008/000009 e test.
+  - Dipende da: nessuno; integra AP-REVIEW-01 senza accettazione implicita.
+  - Test: frontend 164 test/build PASS; backend suite/build/vet su DB dedicato PASS; up/down e gerarchia reale PostgreSQL PASS, tutti exit 0. Test PDF contenuto/paginazione PASS, render visivo non eseguito.
+  - Docs: [piano](docs/04-development/plans/COMPANY-UX-02.md), [dominio](docs/domains/reporting_and_assets.md), [QA](docs/05-qa/COMPANY_WORKFLOW_QA.md).
+  - DoD: (1) mirati PASS; (2) collaudo browser desktop/mobile e PDF renderizzato; (3) suite/build/vet e migrazioni up/down PASS; (4) Doc Sync e self-review.
+  - Limite residuo: browser e renderer PDF indisponibili; nessun PASS visuale dichiarato. Schema/dati applicativi invariati; migrazioni provate solo su test DB. Accettazione PO distinta da prova visuale autonoma.
+
+- [x] AP-REVIEW-01 · Correttezza del modello, scope, grafo e guida integrata
+  - Accettazione PO: 2026-10-17, “Approvo tutto”; pubblicazione esplicita su main, limite browser accettato.
+  - File: domain/service/handler Attack Path e test, repository target/finding (ordine paginazione), types/page e `frontend/src/components/graph/`.
+  - Dipende da: nessuno; checkpoint `b16264b` pubblicato prima dell'intervento su richiesta PO.
+  - Test: regressione backend suite/build/vet e frontend 156 test/build PASS exit 0; test rosso→verde su cammini/esposizione/protocolli; snapshot locale 17 target/20 finding senza CVE, servizio validato a soglie 0/7/9. Nessuna mutazione DB.
+  - Docs: [piano](docs/04-development/plans/AP-REVIEW-01.md), [dominio](docs/domains/attack_path.md), [report QA](docs/05-qa/ATTACK_PATH_REVIEW.md).
+  - DoD: (1) test mirati PASS; (2) prova browser desktop/mobile con screenshot; (3) suite/build/vet PASS; (4) Doc Sync e self-review.
+  - Limite residuo: browser runtime indisponibile (inventario vuoto, iab/Chrome non disponibili); nessuna validazione visuale autonoma o exploit/reachability reale dichiarata. Accettazione PO con limiti espliciti, non certificazione di sicurezza.
+
+- [x] E28-S1-T1 · Backend Chokepoint Auto-Remediation Service & SSH Firewall Rule Applicator
+  - PO acceptance: 2026-10-18, explicit approval of all `[~]` tasks. Declared test limits remain unchanged.
+  - Avanzamento 2026-10-17: implementati preview e blocco porta sul server del chokepoint, scelta confermata dal PO; isolamento host escluso. Suite backend/build/vet e test frontend PASS. Gate operativo aperto: prova Linux reale e limiti watchdog/SSH (TECH-DEBT-06/07). Non promosso a `[~]`.
+  - Esito 2026-10-18: prova operativa `TestDefenseSSHBlocksServiceAndRestoresAfterRollback` PASS (3.01s Linux, comando Docker 7.048s exit 0). DefenseService + SSH/firewall reali: preview/rifiuti senza mutazioni; HTTP raggiungibile→DROP blocca→conferma nuova istanza→rollback ripristina e revisione iniziale. Grafo/backup deterministici in memoria, nessun nuovo E2E DB. Baseline All preservata, solo nuovo test integration; self-review e Doc Sync, accettazione separata.
+  - Piano: [E28-S1-T1](docs/04-development/plans/E28-S1-T1-chokepoint-remediation.md).
+  - File: `backend/internal/domain/defense.go`, `backend/internal/service/defense_service.go`, `backend/internal/delivery/defense_handler.go`
+  - Dipende da: Epic 26 (Attack Path), Epic 22 (SSH Manager)
+  - Test: test unitari Go su generazione regole firewall da chokepoint e invocazione sicura SSH con rollback
+  - Docs: `docs/domains/active_defense_and_soar.md`
+  - DoD: Endpoint `POST /api/v1/attack-paths/chokepoints/{id}/remediate` operativo con isolamento o blocco porta e fallback sicuro.
+
+- [x] E28-S1-T2 · Frontend Attack Path UI: Azione "Neutralizza Chokepoint" con Safety Timer
+  - PO acceptance: 2026-10-18, explicit approval of all `[~]` tasks. Declared test limits remain unchanged.
+  - Avanzamento 2026-10-18: modale preview/consenso e handoff al firewall implementati; 22 test mirati PASS. [Piano](docs/04-development/plans/E28-S1-T2-chokepoint-ui.md). Gate integrato e browser completo ancora aperti; preparato ambiente QA separato con fixture sintetiche, non avviato senza autorizzazione deploy.
+  - Chiusura tecnica 2026-10-18: PO autorizza esplicitamente laboratorio QA separato e prove sulla fixture; avvio eseguito. Final Frontend 215 test/build PASS, report `20261018-183418-df186fee`. Browser reale: preview/consenso, DROP HTTP, conferma, rollback manuale e scadenza remota con ripristino HTTP PASS; tastiera/focus e modale desktop/mobile PASS. Stato dopo scadenza verificato con ricarica esplicita; nessuna attestazione di refresh automatico. Self-review/Doc Sync; attende PO.
+  - File: `frontend/src/pages/AttackPath.tsx`, `frontend/src/components/ChokepointRemediationModal.tsx`
+  - Dipende da: E28-S1-T1
+  - Test: test Vitest su apertura modale di mitigazione, preview della regola e countdown di rollback
+  - Docs: `docs/domains/active_defense_and_soar.md`
+  - DoD: Pulsante interattivo nel drawer del chokepoint per applicare la regola firewall con 1-click e monitorare il safety timer.
+
+- [x] E28-S1-T3 · Virtual Patching & WAF Rules Generator (Fail2ban, CrowdSec, ModSecurity/Nginx)
+  - PO acceptance: 2026-10-18, explicit approval of all `[~]` tasks. Declared test limits remain unchanged.
+  - Esito 2026-10-18: endpoint tenant e pannello finding con preview/copia/download; catalogo ampliato su richiesta PO a otto CVE/cinque prodotti, con fonti vendor, strategia e impatto operativo. Final All PASS (220 test frontend), report `20261018-185831-e92556f2`; test Nginx nativo otto template PASS, browser QA autorizzata desktop/mobile e export PASS. [Piano e copertura](docs/04-development/plans/E28-S1-T3-virtual-patching.md). Fail2ban/CrowdSec/ModSecurity nativi NON ESEGUITI; nessuna installazione o garanzia di prevenzione. Self-review/Doc Sync; accettazione PO separata.
+  - File: `backend/internal/service/virtual_patching.go`, `frontend/src/components/VirtualPatchModal.tsx`
+  - Dipende da: Epic 25 (CVE Finding models)
+  - Test: test unitari Go su generazione regole regex/WAF e test Vitest su visualizzazione/copia
+  - Docs: `docs/domains/active_defense_and_soar.md`
+  - DoD: Generazione accurata di regole virtual patch per le principali CVE di rete e web con download/copia immediata.
+
+### Historical archive index
+
+> *Nota di archiviazione:* Tutti i task completati e convalidati (TASK-01..60, `FEAT-IP-ORG-01..04`, `FEAT-SCAN-PROF-01..04`, `FEAT-WORKFLOW-CLEANUP-01..07`, `FEAT-CVE-ONLINE-01`, `FEAT-REPORT-PDF-UX-01`, `FEAT-M2-01..03`, `ONBOARD-01..05`, `SEC-P0-01..06`, `SEC-P1-01..06`, `SEC-P2-01..03`) sono stati formalmente archiviati nel [CHANGELOG.md](CHANGELOG.md) in conformità alle regole di token & backlog management di `AGENTS.md`.
+
 ## Accettazione e pubblicazione su main · 2026-10-17
 
 ### Ritiro della feature e aggiornamenti SSH

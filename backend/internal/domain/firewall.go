@@ -78,6 +78,7 @@ type FirewallChain struct {
 
 // FirewallStatus racchiude lo stato globale del firewall di un host e il tracking del Safety Timer
 type FirewallStatus struct {
+	Revision             string                       `json:"revision"`
 	ServerID             uuid.UUID                    `json:"server_id"`
 	Chains               map[ChainName]*FirewallChain `json:"chains"`
 	ActiveSafetyTimer    bool                         `json:"active_safety_timer"`

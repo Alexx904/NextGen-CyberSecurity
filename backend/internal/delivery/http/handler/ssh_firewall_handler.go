@@ -36,6 +36,7 @@ type SSHServerResponse struct {
 
 // AddFirewallRuleRequest modella il payload JSON per l'inserimento di una nuova regola firewall
 type AddFirewallRuleRequest struct {
+	ExpectedRevision     string            `json:"expected_revision"`
 	Chain                domain.ChainName  `json:"chain"`
 	Action               domain.RuleAction `json:"action"`
 	Protocol             string            `json:"protocol"`
@@ -358,8 +359,20 @@ func (h *SSHFirewallHandler) AddFirewallRule(w http.ResponseWriter, r *http.Requ
 		timeoutSec = 60
 	}
 
-	status, err := h.firewallService.AddRule(r.Context(), tenantID, serverID, params, req.WithSafetyTimer, timeoutSec)
+	var status *domain.FirewallStatus
+	if req.ExpectedRevision != "" {
+		editor, supported := h.firewallEditor(w)
+		if !supported {
+			return
+		}
+		status, err = editor.AddRuleWithRevision(r.Context(), tenantID, serverID, params, req.ExpectedRevision, timeoutSec)
+	} else {
+		status, err = h.firewallService.AddRule(r.Context(), tenantID, serverID, params, req.WithSafetyTimer, timeoutSec)
+	}
 	if err != nil {
+		if writeFirewallCommonError(w, err) {
+			return
+		}
 		if errors.Is(err, domain.ErrSSHServerNotFound) || errors.Is(err, domain.ErrNotFound) {
 			response.Error(w, http.StatusNotFound, "NOT_FOUND", "Server SSH non trovato")
 			return
@@ -435,8 +448,20 @@ func (h *SSHFirewallHandler) DeleteFirewallRule(w http.ResponseWriter, r *http.R
 		timeoutSec = val
 	}
 
-	status, err := h.firewallService.DeleteRule(r.Context(), tenantID, serverID, chain, lineNum, withSafetyTimer, timeoutSec)
+	var status *domain.FirewallStatus
+	if revision := r.URL.Query().Get("expected_revision"); revision != "" {
+		editor, supported := h.firewallEditor(w)
+		if !supported {
+			return
+		}
+		status, err = editor.DeleteRuleWithRevision(r.Context(), tenantID, serverID, chain, lineNum, revision, timeoutSec)
+	} else {
+		status, err = h.firewallService.DeleteRule(r.Context(), tenantID, serverID, chain, lineNum, withSafetyTimer, timeoutSec)
+	}
 	if err != nil {
+		if writeFirewallCommonError(w, err) {
+			return
+		}
 		if errors.Is(err, domain.ErrValidation) {
 			response.Error(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
 			return
@@ -480,6 +505,9 @@ func (h *SSHFirewallHandler) ApplyWithSafetyTimer(w http.ResponseWriter, r *http
 
 	status, err := h.firewallService.ApplyWithSafetyTimer(r.Context(), tenantID, serverID, timeoutSec)
 	if err != nil {
+		if writeFirewallCommonError(w, err) {
+			return
+		}
 		if errors.Is(err, domain.ErrValidation) {
 			response.Error(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
 			return
@@ -510,6 +538,9 @@ func (h *SSHFirewallHandler) ConfirmFirewall(w http.ResponseWriter, r *http.Requ
 	}
 
 	if err := h.firewallService.Confirm(r.Context(), tenantID, serverID); err != nil {
+		if writeFirewallCommonError(w, err) {
+			return
+		}
 		if errors.Is(err, domain.ErrSSHServerNotFound) || errors.Is(err, domain.ErrNotFound) {
 			response.Error(w, http.StatusNotFound, "NOT_FOUND", "Server SSH non trovato")
 			return
@@ -541,6 +572,9 @@ func (h *SSHFirewallHandler) RollbackFirewall(w http.ResponseWriter, r *http.Req
 	_ = json.NewDecoder(r.Body).Decode(&req)
 
 	if err := h.firewallService.Rollback(r.Context(), tenantID, serverID, req.BackupID); err != nil {
+		if writeFirewallCommonError(w, err) {
+			return
+		}
 		if errors.Is(err, domain.ErrSSHServerNotFound) || errors.Is(err, domain.ErrNotFound) {
 			response.Error(w, http.StatusNotFound, "NOT_FOUND", "Server SSH o snapshot backup non trovato")
 			return

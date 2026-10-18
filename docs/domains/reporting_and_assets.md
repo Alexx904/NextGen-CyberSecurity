@@ -1,5 +1,22 @@
 # Dominio: Asset Tree Management & Centralized Reports Hub
 
+> Publication scope 2026-10-18: alert-channel / outbox / migration 000012 sections describe deferred T4/T5 design and local prototype evidence. Their code and routes are excluded from this release; published migration is 000011. Alert-specific commands are future gates.
+
+
+## M11-CLOSE-01 · Company switch regression · 2026-10-18 · working tree
+
+Changing company resets the selected department, bulk target selection and open
+target mutation dialogs. Department filtering always intersects the active
+company group IDs. Browser reproduced old department targets under a newly
+selected company; `Targets.test.tsx` is RED→GREEN. Corrected-build browser check
+PASS on corrected Docker build; tenant authorization remains unchanged.
+
+During a background company refresh, CompanyRoute preserves a page whose company
+is already valid, avoiding lost import/scan drafts. Initial unresolved selections
+still wait; invalid selections redirect after resolution. This is client navigation
+policy and does not change server authorization. Regression RED→GREEN; corrected
+discovery-build browser handoff PASS after refresh.
+
 ## M11-REPORT-01 · Archivio e filtri · 2026-10-18 · working tree
 
 Contratto UI: storico caricato su tutte le pagine API, quindi filtri locali per
@@ -8,6 +25,14 @@ Scope azienda applicato sia a gruppi sia a cronologico, 10 righe/pagina.
 Errori di caricamento parziale impediscono aggregazioni incomplete. I download
 aziendali consolidati restano completi: i filtri selezionano solo lo storico.
 Nessuna modifica API/DB; [piano](../04-development/plans/M11-CLOSE-01.md).
+
+Collaudo 2026-10-18 su UI locale 3080: archivio 21 righe su tre pagine,
+filtri combinati e isolamento scope verificati; Executive A4 di quattro pagine
+scaricato e renderizzato con Poppler/font Liberation, tutte le pagine ispezionate.
+[Evidenze e limiti](../05-qa/M11_CLOSURE_QA.md#browser-e-pdf--2026-10-18).
+La media score dello storico filtrato UI e lo score del PDF consolidato sono
+metriche con insiemi diversi; non assumere uguaglianza. Contesto aziende caricato
+all'ingresso nel layout autenticato da M11-CLOSE-01, evitando il refresh post login.
 
 Ultimo allineamento: 2026-10-17 · working tree. Rimossa la voce di navigazione e la route `/pentest` per richiesta del PO; la riprogettazione è da definire. Le route aziendali e gli strumenti SSH restano invariati.
 
@@ -128,3 +153,10 @@ $$\text{PostureScore} = \text{clamp}\left(0, \, 100, \, \text{round}(100 - \text
 ## 5. Ultimo Allineamento
 - **Data:** 2026-10-17
 - **Hash commit:** working tree · COMPANY-UX-02 / COMPANY-PDF-03, gate visuale aperto.
+## Company scope with notification channels
+
+2026-10-18 · working tree · E28-S1-T4: root companies referenced by non-deleted
+notification channels cannot be reparented or deleted. Remove/reassign those
+channels first; this avoids silent recipient-scope changes. Tenant removal still
+cascades its owned records. Alert configuration and source-event semantics remain
+in [Active Defense](active_defense_and_soar.md#alerting-hub-e28-s1-t4t5-in-progress).

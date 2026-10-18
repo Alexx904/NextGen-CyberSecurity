@@ -1,5 +1,17 @@
 # Dominio: Debug & Testing Live Console Drawer
 
+> Publication scope 2026-10-18: alert-channel / outbox / migration 000012 sections describe deferred T4/T5 design and local prototype evidence. Their code and routes are excluded from this release; published migration is 000011. Alert-specific commands are future gates.
+
+
+M11-CLOSE-01 · 2026-10-18 · working tree: real SSH browser QA exposed missing
+terminal WS logger calls. Terminal now records connecting/open/close/error and
+in/out frame lengths; ticket query is omitted before logging. Raw terminal input,
+output and remote close reasons never enter the debug buffer because free-form
+terminal content can contain secrets. Explicit local close/reconnect is recorded.
+Synthetic sensitive payload/ticket regression RED→GREEN. Corrected-build browser
+filter/Markdown/JSON PASS: 64 real WS metadata entries; terminal sentinel, ticket
+query and JWT-shaped values absent. REST export redaction PASS is separate.
+
 > **Dominio:** Osservabilità Client-Side, Diagnostica Interattiva ed Esportazione per AI  
 > **File di Riferimento:** `frontend/src/types/debug.ts`, `frontend/src/utils/debugLogger.ts`, `frontend/src/utils/markdownExporter.ts`, `frontend/src/context/DebugContext.tsx`, `frontend/src/components/debug/DebugConsoleDrawer.tsx`, `frontend/src/components/debug/DebugFloatingToggle.tsx`
 
@@ -75,3 +87,12 @@
 ## 11. Ultimo allineamento
 - 2026-10-10 (Epic 24 SEC-P0: Redazione token/ticket query params e sanitizzazione Markdown per AI implementata e verificata al 100%)
 
+## Alert configuration redaction
+
+2026-10-18 · working tree · E28-S1-T4/T5: diagnostic sanitization redacts the
+entire `config` object and standalone `endpoint` fields, in addition to existing
+secret-key rules. Incoming-webhook credentials may be embedded in URL paths,
+so query-string-only masking is insufficient. Regression demonstrated red→green;
+debug/export/context targeted suite 45 tests PASS. No raw alert configuration
+may appear in diagnostic records or exports. Other debug metadata remains subject
+to existing sanitization; this is not a guarantee about arbitrary free text.

@@ -13,6 +13,7 @@ interface NewScanModalProps {
   onScanLaunched: (scans?: ScanItem[]) => void;
   onScheduleCreated?: () => void;
   defaultGroupId?: string;
+  targetValues?: string[];
 }
 
 const CRON_PRESETS = [
@@ -30,7 +31,7 @@ function errorMessage(error: unknown): string {
 
 const fieldClass = 'w-full rounded-lg border border-cyber-border bg-slate-950 p-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-500';
 
-export const NewScanModal: React.FC<NewScanModalProps> = ({ isOpen, onClose, onScanLaunched, onScheduleCreated, defaultGroupId }) => {
+export const NewScanModal: React.FC<NewScanModalProps> = ({ isOpen, onClose, onScanLaunched, onScheduleCreated, defaultGroupId, targetValues }) => {
   const { selectedCompanyId } = useCompany();
   const dialogRef = useRef<HTMLElement>(null);
   const [mode, setMode] = useState<'PRESETS' | 'COMMAND'>('PRESETS');
@@ -51,6 +52,9 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({ isOpen, onClose, onS
   const [error, setError] = useState<string | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [completedScheduleIds, setCompletedScheduleIds] = useState<Set<string>>(new Set());
+  const [completedScanIds, setCompletedScanIds] = useState<Set<string>>(new Set());
+  const [launchUncertain, setLaunchUncertain] = useState(false);
+  const selectionKey = targetValues === undefined ? null : JSON.stringify([...new Set(targetValues)].sort());
 
   useEffect(() => {
     if (!isOpen) return;
@@ -120,8 +124,15 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({ isOpen, onClose, onS
   const scopedTargets = useMemo(() => {
     if (!selectedGroup) return [];
     const ids = new Set(getAllDescendantGroupIds(selectedGroup));
-    return targets.filter((target) => target.group_id && ids.has(target.group_id));
-  }, [targets, selectedGroup]);
+    const selectedValues: Set<string> | null = selectionKey === null ? null : new Set(JSON.parse(selectionKey));
+    const candidates = targets.filter((target) => target.group_id && ids.has(target.group_id) && (!selectedValues || selectedValues.has(target.value)));
+    if (!selectedValues) return candidates;
+    // One device can already be inventoried in multiple descendant folders.
+    // Honor any blacklist entry, otherwise prefer its direct destination entry.
+    const seen = new Set<string>();
+    return candidates.sort((a, b) => Number(b.is_blacklisted) - Number(a.is_blacklisted) || Number(b.group_id === selectedGroup.id) - Number(a.group_id === selectedGroup.id))
+      .filter(target => { if (seen.has(target.value)) return false; seen.add(target.value); return true; });
+  }, [targets, selectedGroup, selectionKey]);
   const eligibleTargets = scopedTargets.filter((target) => !target.is_blacklisted);
   const preset = SCAN_PRESETS.find((item) => item.id === presetId) || SCAN_PRESETS[0];
   const args = mode === 'PRESETS' ? preset.args : normalizeNmapInput(command);
@@ -135,7 +146,9 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({ isOpen, onClose, onS
   const cronInvalid = scheduled && cron.split(/\s+/).length !== 5;
   useEffect(() => { setConfirmed(false); }, [args, groupId, scheduled, cron, timeout]);
   useEffect(() => { setCompletedScheduleIds(new Set()); }, [args, groupId, cron, timeout, scheduled]);
-  const disabled = loading || loadFailed || submitting || !selectedGroup || eligibleTargets.length === 0 || !!validationError || timeoutInvalid || cronInvalid || (intrusive && !confirmed);
+  useEffect(() => { setCompletedScanIds(new Set()); setConfirmed(false); }, [isOpen, args, groupId, timeout, scheduled, selectionKey]);
+  useEffect(() => { setLaunchUncertain(false); }, [isOpen, selectionKey]);
+  const disabled = loading || loadFailed || submitting || launchUncertain || !selectedGroup || eligibleTargets.length === 0 || !!validationError || timeoutInvalid || cronInvalid || (intrusive && !confirmed);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -154,7 +167,34 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({ isOpen, onClose, onS
         const created = profile;
         setProfiles((previous) => [...previous, created]);
       }
-      if (!scheduled) {
+      if (!scheduled && targetValues !== undefined) {
+        const pending = eligibleTargets.filter(target => !completedScanIds.has(target.id));
+        const profileId = profile.id;
+        const results: PromiseSettledResult<{ targetId: string; scan: ScanItem }>[] = [];
+        for (let offset = 0; offset < pending.length; offset += 4) {
+          results.push(...await Promise.allSettled(pending.slice(offset, offset + 4).map(async target => {
+          const res = await apiClient.post<ApiResponse<ScanItem>>('/scans', { target_id: target.id, profile_id: profileId });
+          if (!res.data.success || !res.data.data) throw new Error('Avvio target fallito.');
+          return { targetId: target.id, scan: res.data.data };
+          })));
+        }
+        const succeeded = new Set(completedScanIds);
+        const scans: ScanItem[] = [];
+        results.forEach(result => { if (result.status === 'fulfilled') { succeeded.add(result.value.targetId); scans.push(result.value.scan); } });
+        setCompletedScanIds(succeeded);
+        if (scans.length) onScanLaunched(scans);
+        const failures = results.filter(result => result.status === 'rejected').length;
+        const uncertain = results.some(result => {
+          if (result.status !== 'rejected') return false;
+          const status = (result.reason as { response?: { status?: number } })?.response?.status;
+          return !status || status >= 500;
+        });
+        if (uncertain) {
+          setLaunchUncertain(true);
+          throw new Error(`${succeeded.size} scansioni confermate; altri esiti non confermati. Chiudi e verifica lo storico prima di avviare nuovamente: nessun retry automatico.`);
+        }
+        if (failures) throw new Error(`${succeeded.size} scansioni avviate; ${failures} non riuscite. Riprova solo quelle mancanti.`);
+      } else if (!scheduled) {
         const res = await apiClient.post<ApiResponse<ScanItem[] | ScanItem>>('/scans', { group_id: groupId, profile_id: profile.id });
         if (!res.data.success) throw new Error(res.data.error?.message || 'Avvio scansione fallito.');
         onScanLaunched(res.data.data ? Array.isArray(res.data.data) ? res.data.data : [res.data.data] : []);
@@ -192,6 +232,7 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({ isOpen, onClose, onS
         <form onSubmit={submit} className="overflow-y-auto p-5 space-y-5">
           {error && <p role="alert" className="rounded-lg border border-rose-500/40 bg-rose-950/30 p-3 text-sm text-rose-300">{error}</p>}
           {loading && <p role="status" className="text-sm text-slate-400">Caricamento target e profili…</p>}
+          {targetValues !== undefined && <p role="note" className="text-xs text-cyan-300">Solo i dispositivi selezionati nella discovery e presenti nella cartella scelta. Nessun altro target della cartella viene avviato.</p>}
           <fieldset disabled={submitting || loading || loadFailed} className="space-y-5 disabled:opacity-60">
             <div>
               <label htmlFor="scan-group" className="mb-2 block text-sm text-slate-200">Azienda / reparto</label>

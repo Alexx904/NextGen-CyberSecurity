@@ -571,7 +571,7 @@ func TestDiscoveryHandler_Stream(t *testing.T) {
 		time.Sleep(30 * time.Millisecond)
 
 		// Pubblica un evento device_discovered
-		topic := domain.DiscoveryTopic(sessionID)
+		topic := domain.TenantDiscoveryTopic(tenantID, sessionID)
 		broadcaster.Publish(topic, domain.SSEEvent{
 			Event: domain.EventDeviceDiscovered,
 			Data: domain.DeviceDiscoveredPayload{

@@ -1,5 +1,8 @@
 # Deployment
 
+> Publication scope 2026-10-18: alert-channel / outbox / migration 000012 sections describe deferred T4/T5 design and local prototype evidence. Their code and routes are excluded from this release; published migration is 000011. Alert-specific commands are future gates.
+
+
 ## DOCKER-CI-01 · Caricamento artifact
 
 Ultimo allineamento: 2026-10-17 · working tree. Contratto operativo del pacchetto definito nella [pipeline CI](CI_CD_PIPELINE.md#docker-ci-01--pacchetto-scaricabile). Dopo una CI riuscita, scaricare ed estrarre l'artifact `nextgen-docker-linux-amd64-<sha>` dalla pagina Actions. Su Windows è richiesto Docker Desktop con container Linux, architettura amd64. Dalla cartella estratta:
@@ -68,7 +71,14 @@ PATH con sbin e `sudo -n`, senza riusare password SSH per sudo. Una sessione SSH
 riuscita non dimostra questi privilegi. Su Debian verificare nella sessione del
 PO `command -v iptables` e `sudo -n iptables -L -n -v --line-numbers` (sola
 lettura). Nessuna installazione o modifica sudoers automatica. Mutazioni e
-watchdog mantengono i prerequisiti precedenti e il gate Linux aperto.
+watchdog now use the host-owned transaction described in the
+[SSH domain](../domains/ssh_and_firewall.md): flock, stat, nohup, date, sha256sum,
+awk, core file/sleep utilities and iptables/save/restore (including restore test).
+Non-root users require noninteractive authorization for the individual tools;
+no privileged shell/install/sudoers change is performed automatically. State is
+private per SSH UID under /tmp; reboot/deleted state and other administrators
+are outside the guarantee. Linux nft/legacy and real OpenSSH tests PASS in the
+isolated lab; no customer-host validation is inferred.
 
 La migrazione 000010 aggiunge `ssh_servers.host_key_fingerprint` vuoto per
 l'inventario esistente. Prima delle connessioni occorre configurare il pin SHA256
@@ -79,3 +89,26 @@ i pin host; salvare i pin autorizzati prima di un rollback operativo e riconfigu
 dopo il re-upgrade. Nessuna migrazione o deploy applicativo eseguito in questa
 sessione. Timeout locali non sostituiscono watchdog/transazione Linux remota;
 E28-S1-T1 e TECH-DEBT-07 restano aperti.
+## Notification channel deployment (E28-S1-T4/T5)
+
+Migration 000012 and server worker must be deployed together. No channels are
+automatically created, enabled or contacted at startup. Existing source history
+is baselined without retroactive notifications. Production-sized baseline time,
+queue throughput and audit retention have not been benchmarked; plan maintenance
+and backup before migration. Down destroys the three alert tables and cannot
+recall external messages. Root company deletion/reparenting requires channel
+reassignment/removal first.
+
+Alerting requires an operator-provisioned, stable, non-default `SSH_MASTER_KEY`
+of at least 32 bytes; default/short key refuses alert encryption/activation/test.
+Keep the existing master-key backup/rotation boundary; replacing it without
+preserving old key access makes stored configuration undecryptable. No key or
+provider credential is returned in API responses or diagnostics. Do not put
+credentials in URLs passed to shell commands or logs.
+
+Egress must support public HTTPS 443 and SMTP TLS 465/587 with trusted certificates.
+No redirects or environment proxy, no private relay/webhook exception. Tenant
+admins explicitly choose destinations and consent to synthetic tests. Teams
+targets current Workflows with Adaptive Cards. Provider acceptance does not prove
+receipt; possible duplicate retries and already in-flight sends after disable
+remain explicit. [Protocol and queue contract](../domains/active_defense_and_soar.md#alerting-hub-e28-s1-t4t5-in-progress).

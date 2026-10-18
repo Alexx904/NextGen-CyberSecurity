@@ -184,7 +184,7 @@ func TestRealTime_E2E_LANDiscovery_StreamingAndPersistence(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 
 		// Evento progress
-		broadcaster.Publish(domain.DiscoveryTopic(sessionID), domain.SSEEvent{
+		broadcaster.Publish(domain.TenantDiscoveryTopic(tenantID, sessionID), domain.SSEEvent{
 			Event: domain.EventDiscoveryProgress,
 			Data: domain.DiscoveryProgressPayload{
 				SessionID:    sessionID,
@@ -211,7 +211,7 @@ func TestRealTime_E2E_LANDiscovery_StreamingAndPersistence(t *testing.T) {
 		persistedDevices = append(persistedDevices, dev)
 		mu.Unlock()
 
-		broadcaster.Publish(domain.DiscoveryTopic(sessionID), domain.SSEEvent{
+		broadcaster.Publish(domain.TenantDiscoveryTopic(tenantID, sessionID), domain.SSEEvent{
 			Event: domain.EventDeviceDiscovered,
 			Data: domain.DeviceDiscoveredPayload{
 				SessionID: sessionID,
@@ -226,7 +226,7 @@ func TestRealTime_E2E_LANDiscovery_StreamingAndPersistence(t *testing.T) {
 		mu.Unlock()
 
 		// Evento complete
-		broadcaster.Publish(domain.DiscoveryTopic(sessionID), domain.SSEEvent{
+		broadcaster.Publish(domain.TenantDiscoveryTopic(tenantID, sessionID), domain.SSEEvent{
 			Event: domain.EventDiscoveryComplete,
 			Data: domain.DiscoveryCompletePayload{
 				SessionID:       sessionID,
@@ -275,7 +275,7 @@ func TestRealTime_E2E_LANDiscovery_StreamingAndPersistence(t *testing.T) {
 	}
 
 	var discRes struct {
-		Success bool                  `json:"success"`
+		Success bool                   `json:"success"`
 		Data    domain.DiscoveryResult `json:"data"`
 	}
 	_ = json.NewDecoder(resultsResp.Body).Decode(&discRes)

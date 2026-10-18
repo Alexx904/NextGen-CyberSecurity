@@ -36,9 +36,10 @@ export const discoveryApi = {
       if (response.data.success && response.data.data) {
         return response.data.data;
       }
-      return null;
-    } catch {
-      return null;
+      throw new Error(response.data.error?.message || 'Errore durante il recupero dei risultati discovery');
+    } catch (error) {
+      if (isAxiosError(error) && error.response?.status === 404) return null;
+      throw error;
     }
   },
 
@@ -54,3 +55,4 @@ export const discoveryApi = {
   },
 };
 
+import { isAxiosError } from 'axios';

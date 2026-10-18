@@ -74,6 +74,7 @@ export interface FirewallChain {
 }
 
 export interface FirewallStatus {
+  revision?: string;
   server_id: string;
   chains: Record<ChainName, FirewallChain>;
   active_safety_timer: boolean;
@@ -82,6 +83,7 @@ export interface FirewallStatus {
 }
 
 export interface AddFirewallRulePayload {
+  expected_revision?: string;
   chain: ChainName;
   action: RuleAction;
   protocol: string;
