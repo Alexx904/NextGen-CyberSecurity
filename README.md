@@ -83,13 +83,14 @@ cd NextGen-CyberSecurity
 Facoltativamente copia `.env.example` in `.env` e personalizza localmente i valori prima dell'avvio. Compose usa il file per l'interpolazione; evita di versionare credenziali reali.
 
 ```powershell
+$env:FRONTEND_PORT = "3080"
 docker compose up -d --build
 docker compose ps
 ```
 
 | Servizio | Indirizzo predefinito |
 |---|---|
-| Interfaccia web | http://localhost:3000 |
+| Interfaccia web | http://localhost:3080 |
 | API REST | http://localhost:8080/api/v1 |
 | Health backend | http://localhost:8080/api/v1/health |
 | PostgreSQL | localhost:5432 |
@@ -97,6 +98,8 @@ docker compose ps
 Il backend attende PostgreSQL, applica le migrazioni e inizializza tenant e amministratore se necessari. Nmap è incluso nell'immagine backend; Compose assegna la capability `NET_RAW`.
 
 Le credenziali iniziali di sviluppo sono definite da `ADMIN_EMAIL` e `ADMIN_PASSWORD` nel [manifest Compose](docker-compose.yml). Imposta valori propri prima del primo avvio: il seeding è idempotente e cambiare queste variabili non equivale a reimpostare un account già presente.
+
+Il quickstart imposta `FRONTEND_PORT=3080` nel processo PowerShell. Puoi conservarla nel tuo `.env` locale; senza configurazione il manifest usa ancora il fallback 3000.
 
 ### Log e arresto
 
@@ -163,7 +166,7 @@ npm ci
 npm run dev
 ```
 
-Vite espone la UI sulla porta 3000 e inoltra API e WebSocket al backend sulla porta 8080. Libera la porta 3000 se occupata dallo stack Docker. Dettagli in [Frontend Setup](docs/04-development/FRONTEND_SETUP.md).
+Vite espone la UI sulla porta 3000 e inoltra API e WebSocket al backend sulla porta 8080. Lo stack Docker descritto nel quickstart espone invece la UI sulla porta 3080. Dettagli in [Frontend Setup](docs/04-development/FRONTEND_SETUP.md).
 
 ## Test e verifiche
 
@@ -225,6 +228,7 @@ Quando disponibile, scarica ed estrai l'artifact dalla pagina [Actions](https://
 Get-FileHash .\nextgen-images.tar.gz -Algorithm SHA256
 # Confrontare il risultato con SHA256SUMS prima di caricare le immagini.
 docker load --input nextgen-images.tar.gz
+$env:FRONTEND_PORT = "3080"
 docker compose -f docker-compose.yml -f compose.images.yml up -d --no-build
 ```
 
@@ -254,7 +258,7 @@ NextGen-CyberSecurity/
 
 | Sintomo | Controllo consigliato |
 |---|---|
-| UI o API non disponibili | Verifica `docker compose ps`, health backend, log e disponibilità delle porte 3000/8080/5432. |
+| UI o API non disponibili | Verifica `docker compose ps`, health backend, log e disponibilità delle porte 3080/8080/5432 per lo stack Docker del quickstart; Vite nativo usa 3000. |
 | Backend non healthy | Controlla PostgreSQL, configurazione e log delle migrazioni; evita reset automatici del volume. |
 | Discovery incompleta o target irraggiungibile | Verifica route dal backend/container, firewall e limiti del bridge Docker; la raggiungibilità dal PC non garantisce quella dal container. |
 | Scansione lenta o ETA assente | Filtraggio, UDP, NSE e dimensione dello scope influenzano la durata; le ETA sono euristiche, non SLA. |

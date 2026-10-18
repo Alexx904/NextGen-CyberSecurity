@@ -23,6 +23,7 @@
 ## 🚀 Coda di Sviluppo Attiva (Priorità validate dal PO)
 
 - [~] README-GH-01 · README completo per GitHub
+  - Feedback PO: URL Docker corretto a localhost:3080; quickstart/artifact con FRONTEND_PORT esplicita, Vite nativo invariato a 3000.
   - File: README.md.
   - Dipende da: nessuno.
   - Test: verificatore documentale e git diff --check; nessuna suite applicativa per soli Markdown.
