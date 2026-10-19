@@ -1,6 +1,6 @@
 # Domain Map
 
-Ultimo allineamento: 2026-10-18 · working tree.
+Ultimo allineamento: 2026-10-19 · working tree.
 Mappa canonica eseguibile dal verificatore: `*` non attraversa `/`, `**` attraversa directory. Ogni riga assegna un documento primario; più glob nella stessa cella sono alternativi. Tutti i file Go/SQL sotto backend e TS/TSX/CSS sotto frontend/src (test e untracked inclusi, vendor/build/cache esclusi) devono avere esattamente un documento primario. Sovrapposizioni verso documenti diversi sono errori; modifiche condivise richiedono anche i domini consumatori pertinenti.
 
 ## Mappa documenti Full-Stack
@@ -15,6 +15,9 @@ Mappa canonica eseguibile dal verificatore: `*` non attraversa `/`, `**` attrave
 | `frontend/src/pages/Companies*` `frontend/src/pages/Targets*` `frontend/src/pages/Reports*` `frontend/src/pages/Dashboard*` `frontend/src/context/CompanyContext*` `frontend/src/components/auth/CompanyRoute*` `frontend/src/components/Company*` `frontend/src/components/GroupModal*` `frontend/src/components/TreeExplorer*` `frontend/src/components/Target*` `frontend/src/components/ReportPreview*` `frontend/src/api/reports.ts` `frontend/src/types/report.ts` `frontend/src/types/target.ts` `frontend/src/utils/reportArchive*` `frontend/src/utils/download.ts` | reporting & assets | `docs/domains/reporting_and_assets.md` |
 | `frontend/src/components/debug/**` `frontend/src/context/DebugContext*` `frontend/src/utils/debugLogger*` `frontend/src/utils/markdownExporter*` `frontend/src/types/debug.ts` `frontend/src/tests/debugConsoleE2E.test.tsx` | debug console | `docs/domains/debug_console.md` |
 | `backend/internal/domain/attack_path*` `backend/internal/service/attack_path*` `backend/internal/delivery/http/handler/attack_path*` `frontend/src/types/attackPath.ts` `frontend/src/api/attackPath*` `frontend/src/pages/AttackPath*` `frontend/src/components/graph/**` | attack path | `docs/domains/attack_path.md` |
+| `backend/internal/domain/assessment_issue*` | shared assessment issue contracts | `docs/domains/vulnerability_intelligence.md` |
+| `backend/internal/domain/compliance*` `backend/internal/service/compliance*` `backend/internal/delivery/http/handler/compliance*` `frontend/src/pages/Compliance*` `frontend/src/api/compliance*` `frontend/src/types/compliance*` | compliance & assessment lifecycle | `docs/domains/compliance.md` |
+| `frontend/src/components/AuditExport*` | reporting & assets | `docs/domains/reporting_and_assets.md` |
 | `backend/cmd/cve-sync/**` `backend/internal/domain/cve.go` `backend/internal/domain/finding.go` `backend/internal/service/cve*` `backend/internal/service/online_cve*` `backend/internal/service/fixtures/**` `backend/internal/delivery/http/handler/cve*` `frontend/src/pages/Findings*` `frontend/src/components/Finding*` `frontend/src/components/SeverityChart*` `frontend/src/types/finding.ts` | vulnerability intelligence | `docs/domains/vulnerability_intelligence.md` |
 | `backend/internal/domain/defense*` `backend/internal/service/defense*` `backend/internal/delivery/http/handler/defense*` `frontend/src/types/defense.ts` `frontend/src/components/ChokepointRemediationModal*` | active defense & soar | `docs/domains/active_defense_and_soar.md` |
 | `backend/internal/domain/virtual_patch*` `backend/internal/service/virtual_patch*` `backend/internal/delivery/http/handler/virtual_patching*` `frontend/src/api/virtualPatching*` `frontend/src/components/VirtualPatchModal*` | active defense & soar | `docs/domains/active_defense_and_soar.md` |
@@ -29,4 +32,4 @@ Il wiring server/App, eventi/errori comuni, trasporto SSE, auth/tenant e configu
 
 M11-CLOSE-01 modifica firewall e l'atteso del test defense per quoting condiviso; M11-REPORT-01 modifica archivio report frontend. Questi contributi preesistenti sono conservati, senza includere nuove capacità M3.
 
-Compliance (M4), copilot (M5) e alerting sono pianificati: non inserire glob o link verso documenti inesistenti. Aggiungere mapping e dominio quando inizia l'implementazione; un nuovo percorso non classificato deve fallire il gate.
+M4 implementation maps to the compliance domain and shared reporting ownership above; verification evidence remains in its plan. Copilot (M5) and M6-M8 remain planned under [ADR-28](ADR/README.md#adr-28--integrated-assessment-lifecycle-and-reporting-2026-10-19). Alerting remains deferred. Add ownership only for real paths; unclassified application paths fail the gate.

@@ -421,40 +421,48 @@ func (h *ScanHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // FindingResponse modella la rappresentazione pubblica di una vulnerabilità o servizio
 type FindingResponse struct {
-	ID             string    `json:"id"`
-	ScanID         string    `json:"scan_id"`
-	TenantID       string    `json:"tenant_id"`
-	HostIP         string    `json:"host_ip"`
-	Hostname       *string   `json:"hostname,omitempty"`
-	Port           int       `json:"port"`
-	Protocol       string    `json:"protocol"`
-	ServiceName    *string   `json:"service_name,omitempty"`
-	ServiceVersion *string   `json:"service_version,omitempty"`
-	CVEID          *string   `json:"cve_id,omitempty"`
-	CVSSScore      *float64  `json:"cvss_score,omitempty"`
-	Severity       string    `json:"severity"`
-	RawBanner      *string   `json:"raw_banner,omitempty"`
-	Remediation    *string   `json:"remediation,omitempty"`
-	CreatedAt      time.Time `json:"created_at"`
+	RegulatoryContext domain.RegulatoryContext `json:"regulatory_context"`
+	PortState         string                   `json:"port_state,omitempty"`
+	Confidence        domain.FindingConfidence `json:"confidence,omitempty"`
+	DetectionMethod   domain.DetectionMethod   `json:"detection_method,omitempty"`
+	ID                string                   `json:"id"`
+	ScanID            string                   `json:"scan_id"`
+	TenantID          string                   `json:"tenant_id"`
+	HostIP            string                   `json:"host_ip"`
+	Hostname          *string                  `json:"hostname,omitempty"`
+	Port              int                      `json:"port"`
+	Protocol          string                   `json:"protocol"`
+	ServiceName       *string                  `json:"service_name,omitempty"`
+	ServiceVersion    *string                  `json:"service_version,omitempty"`
+	CVEID             *string                  `json:"cve_id,omitempty"`
+	CVSSScore         *float64                 `json:"cvss_score,omitempty"`
+	Severity          string                   `json:"severity"`
+	RawBanner         *string                  `json:"raw_banner,omitempty"`
+	Remediation       *string                  `json:"remediation,omitempty"`
+	CreatedAt         time.Time                `json:"created_at"`
 }
 
 func toFindingResponse(f *domain.Finding) FindingResponse {
 	return FindingResponse{
-		ID:             f.ID.String(),
-		ScanID:         f.ScanID.String(),
-		TenantID:       f.TenantID.String(),
-		HostIP:         f.HostIP,
-		Hostname:       f.Hostname,
-		Port:           f.Port,
-		Protocol:       f.Protocol,
-		ServiceName:    f.ServiceName,
-		ServiceVersion: f.ServiceVersion,
-		CVEID:          f.CVEID,
-		CVSSScore:      f.CVSSScore,
-		Severity:       string(f.Severity),
-		RawBanner:      f.RawBanner,
-		Remediation:    f.Remediation,
-		CreatedAt:      f.CreatedAt,
+		RegulatoryContext: domain.BuildRegulatoryContext(*f),
+		PortState:         f.PortState,
+		Confidence:        f.Confidence,
+		DetectionMethod:   f.DetectionMethod,
+		ID:                f.ID.String(),
+		ScanID:            f.ScanID.String(),
+		TenantID:          f.TenantID.String(),
+		HostIP:            f.HostIP,
+		Hostname:          f.Hostname,
+		Port:              f.Port,
+		Protocol:          f.Protocol,
+		ServiceName:       f.ServiceName,
+		ServiceVersion:    f.ServiceVersion,
+		CVEID:             f.CVEID,
+		CVSSScore:         f.CVSSScore,
+		Severity:          string(f.Severity),
+		RawBanner:         f.RawBanner,
+		Remediation:       f.Remediation,
+		CreatedAt:         f.CreatedAt,
 	}
 }
 

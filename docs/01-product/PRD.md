@@ -1,6 +1,16 @@
 # Product Requirements Document
 
-Ultimo allineamento: 2026-10-18 · working tree · AGENT-HARNESS-01 (deduplicazione editoriale, requisiti e milestone preservati).
+Current M4 product decision (2026-10-19): PO selected automatic technical regulatory
+context in Findings and Executive/Technical PDFs, replacing manual compliance
+scorecards, questionnaires, identity associations and Audit workflow. The earlier
+delivery below is superseded. [Current scope](../04-development/plans/M4-AUTOMATIC-CONTEXT.md).
+
+M4 implementation (2026-10-19 working tree) is verified and awaiting PO acceptance: evidence-based
+scorecards, explicit issue identity/lifecycle/SLA and Audit A4 in the existing
+assessment/reporting workflow. Curated framework coverage and unknown states do
+not establish certification. [Boundaries and gates](../04-development/plans/M4-COMPLIANCE.md).
+
+Ultimo allineamento: 2026-10-19 · working tree · ROADMAP-COHERENCE-01.
 
 > Responsabile: Business Analyst; decisioni di prodotto al PO. Migrazione documentale: 2026-10-15. Gli stati funzionali restano quelli di [PROJECT_STATE](../PROJECT_STATE.md).
 
@@ -52,6 +62,18 @@ Le nuove milestone seguono M5 senza riordinare le priorità esistenti. Sono pian
 Flusso: azienda/asset/finding → candidati e prerequisiti (M6) → verifica autorizzata ed evidenze (M7) → eventuale prova di sfruttamento autorizzata (M8) → report → correzione → retest. Esiti distinti: potenziale, validata, sfruttamento dimostrato, non confermata, inconcludente, corretta e riverificata. Fallimento della prova non equivale ad assenza di vulnerabilità; l'Attack Path resta euristico fuori dalle evidenze puntualmente raccolte.
 
 Scope, task e gate: [TASK_LIST](../04-development/TASK_LIST.md); contratti: FR-22..FR-24 in [REQUIREMENTS](REQUIREMENTS.md). Architettura definitiva, versione/licenze delle dipendenze, API/DTO e schema con migrazioni up/down saranno definiti prima dell'implementazione. Nessuna nuova API o dipendenza è introdotta da questa pianificazione.
+
+### 1.4 Integrated assessment roadmap (approved 2026-10-19)
+
+M4-M8 extend the existing company assessment workflow: company → department → asset → scan/finding → evaluation → remediation → verification → report. Inputs include CVEs, exposed services, configuration observations and evidence; not every assessment item requires a CVE. These are connected capabilities, not one independent tool per milestone. SSH/Firewall remains a tenant-scoped operational tool accessible without company selection; explicit remediation links do not implicitly assign SSH records to companies.
+
+Reuse the implemented inventory, company context, CVE/confidence/detection metadata, remediation text, heuristic Attack Path and report hub. Existing Executive/Technical PDF and CSV exports, company consolidation and department sections remain the foundation. M4 adds an Audit profile to the same pipeline; M5 enriches summaries and remediation; M6 adds applicability; M7/M8 add authorized verification evidence. No parallel finding store, report hub or automatic remediation executor is planned.
+
+Start M4 by defining persistent issue identity across scan observations, lifecycle, ownership/deadlines, evidence and consistent report scope/cutoff. These are future contracts, not current Finding capabilities. Separate detection confidence, applicability, validation and demonstrated exploitation. Mitigation applied, correction declared, correction verified and reopening are distinct; missing observations do not prove correction.
+
+Keep M4 → M5 → M6 → M7 → M8 delivery order. M7/M8 share authorization/job/evidence contracts with separate permissions and execution gates. Resolve relevant Attack Path scope/freshness debt before relying on it. Notifications remain deferred; M4 can display SLA breaches without claiming external delivery. Public exploits may be absent or incompatible; successful exploitation is never guaranteed. Dependency approval, a dedicated lab and per-engagement authorization precede active tests.
+
+This section refines older milestone summaries: M3 T1/T2/T3 are delivered and accepted; the eight-CVE generator remains until planned T7 replacement with mitigation sources. T4/T5 are incomplete/deferred and T6 pending. M4-M8 remain unimplemented. Approval covers product direction and documentation, not code, installations or live tests. See [ADR-28](../03-architecture/ADR/README.md#adr-28--integrated-assessment-lifecycle-and-reporting-2026-10-19).
 
 ## 2. Modello di Tenancy e Attori del Sistema
 

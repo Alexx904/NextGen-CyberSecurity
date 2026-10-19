@@ -1,5 +1,49 @@
 # UI Specifications
 
+## Current M4 - automatic finding context
+
+The Findings table explains where to find automatic interpretation. Its existing
+detail modal includes observed fact, technical meaning, suggested action, original
+confidence/method, catalogue version and official links. Missing server context and
+empty mappings have explicit messages without implying compliance. No manual forms
+or compliance percentages are part of this feature. The previous Compliance nav is
+removed; `/compliance` redirects to Findings. Reports retain normal Executive/Technical
+exports with automatic context, without the manual Audit form. Sections below on
+manual M4 are historical/superseded. [Gates](../04-development/plans/M4-AUTOMATIC-CONTEXT.md).
+
+## M4 verified implementation - 2026-10-19
+
+Guided follow-up: a "Cosa devo fare adesso?" queue precedes the scorecard, with
+scope-wide technical tasks and framework-filtered control tasks. Identity forms
+suggest historical same-group candidates and require confirmation; policy forms
+apply named owner/SLA to explicitly selected issues with per-item results. Actions
+focus the existing lifecycle/evidence editor. Visible idle pages refresh every 30s,
+pausing during editing or open disclosures. Scan links use the existing consent
+workflow. [Verification status](../04-development/plans/M4-WORKFLOW.md).
+
+The Compliance page offers a native expandable first-use guide above its filters,
+including score interpretation and the absence of automatic regulatory updates.
+It remains accessible while data loads or fails, for read-only and write roles.
+
+`/compliance` sits in assessment navigation, scoped by the global company and an
+optional department. It displays framework/global score, denominators, unknowns,
+exclusions, scan/target coverage and per-department cards. Evidence, stable asset
+association, issue owner/policy/actions/history and in-app SLA breach are distinct
+sections. Empty, loading, failed/retry and stale scope responses are handled;
+Auditors see read/export only. Labeled fields, native disclosures and visible
+keyboard focus support desktop/mobile use. Shared Audit form in Reports and
+Compliance collects declared legal/reviewer/period data. [Semantics/limits](../domains/compliance.md).
+
+## Planned integrated M4-M8 experience - 2026-10-19
+
+M4-M8 extend assessment with company/department context; SSH/Firewall remains independent. The verified M4 screen is described above; this section describes remaining integrated expansion. UI-TOOLS-01 owns the final hub design.
+
+- Enrich existing finding details with detection, context, applicability, remediation, verification history and control evidence; no duplicate inventory or report archive.
+- Preserve Executive/Technical/CSV exports and add an Audit profile in the report hub. Show period/cutoff, scope, filters and coverage. Empty/partial/unknown data cannot imply safety or compliance.
+- Distinguish detection confidence from applicability, validation and exploitation; distinguish AI advice, action applied, correction declared and correction reverified.
+- Lifecycle/owner/deadline and linked observations need loading/error/empty/read-only states. Server authorization, deep links, company context, keyboard/focus and mobile behavior must be preserved.
+- M7/M8 require explicit scope/technique/window confirmation, status/stop and cleanup/residual-effect results. No execution from a CVE or AI response without separate authorization. Missing provider/context cannot fabricate advice.
+
 TECH-DEBT-09 · 2026-10-19 · working tree: Tailwind 4 migration retains custom
 brand colors, v3 small shadows/blurs, transparent keyboard outlines and enabled
 button pointer cursors. Supported browser minimums: Safari 16.4, Chrome 111,
@@ -107,6 +151,10 @@ Ultimo allineamento: 2026-10-16 · working tree. Il PO conferma scope intero gru
 
 Dettaglio singolo continua a mostrare SSE e barra totale del job (senza la vecchia barra duplicata), distinguendo percentuale della fase da stima totale. Test automatici includono polling, ripristino sessione, gruppi oltre 50 job, errori e assenza di ETA; visuale reale ancora non disponibile.
 ## Virtual patch panel (E28-S1-T3)
+
+2026-10-19 PO change: removed "Genera virtual patch" and its modal mount/import
+from Finding details. The generator has no active UI entry point. The panel behavior
+below is historical; backend template endpoints are unchanged by this UI removal.
 
 Finding detail opens a separate keyboard-accessible panel with product, catalog
 revision/coverage, strategy and operational impact before the engine selector.

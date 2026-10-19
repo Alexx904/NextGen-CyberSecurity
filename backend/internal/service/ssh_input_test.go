@@ -72,6 +72,10 @@ func TestSSHCommandSnapshotInputIsData(t *testing.T) {
 				_, _ = channel.Write(input)
 				_, _ = channel.SendRequest("exit-status", false, ssh.Marshal(struct{ Status uint32 }{0}))
 				_ = channel.Close()
+				// Keep the transport alive until the peer closes its channel. An
+				// immediate connection close can race the client's exit-status reader.
+				for range requests {
+				}
 				return
 			}
 		}

@@ -3,7 +3,16 @@ import type { SeverityLevel } from './scan';
 export type FindingConfidence = 'CONFIRMED' | 'PROBABLE' | 'UNVERIFIED';
 export type DetectionMethod = 'nse' | 'banner' | 'nvd_keyword' | 'port_state';
 
+export interface RegulatoryContext {
+  rule_version: string;
+  confidence: FindingConfidence | '';
+  detection_method: DetectionMethod | '';
+  implications: { kind: string; observation: string; meaning: string; action: string; references: { id: string; title: string; source: string }[] }[];
+  limit: string;
+}
+
 export interface FindingItem {
+  regulatory_context?: RegulatoryContext;
   id: string;
   scan_id: string;
   tenant_id: string;

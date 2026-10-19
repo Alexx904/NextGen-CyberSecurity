@@ -1,5 +1,26 @@
 # Use Cases
 
+## Current M4 - automatic interpretation
+
+Operator runs an authorized scan and opens a finding. The software automatically
+explains the technical observation, relevant NIS2/DORA/ISO themes and suggested
+verification/remediation, preserving source confidence and linking official sources.
+No regulatory knowledge, questionnaire or manual mapping is required. The same
+information appears in Executive/Technical PDFs. Unknown/unmapped findings do not
+imply compliance. The former manual use case below is retired; existing data remain.
+[Current contract](../04-development/plans/M4-AUTOMATIC-CONTEXT.md).
+
+## M4 control-evidence and remediation review
+
+2026-10-19 - working tree, verified and awaiting PO acceptance. Operator selects company/reparto,
+reviews unknowns/technical gaps, records sourced manual assessments, explicitly
+resolves asset identity and links observations. Operator assigns owner/configured
+SLA and declares mitigation/correction; a separate issue-scoped verification records
+proof and ends the current remediation cycle. Recurrence reopens without erasing
+history. Auditor reviews evidence/denominators and exports the same scoped Audit
+dossier from Compliance or Reports, with declared legal/reviewer/period metadata.
+No remote validation or external notification occurs. [Contract](../domains/compliance.md).
+
 > Responsabile: Business Analyst. Migrazione documentale: 2026-10-15. Gli stati funzionali restano quelli di [PROJECT_STATE](../PROJECT_STATE.md).
 
 ### UC-01: Configurazione Target e Policy
@@ -101,5 +122,18 @@
 - **Postcondizione:** impatto osservato e limiti documentati, eventuale correzione riverificata collegata alla prova originale. Riferimenti: FR-24, E33-S1-T1.
 
 ## Completamento progressivo
+
+### Integrated assessment refinement for UC-17..23 (planned, 2026-10-19)
+
+This refinement takes precedence over older illustrative flow details while preserving UC IDs and accepted implementation states.
+
+- UC-17: reuse existing Executive/Technical/CSV exports and company/department consolidation; inventories can span multiple A4 pages, not universally two. Add planned Audit profile with consistent scope/period/cutoff and evidence. Report incomplete coverage/export errors explicitly.
+- UC-18: current mitigation selects a supported SERVICE chokepoint and matching tenant SSH server, obtains backend preview and operator consent, applies a service-port block and uses the existing confirmation/rollback manager. Management SSH port/unsupported nodes are rejected. The graph is heuristic; rule application does not prove path neutralization or finding correction.
+- UC-19: inspect company control mappings, evidence coverage/unknown states and configured SLA/issue history; export the Audit profile through the existing report hub. A score is not certification; missing manual evidence stays not assessed. External SLA delivery remains deferred.
+- UC-20: attach reviewed AI proposals to existing remediation and source evidence; no implicit execution. Provider failure or insufficient context must be explicit.
+- UC-21: enrich existing finding/CVE detail with exploit applicability and prerequisites; no automatic PoC download/execution.
+- UC-22/23: share issue/observation/evidence links and execution infrastructure with separate validation/exploitation permissions. Require valid asset/technique/window authorization; scan consent is insufficient. Record outcome, stop/cleanup limitations and retest linked to the original issue. Failed proof or missing observation does not establish safety/correction.
+
+Shared preconditions: authorized company/asset access and implemented milestone contracts. Postcondition: evidence and report references remain traceable within tenant/authorized scope. These flows create no parallel report archive or implicit company ownership of SSH records. See [shared requirements](REQUIREMENTS.md#shared-assessment-contract-planned-approved-2026-10-19).
 
 Gli UC conservano gli identificativi e il dettaglio storico. Per ogni UC modificato esplicitare: attore, precondizioni, trigger, happy path, errori/eccezioni, postcondizioni e riferimenti FR/test. L'assenza di UC-16 è preesistente: non rinumerare gli altri UC.

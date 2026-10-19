@@ -3,6 +3,8 @@ import { apiClient } from '../api/client';
 export interface DownloadFileOptions {
   url: string;
   defaultFilename: string;
+  method?: 'get' | 'post';
+  data?: unknown;
   onStart?: () => void;
   onSuccess?: () => void;
   onError?: (error: Error) => void;
@@ -16,6 +18,8 @@ export interface DownloadFileOptions {
 export async function downloadReportFile({
   url,
   defaultFilename,
+  method = 'get',
+  data,
   onStart,
   onSuccess,
   onError,
@@ -23,7 +27,7 @@ export async function downloadReportFile({
   try {
     onStart?.();
 
-    const response = await apiClient.get(url, {
+    const response = method === 'post' ? await apiClient.post(url, data, { responseType: 'blob' }) : await apiClient.get(url, {
       responseType: 'blob',
     });
 

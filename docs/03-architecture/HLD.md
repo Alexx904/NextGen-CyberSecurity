@@ -1,11 +1,29 @@
 # High-Level Design
 
+Current M4: ADR-30 supersedes ADR-29's manual product workflow. A pure domain
+function derives versioned regulatory context from existing findings; REST DTOs,
+live/replayed SSE and Executive/Technical PDFs share it. No additional persistence
+or external provider. Manual compliance routes/UI/Audit are retired; existing
+schema/history remain. [Boundaries](../04-development/plans/M4-AUTOMATIC-CONTEXT.md).
+
+## M4 runtime extension - 2026-10-19
+
+Compliance extends the existing assessment and Reports flow. JWT/tenant scope and
+SecOps writes wrap persistent asset/observation issue streams, manual evidence and
+versioned relevance rules. Optimistic event versions plus row locks serialize
+lifecycle writes. Repeatable-read snapshots feed scorecards and the existing PDF
+package's Audit profile. No new executor, report archive or notification service.
+[ADR-29](ADR/README.md#adr-29---evidence-backed-compliance-and-persistent-issue-streams-2026-10-19),
+[runtime details](../domains/compliance.md), [verification](../04-development/plans/M4-COMPLIANCE.md).
+
 > Publication scope 2026-10-18: alert-channel / outbox / migration 000012 sections describe deferred T4/T5 design and local prototype evidence. Their code and routes are excluded from this release; published migration is 000011. Alert-specific commands are future gates.
 
 
 > Responsabile: Software Architect. Architettura ereditata; migrazione strutturale 2026-10-15.
 
 ## 1. Diagramma Architetturale di Sistema
+
+Planned integration, 2026-10-19: [ADR-28](ADR/README.md#adr-28--integrated-assessment-lifecycle-and-reporting-2026-10-19) connects M4-M8 to the existing company assessment tool. Finding remains the per-scan observation; persistent issue identity/lifecycle, evidence and consistent report cutoff are future contracts designed first in M4. Extend report service/PDF generation with an Audit profile and shared evidence rather than a second report engine. M7/M8 share authorization/job/evidence infrastructure with distinct execution gates. SSH stays independent; exact APIs, tables, worker deployment and dependencies require design before code. No runtime architecture change is delivered here.
 
 COMPANY-UX-02 · 2026-10-17: dashboard aziendale unica e route guard per navigazione operativa; SSH/Firewall rimane modulo tenant indipendente con clienti interni. Gerarchia due livelli nelle nuove scritture e report consolidati per discendenti, senza nuova dipendenza o servizio. [ADR-18](ADR/README.md), [dominio asset/report](../domains/reporting_and_assets.md).
 

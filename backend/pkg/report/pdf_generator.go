@@ -538,6 +538,7 @@ func (g *DefaultPDFGenerator) generateExecutive(data PDFReportData) ([]byte, err
 	}
 
 	appendDepartmentInventory(pdf, tr, data.Departments)
+	appendRegulatoryContext(pdf, tr, data)
 
 	var buf bytes.Buffer
 	if err := pdf.Output(&buf); err != nil {
@@ -977,6 +978,7 @@ func (g *DefaultPDFGenerator) generateTechnical(data PDFReportData) ([]byte, err
 	}
 
 	appendDepartmentInventory(pdf, tr, data.Departments)
+	appendRegulatoryContext(pdf, tr, data)
 
 	var buf bytes.Buffer
 	if err := pdf.Output(&buf); err != nil {

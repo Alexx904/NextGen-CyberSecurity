@@ -238,7 +238,7 @@ func (h *TargetGroupHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.groupService.DeleteGroup(r.Context(), tenantID, groupID); err != nil {
 		if errors.Is(err, domain.ErrConflict) {
-			response.Error(w, http.StatusConflict, "GROUP_IN_USE", "Rimuovere o riassegnare i canali di notifica collegati prima di eliminare l’azienda")
+			response.Error(w, http.StatusConflict, "GROUP_IN_USE", "Il gruppo contiene riferimenti protetti: asset, evidenze compliance o canali di notifica. Lo storico di audit deve essere conservato.")
 			return
 		}
 		if errors.Is(err, domain.ErrNotFound) {

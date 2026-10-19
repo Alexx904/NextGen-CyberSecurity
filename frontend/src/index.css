@@ -22,3 +22,16 @@
   }
 }
 
+/* Assessment forms share readable fields and visible keyboard focus. */
+.compliance-page .input, .assessment-panel .input {
+  display: block; min-width: 0; margin-top: .35rem; padding: .6rem .75rem;
+  color: #e2e8f0; background: #0f172a; border: 1px solid #64748b; border-radius: .4rem;
+}
+.compliance-page .btn-primary, .assessment-panel .btn-primary,
+.compliance-page .btn-secondary, .assessment-panel .btn-secondary {
+  padding: .6rem .85rem; border: 1px solid #64748b; border-radius: .4rem; background: #1e293b; color: #f1f5f9;
+}
+.compliance-page .btn-primary, .assessment-panel .btn-primary { background: #155e75; border-color: #22d3ee; }
+.compliance-page button:disabled, .assessment-panel button:disabled { opacity: .5; cursor: not-allowed; }
+.compliance-page :is(input,select,textarea,button,summary,a):focus-visible,
+.assessment-panel :is(input,select,textarea,button,summary):focus-visible { outline: 2px solid #22d3ee; outline-offset: 3px; }

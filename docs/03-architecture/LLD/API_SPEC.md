@@ -1,5 +1,38 @@
 # API Specification
 
+## Automatic finding context - current M4 contract
+
+`GET /api/v1/scans/{id}/findings` adds `regulatory_context` to every finding:
+rule_version, original confidence/detection_method, implications[] with kind,
+observation, meaning, action and references[] (id/title/source), plus limit.
+Port state/confidence/detection method are preserved in the REST DTO. Live/replayed
+SSE finding objects carry the same context. Existing auth/tenant/pagination remain.
+Executive/Technical PDFs derive the same information; CSV columns are unchanged.
+Manual `/api/v1/compliance` and `POST /api/v1/reports/audit` routes are unregistered
+(404); frontend `/compliance` redirects to `/findings`. No schema/data deletion.
+[Full contract](../../04-development/plans/M4-AUTOMATIC-CONTEXT.md).
+
+## Historical M4 compliance API - retired
+
+2026-10-19 - working tree. Existing JWT/tenant middleware: tenant readers read/
+export; SecOps/admin write. Server scopes company root/child department; this is
+not a new company entitlement model. Out-of-tenant/scope IDs return 404.
+
+| Method/path under `/api/v1` | Contract |
+|---|---|
+| GET `/compliance?company_id=<root>&department_id=<optional child>` | Complete repeatable-read snapshot: groups, target counts/latest scans, assets/observations, issues/evidence, scorecards/denominators, cutoff/MVCC ID/rule version/limits. |
+| POST `/compliance/assets` | `group_id`, stable `name`; registered UUID, no address-based auto-resolution. |
+| POST `/compliance/observations` | `asset_id`, persisted `finding_id`; source snapshot and atomic deduplication. Same group required. |
+| POST `/compliance/issues/{id}/events` | `action`, `expected_version`, `reason`. Configure: `owner` UUID (nil unassigns), `policy_id`, `policy_version`, `sla_hours` (0 removes, max 87600). Operator actions: `mitigation_applied`, `correction_declared`. Verify: `verification` with `provenance` (`source`,`version`,`reference`), `complete_coverage`, `not_present`. Actor/time/verification identity are server-owned. |
+| POST `/compliance/evidence` | `group_id`, known `control_id`, `status`, `reason`, `reference`, `source_version`; append with trusted actor/time. |
+| POST `/reports/audit` | `scope` (`company_id`,`department_id` nil UUID if absent), `metadata` (`legal_entity`,`legal_details`,`signatory`,`period`,`audit_date` RFC3339). PDF from exactly one snapshot; period is declared review metadata, not a historical filter. |
+
+Strict JSON, max 64 KiB, no unknown fields/trailing objects. Validation 400, no
+auth 401, denied role 403, scoped not found 404, stale version/conflicting source
+409, generic internal 500. No SQL/secrets in responses. GET standard envelope;
+download PDF MIME/fixed filename/no-store. No execution/notification endpoints.
+[Semantics and limitations](../../domains/compliance.md).
+
 > Publication scope 2026-10-18: alert-channel / outbox / migration 000012 sections describe deferred T4/T5 design and local prototype evidence. Their code and routes are excluded from this release; published migration is 000011. Alert-specific commands are future gates.
 
 

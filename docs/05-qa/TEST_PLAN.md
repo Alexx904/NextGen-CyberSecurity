@@ -1,5 +1,29 @@
 # Test Plan
 
+## Current M4 automatic context
+
+Verify identical domain rules across REST/SSE/PDF, original provenance/confidence,
+negative ports and empty/unmapped/missing-context states, retired page redirect and
+absence of manual forms. Final All covers shared DTO/wiring and both sides; PDF
+rendering and actual browser checks are separate. No schema/repository change in
+this replacement. Historical manual M4 gates below do not establish current UI PASS.
+
+## M4 compliance gates
+
+Guided workflow regression: queue next actions, same-group/ambiguous asset candidates,
+no writes before confirmation, created-asset retry after association failure,
+per-issue partial policy results/current versions, read-only Auditor, negative port
+observations excluded, idle refresh paused during editing, correct evidence focus.
+Final Frontend gate and a real browser check or explicitly recorded PO-owned visual
+verification; absence of a connected browser is not browser PASS.
+
+2026-10-19 - working tree. Domain/HTTP/component regressions, PostgreSQL scope,
+atomicity, optimistic concurrency, immutable evidence and migration 14 up/down/up.
+Final All + Integration on dedicated local `nextgen_m4_test` 55436; do not run
+schema rollback concurrently with QA services. Browser desktop/mobile and Auditor
+flows plus rendered empty/long Audit PDFs are mandatory additional gates.
+Commands, measured results and remaining limits: [M4 evidence](../04-development/plans/M4-COMPLIANCE.md).
+
 > Publication scope 2026-10-18: alert-channel / outbox / migration 000012 sections describe deferred T4/T5 design and local prototype evidence. Their code and routes are excluded from this release; published migration is 000011. Alert-specific commands are future gates.
 
 
@@ -130,5 +154,19 @@ ID, FR/UC, precondizioni/dati, passi, risultato atteso, livello, comando, esito 
 ID/task, severità, ambiente/versione, atteso, osservato, passi minimi, evidenza sanificata, test di riproduzione, causa radice, fix e regressione.
 
 ## Gate finale
+
+### Planned M4-M8 integration acceptance - 2026-10-19
+
+Strategy only; no feature PASS is asserted by ROADMAP-COHERENCE-01.
+
+| Scope | Required future evidence |
+|---|---|
+| Shared lifecycle | Cross-scan identity/ambiguity, tenant/asset scope, duplicates/reopening, transition provenance, owner permissions, incomplete coverage not closing issues; PostgreSQL/up-down |
+| Shared reports | Executive/Technical/CSV compatibility; Audit profile, consistent scope/cutoff/source IDs, period/filter semantics, concurrent updates, unknown evidence, browser and rendered PDF |
+| Compliance/MTTR | Policy clock/start/end/reopening, manual evidence gaps, explicit denominators, posture distinct from controls; in-app breaches versus deferred external alerts |
+| Copilot | Authorized retrieval, grounded references, missing/stale data, unsupported claims, prompt injection, leakage, provider failure, reviewed scripts and no implicit execution |
+| M6-M8 | Applicability versus detection/validation/exploitation, absent/incompatible modules, separate permissions/technique/window, scope denial, stop/timeout/restart, redaction, cleanup residuals and retest linkage |
+
+Use targeted regressions and Final for affected sides; shared API/auth changes require All, persistence requires PostgreSQL/up-down. Active execution requires an authorized dedicated lab. Existing scan confidence tests do not prove exploit validation.
 
 Test pertinenti e regressione verdi; build/typecheck/vet verdi; nessun blocco critico; Doc Sync; review del diff. La review è indipendente quando un secondo agente è disponibile e autorizzato; altrimenti dichiarare self-review e relativi limiti.

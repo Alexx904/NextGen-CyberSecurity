@@ -58,6 +58,7 @@ export default function App() {
                     <Route path="/findings" element={<Findings />} />
                     <Route path="/attack-path" element={<AttackPath />} />
                     <Route path="/reports" element={<Reports />} />
+                    <Route path="/compliance" element={<Navigate to="/findings" replace />} />
                     <Route path="/settings" element={<Settings />} />
                     </Route>
                   </Route>

@@ -117,6 +117,7 @@ export const FindingsTable: React.FC<FindingsTableProps> = ({
 
   return (
     <div className="space-y-4">
+      <p className="text-sm text-slate-400">Apri il dettaglio di un risultato per leggere automaticamente cosa significa, cosa verificare e i riferimenti NIS2, DORA e ISO pertinenti. Non servono questionari o associazioni manuali; le stesse informazioni sono incluse nei PDF Executive e Technical.</p>
       {/* Toolbar Filtri */}
       <div className="p-4 rounded-xl border border-cyber-border bg-slate-900/60 flex flex-col md:flex-row md:items-center justify-between gap-3">
         {/* Ricerca Testuale */}

@@ -11,7 +11,7 @@ import {
   Globe
 } from 'lucide-react';
 import { FindingItem } from '../types/finding';
-import { VirtualPatchModal } from './VirtualPatchModal';
+import { FindingRegulatoryContext } from './FindingRegulatoryContext';
 
 interface FindingDetailModalProps {
   finding: FindingItem | null;
@@ -23,7 +23,6 @@ export const FindingDetailModal: React.FC<FindingDetailModalProps> = ({
   onClose,
 }) => {
   const [copiedBanner, setCopiedBanner] = useState<boolean>(false);
-  const [patchFindingId, setPatchFindingId] = useState<string | null>(null);
 
   if (!finding) return null;
 
@@ -80,7 +79,6 @@ export const FindingDetailModal: React.FC<FindingDetailModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-200">
-      {patchFindingId === finding.id && <VirtualPatchModal key={finding.id} findingId={finding.id} onClose={() => setPatchFindingId(null)} />}
       <div className="max-w-2xl w-full max-h-[90vh] flex flex-col bg-[#111726] border border-cyber-border rounded-2xl shadow-2xl overflow-hidden relative">
         {/* Header */}
         <div className="p-5 border-b border-cyber-border flex items-center justify-between bg-slate-900/60">
@@ -216,6 +214,8 @@ export const FindingDetailModal: React.FC<FindingDetailModalProps> = ({
             </p>
           </div>
 
+          <FindingRegulatoryContext finding={finding} />
+
           {/* External References (NIST NVD) */}
           {finding.cve_id && (
             <div className="flex flex-wrap items-center gap-3 pt-2">
@@ -246,7 +246,6 @@ export const FindingDetailModal: React.FC<FindingDetailModalProps> = ({
 
         {/* Footer */}
         <div className="p-4 border-t border-cyber-border bg-slate-900/60 flex items-center justify-end">
-          {finding.cve_id && <button type="button" onClick={() => setPatchFindingId(finding.id)} className="mr-3 rounded-lg border border-cyan-700 px-4 py-2 text-xs text-cyan-300">Genera virtual patch</button>}
           <button
             onClick={onClose}
             className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold transition-colors"

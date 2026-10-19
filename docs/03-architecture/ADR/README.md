@@ -1,8 +1,42 @@
 # Architecture Decision Records
 
+## ADR-30 - Automatic scan-based regulatory context replaces manual compliance (2026-10-19)
+
+- Status: PO product direction approved; implementation verification tracked separately.
+- Decision: supersede ADR-29's active manual UI/API/scorecard/Audit workflow with
+  deterministic context derived from findings in existing REST/SSE and PDF flows.
+  No manual assessment, identity registration, questionnaire or SLA input is needed.
+  The former route redirects to Findings; manual API routes/export are retired.
+- Evidence boundaries: preserve scan/finding identity, port state, source confidence
+  and detection method. CVE relevance and transport review are technical mappings,
+  never proof of violation, encryption absence, exploitability or certification.
+  Empty mappings do not establish safety. Catalogue updates require a release.
+- Compatibility: retained migrations/data and dormant implementation avoid destructive
+  rollback. No external provider, new schema or dependency. ADR-29 remains historical;
+  its immutable-history principles remain applicable to retained records.
+- [Scope, sources and verification](../../04-development/plans/M4-AUTOMATIC-CONTEXT.md).
+
 > Responsabile: Software Architect. ADR storici preservati; nuove decisioni significative ricevono ID incrementale, contesto, decisione e conseguenze.
 
 ## 7. Architecture Decision Records (ADR)
+
+### ADR-29 - Evidence-backed compliance and persistent issue streams (2026-10-19)
+
+- Status: implemented and verified in working tree, awaiting PO acceptance; refines ADR-28 for M4 without superseding M5-M8 plans.
+- Context: scan targets can be ranges/dynamic addresses; observations alone cannot identify a persistent host, establish organizational compliance or close remediation.
+- Decision: explicitly register stable scoped assets and associate observations; retain immutable source snapshots and ordered issue commands. Serialize writes plus expected versions, replay shared domain rules, preserve completed-cycle history on recurrence. Explicit configurable SLA, no regulatory default. Migration 14 adds four tables and rejects evidence/event mutation; referenced audit history restricts inventory deletion.
+- Controls: versioned curated relevance rules, evidenced manual assessments, unknown-inclusive denominators, explicit exclusions and conservative company rollup. Latest incomplete/missing coverage cannot earn positive technical credit. Mappings are not legal applicability or certification.
+- Reporting: existing report package/routes/UI provide Audit A4 from one repeatable-read dataset, cutoff/MVCC ID, source references and limitations. Period is declared review metadata, not a historical filter; no stored snapshot/replay promise, no separate report archive.
+- Consequences: conservative manual identity resolution, full scoped history loading and referenced-history deletion restrictions are explicit tradeoffs. No automated executor or external notification. [Contract, gates and rollback](../../04-development/plans/M4-COMPLIANCE.md).
+
+### ADR-28 · Integrated assessment lifecycle and reporting (2026-10-19)
+
+- Status: direction approved by PO; implementation pending. Documentation only, no runtime/API/schema change.
+- Context: M4-M8 overlap implemented remediation, company/department consolidation and Executive/Technical exports; per-scan findings lack a complete cross-scan remediation lifecycle.
+- Decision: extend one company assessment workflow and one reporting pipeline. Design persistent issue identity linked to observations, lifecycle and evidence first in M4. Reuse this data for compliance, AI, applicability, validation and retest; Executive/Technical/Audit profiles use consistent explicit scope/cutoff. Preserve separate detection confidence, execution outcomes and metric meanings.
+- Boundaries: SSH/Firewall remains independent (ADR-18 preserved); UI-TOOLS-01 owns final routes. M7/M8 share infrastructure with separate permissions and engagement gates. ADR-27 scan consent is not validation/exploitation authorization. Notifications remain deferred.
+- Consequences: no parallel report/finding store or automatic remediation executor. Define identity, MTTR, report consistency, retention, auth/scope, compatibility and migration up/down before implementation. Resolve relevant Attack Path coverage debt before consuming inferred paths. Module availability does not imply applicability/success; failed proof does not establish safety.
+- Supersession: refines separate future dossier/AI/pentest reporting descriptions in PRD/FR-20..24. Existing accepted behavior, IDs and evidence remain unchanged.
 
 ### ADR-27 · Inventory scan authorization snapshots (2026-10-19)
 

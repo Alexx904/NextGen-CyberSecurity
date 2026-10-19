@@ -188,19 +188,38 @@ Contratto e limiti nel [dominio Active Defense](../domains/active_defense_and_so
   - Eventi triggerabili: Scoperta nuova vulnerabilità CRITICAL o HIGH, rilevamento nuovo host/porta mai censito (Shadow IT), fallimento o completamento scansione programmata, scadenza certificato SSL/TLS.
   - Test live del canale con invio messaggio di prova prima del salvataggio.
 
-### FR-20: Continuous Compliance & Regulatory Frameworks (NIS2, DORA, ISO 27001) (Milestone 4)
-- **FR-20.1 (Automated Regulatory Mapping Engine):** Correlazione algoritmica automatica tra i finding di sicurezza tecnici censiti nel database e i requisiti normativi:
-  - *NIS2 (Direttiva UE 2022/2555 - Art. 21):* Politiche di analisi dei rischi, gestione e divulgazione delle vulnerabilità, crittografia avanzata e sicurezza delle reti;
-  - *DORA (Regolamento UE 2022/2554):* Gestione del rischio ICT per entità finanziarie, monitoraggio continuativo e test di resilienza;
-  - *ISO/IEC 27001:2022 (Controlli A.8.8 Gestione vulnerabilità tecniche, A.8.20 Sicurezza di rete, A.8.24 Uso della crittografia).*
-- **FR-20.2 (Compliance Scorecard & Department Gap Analysis):** Cruscotto dedicato `/compliance` integrato con il selettore aziendale globale:
-  - Calcolo del *Compliance Score* globale e per singolo framework (0-100%);
-  - Gap Analysis con matrice dei controlli soddisfatti, parzialmente conformi o non conformi;
-  - Tracciamento SLA di remediation (MTTR - Mean Time to Remediate) delle non-conformità con alert per violazioni dei termini prescritti dalla norma.
-- **FR-20.3 (Audit-Ready Dossier PDF):** Generazione ed esportazione di un dossier formale A4 per revisori ed organi di controllo contenente:
-  - Copertina formale con dati legali dell'azienda, data di audit e firmatario;
-  - Checklist di conformità articolo per articolo con evidenze tecniche collegate;
-  - Registro storico delle contromisure applicate e piano di adeguamento residuo.
+### Shared assessment contract (planned, approved 2026-10-19)
+
+The following contract refines FR-20..24. M4 now uses [automatic finding context](../04-development/plans/M4-AUTOMATIC-CONTEXT.md); manual lifecycle/scorecard portions are historical, while M5-M8 remain planned.
+
+- Reuse company/department scope and per-scan findings. Define persistent issue identity linked to observations, covering tenant, asset identity, endpoint and vulnerability/control. Specify ambiguous identities, changing IPs, duplicates, recurrence and reopening before API/schema work.
+- Record first/last observation, responsible party, policy/deadline, transitions and evidence provenance. Define MTTR start/end, exclusions and reopening. Missing findings in scans with insufficient coverage cannot close an issue. Mitigation applied, correction declared and verified correction remain distinct.
+- Separate detection confidence/method from applicability and execution outcomes: potential, validated, exploitation demonstrated, not confirmed, inconclusive, correction declared, corrected and reverified. Existing CONFIRMED detection metadata is not proof of exploitation.
+- Extend one reporting pipeline with Executive, Technical and planned Audit profiles. Record scope, period, data cutoff, coverage, filters, source IDs, versions and limitations; exports must use an internally consistent dataset. Preserve existing consolidated-download semantics until compatibility is explicitly designed.
+- Share existing recommendations, mitigation sources, proposed AI playbooks, applied actions and retest links. Label generated advice and require operator review; generation does not authorize execution. Define local/external provider data policy, prompt-injection defenses and sensitive-data minimization before enabling AI; masking IPs alone does not prove zero leakage.
+- Distinguish posture, heuristic path and control-evidence metrics with explicit denominators. Missing/manual evidence means unknown/not assessed. Technical findings alone cannot establish organizational compliance or certification. SLA deadlines come from documented configured policies, not an assumed universal deadline. External SLA notifications depend on deferred T4/T5; in-app breach display can precede them.
+- Share M7/M8 authorization/job/evidence infrastructure with separate technique permissions. Inventory scan consent never authorizes validation/exploitation. Define server-side scope for new assessment APIs; current client company filtering is not a company authorization boundary. Enforce tenant and authorized asset scope throughout execution/reporting.
+
+### FR-20: Automatic regulatory context from scan findings (Milestone 4)
+
+PO scope revision, 2026-10-19: fully automatic technical interpretation replaces
+manual compliance assessments. [Contract, sources and gates](../04-development/plans/M4-AUTOMATIC-CONTEXT.md).
+
+- **FR-20.1 (Automatic technical relevance):** Derive relevant NIS2/DORA/ISO themes
+  from persisted and live scan findings. Explain the observation, why it matters,
+  suggested verification/remediation and official sources. Preserve source confidence
+  and method; no asset registration, questionnaire or manual mapping is required.
+  Current rules cover CVE correlations and transport review for Telnet/FTP/HTTP.
+- **FR-20.2 (Existing finding experience):** Show context in Finding details, with
+  rule version and explicit unmapped/missing-data states. Remove the dedicated
+  manual scorecard/lifecycle/SLA workflow and redirect `/compliance` to Findings.
+  Do not claim compliance, violations or completeness from technical observations.
+- **FR-20.3 (Automatic reporting):** Include the same context and finding/scan
+  provenance in existing Executive/Technical PDFs without new legal-input forms.
+  Retire manual Audit export; retain persisted historical records without deletion.
+- Rules are versioned software content, not live legal monitoring. Procedures,
+  training, backup effectiveness and legal applicability cannot be inferred from
+  Nmap; an empty mapping does not imply safety or compliance.
 
 ### FR-21: AI Remediation Copilot & Conversational Security Assistant (Milestone 5)
 - **FR-21.1 (AI Remediation Playbooks):** Generazione dinamica di guide di mitigazione prescrittive per ogni CVE e Attack Path:

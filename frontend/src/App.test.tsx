@@ -18,6 +18,7 @@ vi.mock('./pages/Login', async () => {
   } };
 });
 vi.mock('./pages/Dashboard', () => ({ Dashboard: () => <p>Dashboard fixture</p> }));
+vi.mock('./pages/Findings', () => ({ Findings: () => <p>Automatic findings fixture</p> }));
 vi.mock('./components/layout/AppLayout', async () => {
   const { Outlet } = await import('react-router-dom');
   const { useCompany } = await import('./context/CompanyContext');
@@ -42,6 +43,14 @@ beforeEach(() => {
 });
 
 describe('company context login lifecycle', () => {
+  it('redirects the retired manual compliance page to Findings', async () => {
+    session.authenticated = true;
+    localStorage.setItem('nextgen_active_company_id', 'company');
+    window.history.replaceState(null, '', '/compliance');
+    render(<App />);
+    await waitFor(() => expect(window.location.pathname).toBe('/findings'));
+    expect(await screen.findByText('Automatic findings fixture')).toBeTruthy();
+  });
   it('loads companies after login without a browser refresh or unauthenticated inventory calls', async () => {
     render(<App />);
     const signIn = await screen.findByRole('button', { name: 'Test sign in' });

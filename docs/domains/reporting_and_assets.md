@@ -1,5 +1,24 @@
 # Dominio: Asset Tree Management & Centralized Reports Hub
 
+Current M4: Executive/Technical PDFs append automatic per-finding implications,
+actions, provenance and official references using the same domain rules as REST/SSE.
+Scope and CSV are unchanged; no compliance form is needed. Manual Audit export below
+is retired from server/UI. [Contract](../04-development/plans/M4-AUTOMATIC-CONTEXT.md).
+
+## Audit profile - M4 verified delivery
+
+2026-10-19 - working tree. Shared `AuditExport` in Reports/Compliance calls
+`POST /reports/audit`, using existing `pkg/report` for an A4 control/evidence/
+lifecycle dossier. One authorized repeatable-read dataset supplies every section,
+cutoff and source. Period is declared metadata, not a historical data filter;
+reviewer information is unsigned. Executive/Technical downloads and the existing
+archive are unchanged; no parallel archive. [Contracts/limits](compliance.md),
+[gates](../04-development/plans/M4-COMPLIANCE.md).
+
+## Planned integrated assessment reporting - 2026-10-19
+
+M4-M8 extend the implemented company/department Executive/Technical PDF and CSV pipeline with shared issue/evidence data, an Audit profile, AI summaries, applicability and validation/retest outcomes. These additions are not implemented. No second report hub is planned. [Shared requirements](../01-product/REQUIREMENTS.md#shared-assessment-contract-planned-approved-2026-10-19) and [ADR-28](../03-architecture/ADR/README.md#adr-28--integrated-assessment-lifecycle-and-reporting-2026-10-19) own future contracts. Preserve current archive-filter versus consolidated-download semantics until a compatible explicit design changes them.
+
 > Publication scope 2026-10-18: alert-channel / outbox / migration 000012 sections describe deferred T4/T5 design and local prototype evidence. Their code and routes are excluded from this release; published migration is 000011. Alert-specific commands are future gates.
 
 

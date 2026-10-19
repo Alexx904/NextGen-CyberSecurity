@@ -16,6 +16,25 @@ PO request: order by risk and dependencies. Previous pending acceptance tasks ar
 | P4 | Remaining medium/low debt | Order by measured impact; resolve feature prerequisites before that feature. |
 | Final | E28-S1-T4 -> E28-S1-T5 -> E28-S1-T6 | Notifications deferred by PO until project end; full Epic 28 gate depends on both. |
 
+## Integrated assessment planning - approved 2026-10-19
+
+- [~] ROADMAP-COHERENCE-01 · Align M4-M8 with implemented assessment and reporting capabilities.
+  - Documentation only: PRD, requirements, use cases, UI, HLD/ADR-28, DOMAIN_MAP, reporting domain, QA and state. Direction approved; delivery acceptance separate.
+  - DoD: preserve existing IDs/states; distinguish implemented behavior from plans; Docs gate, semantic self-review and Doc Sync PASS. No implementation, installation, live test or notification resumption included.
+  - Verification: Docs PASS (root, 2026-10-19; verifier 0.779s, diff check 0.049s, both exit 0), semantic self-review and Doc Sync complete. No application tests required for Markdown-only changes; final metadata/state recheck recorded in PROJECT_STATE. Awaiting PO acceptance.
+
+M4-M8 extend the assessment tool; SSH/Firewall remains independent. No new tool per milestone or parallel report/finding archive. UI-TOOLS-01 retains final route/hub design. See [shared contract](../01-product/REQUIREMENTS.md#shared-assessment-contract-planned-approved-2026-10-19) and [ADR-28](../03-architecture/ADR/README.md#adr-28--integrated-assessment-lifecycle-and-reporting-2026-10-19).
+
+| Milestone | Additional dependency, scope and acceptance gates |
+|---|---|
+| M4 / E29-S1-T1..T6 | First design persistent issue-to-observation identity, lifecycle, ownership/deadlines, evidence provenance and report cutoff. Extend existing finding/report services, repositories, PDF generator and UI with control evidence/unknown states and an Audit profile. Define API/DTO/errors/auth/schema/up-down before code. Test cross-scan identity, ambiguity, duplicates/reopening, incomplete coverage, MTTR policy, score denominators, tenant/asset scope and consistent exports. Final All + PostgreSQL/up/down + browser/PDF, self-review and Doc Sync. External SLA delivery waits for T4/T5. |
+| M5 / E30-S1-T1..T6 | Depends on M4 shared lifecycle/evidence/report contracts. Enrich existing remediation and Executive summary; Ask Infrastructure uses the same authorized inventory. Define provider/data policy, grounded references, prompt-injection handling and failure states before code. Test unauthorized retrieval, unsupported advice, missing data, provider failure, leakage, script review and report regressions. Final affected sides, DB/up-down if changed, browser/PDF, security review and Doc Sync. No new executor. |
+| M6 / E31-S1-T1 | Extend existing CVE/finding details and shared report with applicability, source/version and module prerequisites; reuse mitigation references. Resolve relevant TECH-DEBT-08 coverage/scope/freshness prerequisites before using Attack Path as execution context. |
+| M7 / E32-S1-T1 | Design shared M7/M8 worker authorization/job/evidence contracts once, preserving distinct validation versus exploitation permissions. Link outcomes to persistent issues and source observations. Existing NSE confidence is not this execution outcome. |
+| M8 / E33-S1-T1 | Reuse M7 infrastructure and M4 lifecycle/reporting; link retest to original issue/proof and a valid authorization. Distinguish stop from rollback, failed proof from safety and applied mitigation from verified correction. |
+
+These additions refine the existing milestone entries without changing their IDs, completion states, delivery order or detailed laboratory/security gates. Concrete new paths and DOMAIN_MAP ownership must be defined during design.
+
 ## P0 - Security prerequisites
 
 - [x] TECH-DEBT-05 · Mandatory server-side inventory scan consent, scope/configuration-bound recurring authorization and immutable audit. Backend/frontend/PostgreSQL/up-down/browser PASS; accepted by PO on 2026-10-19. [Contract and evidence](plans/TECH-DEBT-05.md).
@@ -36,7 +55,32 @@ separate from the existing deployment at 3080. No scans or external sends perfor
 
 ## P1 - M4 - Compliance
 
-- [ ] **E29-S1-T1..T6**: Automated Compliance Mapping (NIS2 Art. 21, DORA, ISO/IEC 27001:2022), Compliance Scorecard per Reparto/Azienda, SLA MTTR Tracking, Generatore Dossier Formale Audit-Ready PDF A4.
+- [ ] M4-AUTO-01: Automatic regulatory context in Findings/REST/SSE and existing
+  Executive/Technical PDFs; retire manual UI/API/Audit without deleting data.
+  [Current scope, sources and gates](plans/M4-AUTOMATIC-CONTEXT.md).
+  PO approved this replacement, not the prior manual product. Backend tests/vet/build,
+  250 frontend tests/typecheck/build and rendered PDFs PASS; Docs corrected/PASS.
+  Browser gate pending (no connected surface); PO deploy, no agent deployment.
+
+The three entries below preserve historical IDs/states/evidence. Their manual
+product scope is superseded by M4-AUTO-01 and is no longer submitted for acceptance.
+
+- [ ] M4-WORKFLOW-01: Guided activity queue, assisted asset association, explicit bulk
+  owner/SLA policy, existing consent-based scan navigation and idle refresh.
+  [Contracts, tests and verification](plans/M4-WORKFLOW.md). Implemented; automated
+  Frontend PASS (246 tests/build); visual gate PO-owned/pending, no unattended retest or
+  regulatory monitoring. No M5, backend/schema change or deployment.
+
+- [~] M4-GUIDE-01: First-use guidance in Compliance and regulatory-update design.
+  PO requested UI guidance and design, not implementation of regulatory automation.
+  [Proposed update workflow and gates](plans/M4-REGULATORY-UPDATES.md). Final Frontend
+  PASS (239 tests, TypeScript/build, report `20261019-190633-b8be16e0`). Visual check
+  assigned to PO and marked done at PO request; not an agent-observed browser PASS.
+  No change to M4 acceptance or M5 scope; delivery awaits PO acceptance.
+
+- [~] **E29-S1-T1..T6**: Automated Compliance Mapping (NIS2 Art. 21, DORA, ISO/IEC 27001:2022), Compliance Scorecard per Reparto/Azienda, SLA MTTR Tracking, Generatore Dossier Formale Audit-Ready PDF A4.
+  - T1 identity/contracts; T2 persistent issue/evidence streams and scoped APIs; T3 versioned control relevance/manual assessments; T4 company/department scorecards; T5 explicit SLA/MTTR/ownership; T6 shared Audit A4 and integrated gates. Implemented and verified, awaiting PO acceptance. [Contract, scope and evidence](plans/M4-COMPLIANCE.md); [earlier domain increment](plans/E29-S1-T1.md).
+  - Final All/Integration PASS (239 frontend tests/build); final backend provenance/retention gate PASS. Real HTTP, PostgreSQL 14 up/down/up, browser desktop/390px/keyboard/Auditor, rendered empty/long/browser-downloaded PDFs PASS. Security self-review and Doc Sync complete. Curated coverage/identity/manual verification/scalability limits are explicit. PO requested stopping at M4; M5 not started.
 
 ## P2 - M5 - Copilot
 
@@ -73,6 +117,15 @@ separate from the existing deployment at 3080. No scans or external sends perfor
   - DoD: impatto osservato distinto da ipotesi, prova fallita distinta da sicurezza, cancellazione distinta da rollback; laboratorio/gate PASS, security-review/Doc Sync, accettazione PO separata. Autorizzazioni reali da acquisire per ogni perimetro.
 
 ## P4 - Technical debt
+
+- [x] UI-VPATCH-REMOVE-01: Remove "Genera virtual patch" from Finding details,
+  including modal import/state/mount. No other active UI entry point found.
+  Frontend Final PASS (250 tests, TypeScript/build, Docs/diff; report
+  `20261019-193251-7e47393a`). Self-review/Doc Sync complete; existing generator
+  backend retained, E28-S1-T7 replacement remains pending. Accepted by PO on
+  2026-10-19 with `OK`; no deploy authorized or performed by the agent.
+
+- [ ] TECH-DEBT-11 · Medium, dormant after M4-AUTO-01 · Retained manual M4 snapshots load/replay entire history with per-issue queries. No active route now uses this workflow. Before reactivation, measure representative volumes and add cursor/materialized snapshots preserving cutoff, denominators and evidence. [Historical contract](../domains/compliance.md).
 
 - [ ] UI-TOOLS-01 · Introduce a post-login tool selection hub and contextual navigation
   - PO request (2026-10-18): after login, show a tool selection screen instead of entering the current unified operational interface. Planning only; implementation and final UI design remain pending.

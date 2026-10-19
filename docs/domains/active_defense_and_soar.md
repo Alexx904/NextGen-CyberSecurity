@@ -63,6 +63,11 @@ alla porta selezionata. Non attesta che l'intero percorso di attacco sia neutral
 
 ## Virtual patch templates (E28-S1-T3, in progress)
 
+2026-10-19: PO requested removal of "Genera virtual patch". Finding details no
+longer imports/mounts the panel or exposes its button. Existing backend/template
+modules remain; no replacement provider or external call is introduced. E28-S1-T7
+remains pending for any future mitigation-source replacement.
+
 `GET /api/v1/findings/{id}/virtual-patches` is an authenticated, tenant-scoped
 read for all existing authenticated roles, including Auditor. It never executes
 or installs files. Missing/foreign finding 404, invalid UUID 400, missing tenant

@@ -1,5 +1,27 @@
 # Database Schema
 
+Current M4 replacement derives regulatory context at read/export time; no schema
+change. Migration 000014 and existing manual audit records are retained, but their
+application routes are retired. No drop/down migration is part of this change.
+[Scope](../../04-development/plans/M4-AUTOMATIC-CONTEXT.md).
+
+## M4 assessment lifecycle
+
+2026-10-19 - working tree, migration `000014_compliance` (up/down paired).
+`assessment_assets`: operator-resolved identity, unique tenant/group/name, composite
+tenant/group FK. `assessment_issues`: unique tenant/asset/transport/port/key and
+composite asset FK. `assessment_issue_events`: ordered command JSONB, primary key
+tenant/issue/version, composite issue FK, unique tenant/finding.
+`assessment_control_evidence`: scoped actor/source/rationale/status history.
+Events/evidence reject UPDATE/DELETE/TRUNCATE via statement triggers. References
+intentionally RESTRICT deletion of referenced history, with no audit cascade.
+Timestamps are server-assigned; append-only rows have no updated_at. Source scope
+is also validated by transactional repository commands. Existing group composite
+index comes from migration 12. Down drops only these four tables and audit
+function, losing their contents; application rollback needs a four-table backup.
+Up restores schema, not data. Tests: disposable `nextgen_m4_test`, localhost 55436.
+[Domain](../../domains/compliance.md), [gates](../../04-development/plans/M4-COMPLIANCE.md).
+
 > Publication scope 2026-10-18: alert-channel / outbox / migration 000012 sections describe deferred T4/T5 design and local prototype evidence. Their code and routes are excluded from this release; published migration is 000011. Alert-specific commands are future gates.
 
 
