@@ -159,3 +159,26 @@ provider acceptance and requires checking receipt separately; rejected test 502
 returns a fixed redacted code. Missing acknowledgement 400. No arbitrary message
 or target URL in a GET/query string. Config fields and HMAC receiver contract,
 event semantics and network policy: [Active Defense](../../domains/active_defense_and_soar.md#alerting-hub-e28-s1-t4t5-in-progress).
+
+## TECH-DEBT-05 - Inventory scan consent (2026-10-19, working tree)
+
+`POST /scans`, `POST /target-groups/{id}/scan` and `POST /schedules` require
+`authorization` with `accepted: true`, `statement: "scan-authorization-v1"`,
+`targets: [{id,value}]`, `nmap_args`, `timeout_seconds`, `cron_expression`.
+Use an empty cron for manual execution; recurring requests bind the exact cron.
+Group requests bind all eligible descendants, loaded without a silent page cap.
+The server compares inventory/profile values before creating any covered work.
+Unknown request identity/time fields never override authenticated actor/server UTC.
+Missing, old-statement, cross-tenant or mismatched consent yields HTTP 409 with
+`SCAN_AUTHORIZATION_REQUIRED`. Existing target/profile errors and blacklist/scope
+rules still apply. No public-network support is added.
+
+Schedule list/get/create/toggle responses add `authorization_required`, computed
+against current configuration. A false value describes current compatibility,
+not an immutable promise that subsequent edits remain authorized. Reactivation
+requires current consent; suspend and recreate legacy/stale schedules explicitly.
+Queued jobs revalidate before execution. An already-started job is not revoked by
+later schedule changes. Audit persistence failure prevents enqueue; persistence
+and queue delivery are not a transactional outbox. Ordinary per-target failures
+can still produce partial group results, following the existing contract.
+See [design and verification](../../04-development/plans/TECH-DEBT-05.md).

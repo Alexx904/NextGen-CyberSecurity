@@ -97,6 +97,16 @@ func setupGroupRouter(h *handler.TargetGroupHandler, tenantID uuid.UUID, role do
 	return r
 }
 
+func TestTargetGroupDeleteAlertConflict(t *testing.T) {
+	svc := &mockTargetGroupService{deleteGroupFunc: func(context.Context, uuid.UUID, uuid.UUID) error { return domain.ErrConflict }}
+	r := setupGroupRouter(handler.NewTargetGroupHandler(svc, nil), uuid.New(), domain.RoleTenantAdmin)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodDelete, "/target-groups/"+uuid.NewString(), nil))
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected actionable scope conflict, got %d: %s", w.Code, w.Body)
+	}
+}
+
 func TestTargetGroupHandler_GetTree_Success(t *testing.T) {
 	tenantID := uuid.New()
 	treeData := []*domain.TargetGroupNode{
@@ -395,4 +405,3 @@ func TestTargetGroupHandler_RBAC_AuditorForbiddenOnWrite(t *testing.T) {
 		t.Errorf("POST scan atteso 403 Forbidden, ottenuto %d", rrScan.Code)
 	}
 }
-

@@ -129,7 +129,7 @@ export const FindingsTable: React.FC<FindingsTableProps> = ({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Filtra per IP, CVE ID o servizio..."
-            className="w-full pl-9 pr-3 py-1.5 bg-slate-950 border border-cyber-border rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+            className="w-full pl-9 pr-3 py-1.5 bg-slate-950 border border-cyber-border rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500"
           />
         </div>
 
@@ -141,7 +141,7 @@ export const FindingsTable: React.FC<FindingsTableProps> = ({
             <select
               value={selectedSeverity}
               onChange={(e) => setSelectedSeverity(e.target.value)}
-              className="bg-slate-950 border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-cyan-500"
+              className="bg-slate-950 border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-hidden focus:border-cyan-500"
             >
               <option value="ALL">Tutte le severità</option>
               <option value="CRITICAL">Critical</option>
@@ -156,7 +156,7 @@ export const FindingsTable: React.FC<FindingsTableProps> = ({
           <select
             value={minCvss}
             onChange={(e) => setMinCvss(e.target.value)}
-            className="bg-slate-950 border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-cyan-500"
+            className="bg-slate-950 border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-hidden focus:border-cyan-500"
           >
             <option value="ALL">Tutti gli Score CVSS</option>
             <option value="9">CVSS &ge; 9.0 (Critico)</option>
@@ -170,7 +170,7 @@ export const FindingsTable: React.FC<FindingsTableProps> = ({
             value={selectedPort}
             onChange={(e) => setSelectedPort(e.target.value)}
             placeholder="Porta (es. 80)"
-            className="w-24 px-2.5 py-1.5 bg-slate-950 border border-cyber-border rounded-lg text-xs text-slate-300 placeholder-slate-600 focus:outline-none focus:border-cyan-500 font-mono"
+            className="w-24 px-2.5 py-1.5 bg-slate-950 border border-cyber-border rounded-lg text-xs text-slate-300 placeholder-slate-600 focus:outline-hidden focus:border-cyan-500 font-mono"
           />
 
           {/* Toggle Solo Host con Porte Aperte */}

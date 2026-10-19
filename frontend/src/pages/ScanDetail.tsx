@@ -466,7 +466,7 @@ export const ScanDetail: React.FC = () => {
       {/* Notifica di errore live SSE */}
       {liveError && (
         <div className="p-4 rounded-xl border border-rose-900/50 bg-rose-950/20 flex items-center space-x-3 text-rose-300">
-          <AlertCircle className="w-5 h-5 flex-shrink-0 text-rose-400" />
+          <AlertCircle className="w-5 h-5 shrink-0 text-rose-400" />
           <div className="text-sm font-medium">{liveError}</div>
         </div>
       )}
@@ -477,7 +477,7 @@ export const ScanDetail: React.FC = () => {
         <div className="p-5 rounded-2xl border border-cyan-500/40 bg-cyan-950/20 shadow-xl space-y-4 animate-in fade-in duration-300">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center space-x-3 text-cyan-300">
-              <Zap className="w-5 h-5 text-cyan-400 animate-pulse flex-shrink-0" />
+              <Zap className="w-5 h-5 text-cyan-400 animate-pulse shrink-0" />
               <div>
                 <div className="flex items-center space-x-2">
                   <span className="font-bold text-white text-sm">

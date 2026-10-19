@@ -156,7 +156,7 @@ export const AttackPath: React.FC = () => {
               aria-label="Reparto Attack Path"
               value={activeDepartmentId}
               onChange={(e) => setDepartmentId(e.target.value)}
-              className="bg-transparent text-cyan-400 font-mono font-medium focus:outline-none cursor-pointer"
+              className="bg-transparent text-cyan-400 font-mono font-medium focus:outline-hidden cursor-pointer"
             >
               <option value="" className="bg-slate-900">Intera azienda</option>
               {departments.map(d => <option key={d.id} value={d.id} className="bg-slate-900">{d.name}</option>)}
@@ -189,7 +189,7 @@ export const AttackPath: React.FC = () => {
 
       {/* Banner Scope Aziendale Attivo */}
       {selectedCompany && (
-        <div className="p-3.5 rounded-xl border border-cyan-500/30 bg-cyan-950/20 backdrop-blur-sm flex items-center justify-between text-xs">
+        <div className="p-3.5 rounded-xl border border-cyan-500/30 bg-cyan-950/20 backdrop-blur-xs flex items-center justify-between text-xs">
           <div className="flex items-center space-x-2.5">
             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
             <span className="text-slate-300">
@@ -276,7 +276,7 @@ export const AttackPath: React.FC = () => {
                 {graph.summary.top_chokepoint || 'Nessuno identificato'}
               </p>
             </div>
-            <div className="p-3 bg-slate-800/80 rounded-xl text-amber-400 border border-slate-700/50 flex-shrink-0">
+            <div className="p-3 bg-slate-800/80 rounded-xl text-amber-400 border border-slate-700/50 shrink-0">
               <Target className="w-5 h-5" />
             </div>
           </div>
@@ -287,7 +287,7 @@ export const AttackPath: React.FC = () => {
       {error && (
         <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-xl text-sm text-rose-300 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 text-rose-400 flex-shrink-0" />
+            <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
             <span>{error}</span>
           </div>
           <button
@@ -364,7 +364,7 @@ export const AttackPath: React.FC = () => {
                 onClick={() => setActiveTab('paths')}
                 className={`flex-1 py-2 text-xs font-semibold rounded-lg transition flex items-center justify-center gap-1.5 ${
                   activeTab === 'paths'
-                    ? 'bg-slate-800 text-white shadow-sm'
+                    ? 'bg-slate-800 text-white shadow-xs'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
@@ -374,7 +374,7 @@ export const AttackPath: React.FC = () => {
                 onClick={() => setActiveTab('chokepoints')}
                 className={`flex-1 py-2 text-xs font-semibold rounded-lg transition flex items-center justify-center gap-1.5 ${
                   activeTab === 'chokepoints'
-                    ? 'bg-slate-800 text-amber-300 shadow-sm'
+                    ? 'bg-slate-800 text-amber-300 shadow-xs'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
@@ -385,7 +385,7 @@ export const AttackPath: React.FC = () => {
                   onClick={() => setActiveTab('node')}
                   className={`flex-1 py-2 text-xs font-semibold rounded-lg transition flex items-center justify-center gap-1.5 ${
                     activeTab === 'node'
-                      ? 'bg-slate-800 text-cyan-300 shadow-sm'
+                      ? 'bg-slate-800 text-cyan-300 shadow-xs'
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
@@ -451,7 +451,7 @@ export const AttackPath: React.FC = () => {
                           </h3>
                         </div>
 
-                        <div className="text-right flex-shrink-0">
+                        <div className="text-right shrink-0">
                           <span
                             className={`text-sm font-bold font-mono ${
                               isCrit ? 'text-rose-400' : isHigh ? 'text-amber-400' : 'text-cyan-400'
@@ -541,7 +541,7 @@ export const AttackPath: React.FC = () => {
 
                         <button
                           onClick={() => handleSelectNode(node || null)}
-                          className="text-[11px] text-cyan-400 hover:text-cyan-200 font-medium flex items-center gap-1 flex-shrink-0"
+                          className="text-[11px] text-cyan-400 hover:text-cyan-200 font-medium flex items-center gap-1 shrink-0"
                           title="Focalizza sul Grafo"
                         >
                           <span>Focalizza</span>

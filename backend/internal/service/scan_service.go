@@ -128,12 +128,16 @@ func (s *scanService) StartScan(ctx context.Context, tenantID, targetID, profile
 	}
 
 	// 2. Verifica esistenza del profilo di scansione
-	_, err = s.profileRepo.GetByID(ctx, profileID)
+	profile, err := s.profileRepo.GetByID(ctx, profileID)
 	if err != nil {
 		return nil, fmt.Errorf("profilo di scansione non valido: %w", err)
 	}
 
 	// 3. Verifica preventiva di scansioni concorrenti attive sullo stesso target
+	authorization := domain.ScanAuthorizationFromContext(ctx)
+	if err := authorization.Validate(tenantID, []*domain.Target{target}, profile, ""); err != nil {
+		return nil, err
+	}
 	activeScan, err := s.scanRepo.GetActiveByTarget(ctx, tenantID, targetID)
 	if err != nil {
 		return nil, fmt.Errorf("controllo scansioni attive fallito: %w", err)
@@ -145,14 +149,15 @@ func (s *scanService) StartScan(ctx context.Context, tenantID, targetID, profile
 	// 4. Creazione record scansione con stato QUEUED
 	now := time.Now()
 	scan := &domain.Scan{
-		ID:          uuid.New(),
-		TenantID:    tenantID,
-		TargetID:    targetID,
-		ProfileID:   profileID,
-		TriggerType: domain.TriggerManual,
-		Status:      domain.ScanStatusQueued,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID:            uuid.New(),
+		TenantID:      tenantID,
+		TargetID:      targetID,
+		ProfileID:     profileID,
+		TriggerType:   domain.TriggerManual,
+		Authorization: authorization.ForTarget(target),
+		Status:        domain.ScanStatusQueued,
+		CreatedAt:     now,
+		UpdatedAt:     now,
 	}
 
 	if err := s.scanRepo.Create(ctx, scan); err != nil {
@@ -264,7 +269,8 @@ func (s *scanService) StartGroupScan(ctx context.Context, tenantID, groupID, pro
 	}
 
 	// 1. Verifica esistenza profilo di scansione
-	if _, err := s.profileRepo.GetByID(ctx, profileID); err != nil {
+	profile, err := s.profileRepo.GetByID(ctx, profileID)
+	if err != nil {
 		return nil, fmt.Errorf("profilo di scansione non valido: %w", err)
 	}
 
@@ -292,9 +298,20 @@ func (s *scanService) StartGroupScan(ctx context.Context, tenantID, groupID, pro
 	}
 
 	// 4. Recupero di tutti i target del tenant per filtrare quelli associati ai gruppi del sotto-albero
-	targets, _, err := s.targetRepo.List(ctx, tenantID, domain.TargetFilter{Limit: 1000})
-	if err != nil {
-		return nil, fmt.Errorf("recupero target per scansione cartella fallito: %w", err)
+	var targets []*domain.Target
+	for offset := 0; ; {
+		page, total, err := s.targetRepo.List(ctx, tenantID, domain.TargetFilter{Limit: 200, Offset: offset})
+		if err != nil {
+			return nil, fmt.Errorf("recupero target per scansione cartella fallito: %w", err)
+		}
+		targets = append(targets, page...)
+		offset += len(page)
+		if offset >= total {
+			break
+		}
+		if len(page) == 0 {
+			return nil, fmt.Errorf("%w: elenco target incompleto", domain.ErrValidation)
+		}
 	}
 
 	var targetsToScan []*domain.Target
@@ -309,6 +326,10 @@ func (s *scanService) StartGroupScan(ctx context.Context, tenantID, groupID, pro
 	}
 
 	// 5. Avvio sicuro dei job di scansione per ciascun target non bloccato
+	authorization := domain.ScanAuthorizationFromContext(ctx)
+	if err := authorization.Validate(tenantID, targetsToScan, profile, ""); err != nil {
+		return nil, err
+	}
 	var startedScans []*domain.Scan
 	for _, target := range targetsToScan {
 		// Controllo blacklist globale/tenant
@@ -330,14 +351,15 @@ func (s *scanService) StartGroupScan(ctx context.Context, tenantID, groupID, pro
 
 		now := time.Now()
 		scan := &domain.Scan{
-			ID:          uuid.New(),
-			TenantID:    tenantID,
-			TargetID:    target.ID,
-			ProfileID:   profileID,
-			TriggerType: domain.TriggerManual,
-			Status:      domain.ScanStatusQueued,
-			CreatedAt:   now,
-			UpdatedAt:   now,
+			ID:            uuid.New(),
+			TenantID:      tenantID,
+			TargetID:      target.ID,
+			ProfileID:     profileID,
+			TriggerType:   domain.TriggerManual,
+			Authorization: authorization.ForTarget(target),
+			Status:        domain.ScanStatusQueued,
+			CreatedAt:     now,
+			UpdatedAt:     now,
 		}
 
 		if err := s.scanRepo.Create(ctx, scan); err != nil {

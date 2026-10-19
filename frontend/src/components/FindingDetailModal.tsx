@@ -79,7 +79,7 @@ export const FindingDetailModal: React.FC<FindingDetailModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-200">
       {patchFindingId === finding.id && <VirtualPatchModal key={finding.id} findingId={finding.id} onClose={() => setPatchFindingId(null)} />}
       <div className="max-w-2xl w-full max-h-[90vh] flex flex-col bg-[#111726] border border-cyber-border rounded-2xl shadow-2xl overflow-hidden relative">
         {/* Header */}

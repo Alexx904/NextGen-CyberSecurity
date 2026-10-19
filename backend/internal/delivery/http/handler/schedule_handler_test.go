@@ -229,6 +229,7 @@ func setupScheduleTestRouter(
 	profileRepo domain.ScanProfileRepository,
 ) (*chi.Mux, *service.SchedulerService) {
 	schedSvc := service.NewSchedulerService(schedRepo, &mockScanRepoForSched{}, &mockOrchestratorForSched{}, nil)
+	schedSvc.ConfigureAuthorizationRepositories(targetRepo, profileRepo)
 	h := handler.NewScheduleHandler(schedSvc, targetRepo, profileRepo)
 
 	r := chi.NewRouter()
@@ -548,6 +549,7 @@ func TestScheduleHandler_Create(t *testing.T) {
 
 	t.Run("Invalid Cron Expression", func(t *testing.T) {
 		body, _ := json.Marshal(handler.CreateScheduleRequest{
+			Authorization:  &domain.ScanAuthorizationRequest{Accepted: true, Statement: domain.ScanAuthorizationStatement, Targets: []domain.AuthorizedTarget{{ID: targetID, Value: "192.168.1.50"}}, CronExpression: "not-a-cron-expression"},
 			TargetID:       targetID,
 			ProfileID:      profileID,
 			CronExpression: "not-a-cron-expression",
@@ -565,6 +567,7 @@ func TestScheduleHandler_Create(t *testing.T) {
 
 	t.Run("Success - 201 Created", func(t *testing.T) {
 		body, _ := json.Marshal(handler.CreateScheduleRequest{
+			Authorization:  &domain.ScanAuthorizationRequest{Accepted: true, Statement: domain.ScanAuthorizationStatement, Targets: []domain.AuthorizedTarget{{ID: targetID, Value: "192.168.1.50"}}, CronExpression: "0 5 * * *"},
 			TargetID:       targetID,
 			ProfileID:      profileID,
 			CronExpression: "0 5 * * *",
@@ -618,6 +621,10 @@ func TestScheduleHandler_Toggle(t *testing.T) {
 		UpdatedAt:      time.Now(),
 	})
 
+	legacyFixture := schedRepo.schedules[scheduleID]
+	_ = targetRepo.Create(context.Background(), &domain.Target{ID: legacyFixture.TargetID, TenantID: tenantID, Value: "192.168.1.50"})
+	profileRepo.profiles[legacyFixture.ProfileID] = &domain.ScanProfile{ID: legacyFixture.ProfileID}
+	legacyFixture.Authorization = domain.ScanAuthorizationFromContext(domain.WithScanAuthorization(context.Background(), tenantID, uuid.New(), &domain.ScanAuthorizationRequest{Accepted: true, Statement: domain.ScanAuthorizationStatement, Targets: []domain.AuthorizedTarget{{ID: legacyFixture.TargetID, Value: "192.168.1.50"}}, CronExpression: legacyFixture.CronExpression}))
 	router, _ := setupScheduleTestRouter(schedRepo, targetRepo, profileRepo)
 
 	t.Run("Unauthorized - no tenant", func(t *testing.T) {
@@ -777,4 +784,3 @@ func TestScheduleHandler_Delete(t *testing.T) {
 		}
 	})
 }
-

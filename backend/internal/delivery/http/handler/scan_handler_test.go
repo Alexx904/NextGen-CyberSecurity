@@ -34,6 +34,41 @@ type mockScanService struct {
 	getScanDiffFunc         func(ctx context.Context, tenantID, scanID uuid.UUID) (*domain.ScanDiffResult, error)
 }
 
+func TestScanAuthorizationHTTPIdentityAndConflict(t *testing.T) {
+	tenant, user, target, profile := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	for _, grouped := range []bool{false, true} {
+		check := func(ctx context.Context) {
+			a := domain.ScanAuthorizationFromContext(ctx)
+			if a == nil || a.UserID != user || a.TenantID != tenant || a.AcceptedAt.Year() < 2026 {
+				t.Fatal("request identity not derived from authenticated context")
+			}
+		}
+		svc := &mockScanService{
+			startScanFunc: func(ctx context.Context, _, _, _ uuid.UUID) (*domain.Scan, error) {
+				check(ctx)
+				return nil, domain.ErrScanAuthorizationRequired
+			},
+			startGroupScanFunc: func(ctx context.Context, _, _, _ uuid.UUID) ([]*domain.Scan, error) {
+				check(ctx)
+				return nil, domain.ErrScanAuthorizationRequired
+			},
+		}
+		selector := "target_id"
+		if grouped {
+			selector = "group_id"
+		}
+		body := map[string]interface{}{selector: target, "profile_id": profile, "authorization": map[string]interface{}{"accepted": true, "statement": domain.ScanAuthorizationStatement, "user_id": uuid.New(), "tenant_id": uuid.New(), "accepted_at": "2000-01-01T00:00:00Z"}}
+		data, _ := json.Marshal(body)
+		r := httptest.NewRequest(http.MethodPost, "/scans", bytes.NewReader(data))
+		r = r.WithContext(middleware.WithUserClaims(r.Context(), &auth.UserClaims{UserID: user, TenantID: tenant, Role: domain.RoleSecOps}))
+		w := httptest.NewRecorder()
+		handler.NewScanHandler(svc, nil).Start(w, r)
+		if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "SCAN_AUTHORIZATION_REQUIRED") {
+			t.Fatalf("unexpected response: %d %s", w.Code, w.Body.String())
+		}
+	}
+}
+
 func (m *mockScanService) CancelScan(ctx context.Context, tenantID, scanID uuid.UUID) error {
 	if m.cancelScanFunc != nil {
 		return m.cancelScanFunc(ctx, tenantID, scanID)

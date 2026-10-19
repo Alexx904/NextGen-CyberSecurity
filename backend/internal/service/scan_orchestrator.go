@@ -40,12 +40,13 @@ func DefaultOrchestratorConfig() OrchestratorConfig {
 
 // ScanOrchestrator coordina l'esecuzione asincrona delle scansioni di rete
 type ScanOrchestrator struct {
-	cfg         OrchestratorConfig
-	scanRepo    domain.ScanRepository
-	profileRepo domain.ScanProfileRepository
-	targetRepo  domain.TargetRepository
-	runner      scanner.Runner
-	logger      *slog.Logger
+	scheduleRepo domain.ScheduleRepository
+	cfg          OrchestratorConfig
+	scanRepo     domain.ScanRepository
+	profileRepo  domain.ScanProfileRepository
+	targetRepo   domain.TargetRepository
+	runner       scanner.Runner
+	logger       *slog.Logger
 
 	findingRepo    domain.FindingRepository
 	correlator     Correlator
@@ -60,6 +61,9 @@ type ScanOrchestrator struct {
 	cancel    context.CancelFunc
 	running   atomic.Bool
 }
+
+// SetScheduleRepo wires live recurring-authorization checks before Start.
+func (o *ScanOrchestrator) SetScheduleRepo(repo domain.ScheduleRepository) { o.scheduleRepo = repo }
 
 // SetFindingRepo configura il repository per salvare i risultati dei servizi scoperti
 func (o *ScanOrchestrator) SetFindingRepo(repo domain.FindingRepository) {
@@ -338,6 +342,26 @@ func (o *ScanOrchestrator) processJob(job *ScanJob, workerID int) {
 	}
 
 	profileArgs, err := scanner.ParseProfileArgs(profile.NmapArgs)
+	cron := ""
+	if scan.Authorization != nil {
+		cron = scan.Authorization.CronExpression
+	}
+	if scan.TriggerType == domain.TriggerScheduled {
+		if o.scheduleRepo == nil || scan.Authorization == nil || scan.Authorization.ScheduleID == nil {
+			o.failScan(scan, domain.ErrScanAuthorizationRequired.Error())
+			return
+		}
+		schedule, scheduleErr := o.scheduleRepo.GetByID(ctx, job.TenantID, *scan.Authorization.ScheduleID)
+		if scheduleErr != nil || !schedule.IsActive || schedule.TargetID != scan.TargetID || schedule.ProfileID != scan.ProfileID || schedule.Authorization == nil || schedule.Authorization.UserID != scan.Authorization.UserID || !schedule.Authorization.AcceptedAt.Equal(scan.Authorization.AcceptedAt) {
+			o.failScan(scan, domain.ErrScanAuthorizationRequired.Error())
+			return
+		}
+		cron = schedule.CronExpression
+	}
+	if authErr := scan.Authorization.Validate(job.TenantID, []*domain.Target{target}, profile, cron); authErr != nil {
+		o.failScan(scan, authErr.Error())
+		return
+	}
 	if err != nil {
 		o.failScan(scan, fmt.Sprintf("argomenti del profilo non validi: %v", err))
 		return

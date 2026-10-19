@@ -282,7 +282,7 @@ export const WebTerminalModal: React.FC<WebTerminalModalProps> = ({
   };
 
   return (
-    <div role={docked && !isFullscreen ? 'region' : 'dialog'} aria-label={`Terminale SSH ${server.name}`} className={docked && !isFullscreen ? 'relative w-full h-[320px] min-h-[260px] flex mt-3' : 'fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4'}>
+    <div role={docked && !isFullscreen ? 'region' : 'dialog'} aria-label={`Terminale SSH ${server.name}`} className={docked && !isFullscreen ? 'relative w-full h-[320px] min-h-[260px] flex mt-3' : 'fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4'}>
       <div
         className={`bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl flex flex-col overflow-hidden transition-all duration-200 ${
           isFullscreen

@@ -148,7 +148,7 @@ describe('Reports Page - Multi-Company Scope & Target IP Inspection', () => {
 
   it('renders company scope groups with posture metrics and specific target IPs', async () => {
     render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <MemoryRouter>
         <Reports />
       </MemoryRouter>
     );
@@ -172,7 +172,7 @@ describe('Reports Page - Multi-Company Scope & Target IP Inspection', () => {
 
   it('allows collapsing and expanding company accordions', async () => {
     render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <MemoryRouter>
         <Reports />
       </MemoryRouter>
     );
@@ -198,7 +198,7 @@ describe('Reports Page - Multi-Company Scope & Target IP Inspection', () => {
 
   it('allows switching to flat chronological archive view', async () => {
     render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <MemoryRouter>
         <Reports />
       </MemoryRouter>
     );
@@ -221,7 +221,7 @@ describe('Reports Page - Multi-Company Scope & Target IP Inspection', () => {
 
   it('triggers 1-click download when clicking download button', async () => {
     render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <MemoryRouter>
         <Reports />
       </MemoryRouter>
     );

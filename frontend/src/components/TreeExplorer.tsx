@@ -521,7 +521,7 @@ export const TreeExplorer: React.FC<TreeExplorerProps> = ({
 
       {/* Dialog Conferma Eliminazione Cartella */}
       {groupToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="max-w-md w-full p-6 rounded-2xl border border-rose-800/40 bg-[#111726] shadow-2xl space-y-4">
             <div className="flex items-center space-x-3">
               <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400">

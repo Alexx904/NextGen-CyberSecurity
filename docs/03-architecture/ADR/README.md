@@ -4,6 +4,24 @@
 
 ## 7. Architecture Decision Records (ADR)
 
+### ADR-27 · Inventory scan authorization snapshots (2026-10-19)
+
+- Context: UI-only elevated-impact consent could be bypassed through the API or
+  scheduler; private addresses do not establish network ownership.
+- Decision: PO requires consent for every inventory scan. Confirm exact target
+  IDs/values, options, timeout and recurrence; derive actor/time server-side.
+  Compare before enqueue and execution. Migration 000013 records source and
+  append-only evidence transactionally, with no cascading inventory references.
+  Recurring authorization survives restart only while its configuration remains
+  unchanged. Reload schedules at trigger/execution; metadata writes never restore
+  disabled state. Legacy schedules require explicit replacement, never inferred
+  consent. Next-run timestamps and cron use the same server-local clock.
+- Consequences: API clients must supply the snapshot; existing queued work without
+  consent fails before Nmap. Audit survives inventory deletion, with no automatic
+  purge in this increment. Database owners can remove protections. Consent is not
+  legal ownership verification; in-flight work is not recalled by later edits.
+  Standalone discovery remains a separate workflow. [Contract and QA](../../04-development/plans/TECH-DEBT-05.md).
+
 ### ADR-26 · Transactional alert outbox and restricted egress (2026-10-18)
 
 - Context: in-memory notification callbacks could lose persisted findings on a

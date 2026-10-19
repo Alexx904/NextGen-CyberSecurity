@@ -81,7 +81,27 @@ Lettura batch e proprietà additive in [API_SPEC](../03-architecture/LLD/API_SPE
 
 `ClassifyInvasiveness` classifica server-side i nuovi profili: NSE vuln/vulners, tutte le porte (`-p-`, `-p1-65535`, `-p0-65535`), T4/T5, version-all, ACK o min-rate sono INTRUSIVE; altri SAFE per compatibilità del contratto. SAFE non è una garanzia di assenza di impatto; la classificazione è euristica e non una policy completa di rate limiting o valutazione del rischio della rete.
 
-La UI verifica opzioni effettive e metadati del profilo equivalente, richiede autorizzazione esplicita per impatto elevato e la invalida quando cambiano comando, gruppo, timeout o pianificazione. **Limite preesistente:** la checkbox non costituisce attestazione immutabile lato server e l'API di scansione non riceve tale prova; FR-01.3 non è pienamente implementato. Vedere TECH-DEBT-05.
+TECH-DEBT-05 · 2026-10-19 · working tree: PO selected explicit consent for every
+inventory scan, including configurations classified SAFE. Manual target/group and
+recurring creation compare the operator-confirmed target IDs/values, Nmap options,
+timeout and recurrence against live tenant inventory/profile. Missing or stale
+consent returns 409 `SCAN_AUTHORIZATION_REQUIRED` before any launch. Actor and UTC
+acceptance time come from authenticated server context. The UI resets confirmation
+on configuration/scope changes; quick and group entry points follow the same rule.
+
+Each job stores its target-bound authorization; migration 000013 writes append-only
+audit evidence in the same transaction as scan/schedule creation. Workers compare
+the snapshot again before Nmap. Scheduled triggers reload current state, reject
+legacy/stale authorization and inactive/deleted schedules; queued recurring jobs
+also recheck their source schedule. Runtime timestamp writes cannot re-enable a
+concurrently disabled schedule. Next-run calculations use the same server-local
+clock as cron, stored as UTC instants. Existing schedules require suspension and
+replacement with explicitly authorized configuration; the UI labels them
+"Autorizzazione richiesta" and blocks reactivation. Historical completed scans
+remain readable; legacy queued scans fail before Nmap. An already-started process
+is not recalled by later schedule changes. Consent is an operator attestation,
+not proof of legal ownership or regulatory compliance. Standalone LAN discovery
+retains its separate existing contract. [Design and evidence](../04-development/plans/TECH-DEBT-05.md).
 
 ## 4. Network Discovery e sovrapposizione
 

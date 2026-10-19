@@ -26,10 +26,47 @@ type SchedulerService struct {
 	scanRepo     domain.ScanRepository
 	orchestrator OrchestratorSchedulerClient
 	logger       *slog.Logger
+	targetRepo   domain.TargetRepository
+	profileRepo  domain.ScanProfileRepository
 
 	mu       sync.RWMutex
 	entryMap map[uuid.UUID]cron.EntryID
 	running  bool
+}
+
+// ConfigureAuthorizationRepositories must be called before starting the scheduler.
+// Missing repositories fail closed when creating or triggering work.
+func (s *SchedulerService) ConfigureAuthorizationRepositories(targets domain.TargetRepository, profiles domain.ScanProfileRepository) {
+	s.targetRepo, s.profileRepo = targets, profiles
+}
+
+func (s *SchedulerService) validateAuthorization(ctx context.Context, schedule *domain.Schedule) error {
+	if s.targetRepo == nil || s.profileRepo == nil {
+		return domain.ErrScanAuthorizationRequired
+	}
+	target, err := s.targetRepo.GetByID(ctx, schedule.TenantID, schedule.TargetID)
+	if err != nil {
+		return err
+	}
+	if target.IsBlacklisted {
+		return domain.ErrTargetBlacklisted
+	}
+	blocked, err := s.targetRepo.IsBlacklisted(ctx, schedule.TenantID, target.Value)
+	if err != nil {
+		return err
+	}
+	if blocked {
+		return domain.ErrTargetBlacklisted
+	}
+	profile, err := s.profileRepo.GetByID(ctx, schedule.ProfileID)
+	if err != nil {
+		return err
+	}
+	return schedule.Authorization.Validate(schedule.TenantID, []*domain.Target{target}, profile, schedule.CronExpression)
+}
+
+func (s *SchedulerService) AuthorizationRequired(ctx context.Context, schedule *domain.Schedule) bool {
+	return s.validateAuthorization(ctx, schedule) != nil
 }
 
 // NewSchedulerService inizializza una nuova istanza di SchedulerService
@@ -121,6 +158,16 @@ func (s *SchedulerService) Stop() {
 
 // AddSchedule crea e persiste una nuova pianificazione, registrandola dinamicamente nell'engine se attiva
 func (s *SchedulerService) AddSchedule(ctx context.Context, schedule *domain.Schedule) error {
+	if schedule.ID == uuid.Nil {
+		schedule.ID = uuid.New()
+	}
+	schedule.Authorization = domain.ScanAuthorizationFromContext(ctx)
+	if err := s.validateAuthorization(ctx, schedule); err != nil {
+		return err
+	}
+	auth := *schedule.Authorization
+	auth.ScheduleID = &schedule.ID
+	schedule.Authorization = &auth
 	// Valida la sintassi dell'espressione cron
 	schedSchedule, err := s.parser.Parse(schedule.CronExpression)
 	if err != nil {
@@ -128,7 +175,7 @@ func (s *SchedulerService) AddSchedule(ctx context.Context, schedule *domain.Sch
 	}
 
 	now := time.Now().UTC()
-	next := schedSchedule.Next(now)
+	next := schedSchedule.Next(now.In(time.Local)).UTC()
 	schedule.NextRunAt = &next
 
 	if err := s.scheduleRepo.Create(ctx, schedule); err != nil {
@@ -150,13 +197,16 @@ func (s *SchedulerService) AddSchedule(ctx context.Context, schedule *domain.Sch
 
 // UpdateSchedule aggiorna una pianificazione e ricarica il job nel cron engine
 func (s *SchedulerService) UpdateSchedule(ctx context.Context, schedule *domain.Schedule) error {
+	if err := s.validateAuthorization(ctx, schedule); err != nil {
+		return err
+	}
 	schedSchedule, err := s.parser.Parse(schedule.CronExpression)
 	if err != nil {
 		return fmt.Errorf("espressione cron non valida (%s): %w", schedule.CronExpression, err)
 	}
 
 	now := time.Now().UTC()
-	next := schedSchedule.Next(now)
+	next := schedSchedule.Next(now.In(time.Local)).UTC()
 	schedule.NextRunAt = &next
 
 	if err := s.scheduleRepo.Update(ctx, schedule); err != nil {
@@ -207,11 +257,16 @@ func (s *SchedulerService) ToggleSchedule(ctx context.Context, tenantID, id uuid
 	}
 
 	schedule.IsActive = !schedule.IsActive
+	if schedule.IsActive {
+		if err := s.validateAuthorization(ctx, schedule); err != nil {
+			return nil, err
+		}
+	}
 
 	if schedule.IsActive {
 		schedSchedule, err := s.parser.Parse(schedule.CronExpression)
 		if err == nil {
-			next := schedSchedule.Next(time.Now().UTC())
+			next := schedSchedule.Next(time.Now()).UTC()
 			schedule.NextRunAt = &next
 		}
 	} else {
@@ -250,6 +305,15 @@ func (s *SchedulerService) ListByTenant(ctx context.Context, tenantID uuid.UUID)
 // TriggerJob esegue la logica di invocazione di una scansione programmata
 func (s *SchedulerService) TriggerJob(schedule *domain.Schedule) {
 	ctx := context.Background()
+	current, err := s.scheduleRepo.GetByID(ctx, schedule.TenantID, schedule.ID)
+	if err != nil || !current.IsActive {
+		return
+	}
+	schedule = current
+	if err := s.validateAuthorization(ctx, schedule); err != nil {
+		s.logger.Warn("Scheduled scan requires current authorization", "schedule_id", schedule.ID)
+		return
+	}
 
 	s.logger.Info("Trigger cron scattato per pianificazione",
 		"schedule_id", schedule.ID,
@@ -279,14 +343,15 @@ func (s *SchedulerService) TriggerJob(schedule *domain.Schedule) {
 	// 2. Creazione record scansione su DB in stato QUEUED
 	now := time.Now().UTC()
 	scan := &domain.Scan{
-		ID:          uuid.New(),
-		TenantID:    schedule.TenantID,
-		TargetID:    schedule.TargetID,
-		ProfileID:   schedule.ProfileID,
-		TriggerType: domain.TriggerScheduled,
-		Status:      domain.ScanStatusQueued,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID:            uuid.New(),
+		TenantID:      schedule.TenantID,
+		TargetID:      schedule.TargetID,
+		ProfileID:     schedule.ProfileID,
+		TriggerType:   domain.TriggerScheduled,
+		Authorization: schedule.Authorization,
+		Status:        domain.ScanStatusQueued,
+		CreatedAt:     now,
+		UpdatedAt:     now,
 	}
 
 	if err := s.scanRepo.Create(ctx, scan); err != nil {
@@ -300,10 +365,10 @@ func (s *SchedulerService) TriggerJob(schedule *domain.Schedule) {
 	// 3. Aggiornamento timestamp di ultima e prossima esecuzione
 	schedule.LastRunAt = &now
 	if parsedSchedule, err := s.parser.Parse(schedule.CronExpression); err == nil {
-		next := parsedSchedule.Next(now)
+		next := parsedSchedule.Next(now.In(time.Local)).UTC()
 		schedule.NextRunAt = &next
 	}
-	_ = s.scheduleRepo.Update(ctx, schedule)
+	s.updateRunTimes(ctx, schedule)
 
 	// 4. Accodamento job nello ScanOrchestrator
 	if s.orchestrator != nil {
@@ -340,8 +405,19 @@ func (s *SchedulerService) registerJobLocked(schedule *domain.Schedule) error {
 
 func (s *SchedulerService) updateNextRunOnly(ctx context.Context, schedule *domain.Schedule) {
 	if parsedSchedule, err := s.parser.Parse(schedule.CronExpression); err == nil {
-		next := parsedSchedule.Next(time.Now().UTC())
+		next := parsedSchedule.Next(time.Now()).UTC()
 		schedule.NextRunAt = &next
-		_ = s.scheduleRepo.Update(ctx, schedule)
+		s.updateRunTimes(ctx, schedule)
+	}
+}
+
+// Runtime timestamps must never overwrite a concurrent disable or configuration edit.
+func (s *SchedulerService) updateRunTimes(ctx context.Context, schedule *domain.Schedule) {
+	if repo, ok := s.scheduleRepo.(interface {
+		UpdateRunTimes(context.Context, *domain.Schedule) error
+	}); ok {
+		if err := repo.UpdateRunTimes(ctx, schedule); err != nil {
+			s.logger.Warn("Schedule runtime metadata update failed", "schedule_id", schedule.ID)
+		}
 	}
 }

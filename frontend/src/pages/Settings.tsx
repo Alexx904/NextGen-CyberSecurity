@@ -16,6 +16,7 @@ import { ApiResponse } from '../types/auth';
 import { Tenant, BrandColors, UpdateBrandingPayload } from '../types/tenant';
 import { useAuth } from '../context/AuthContext';
 import { ReportPreview } from '../components/ReportPreview';
+import { AlertChannelsCard } from '../components/AlertChannelsCard';
 
 const COLOR_PRESETS = [
   {
@@ -234,7 +235,7 @@ export const Settings: React.FC = () => {
                 disabled={!canEdit || loading}
                 required
                 placeholder="es: Acme Cyber Defense Corp"
-                className="w-full px-3.5 py-2.5 bg-slate-900 border border-cyber-border rounded-lg text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500 disabled:opacity-60"
+                className="w-full px-3.5 py-2.5 bg-slate-900 border border-cyber-border rounded-lg text-sm text-slate-100 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500 disabled:opacity-60"
               />
               {tenant && (
                 <div className="mt-1 flex items-center space-x-2 text-[11px] text-slate-500 font-mono">
@@ -309,7 +310,7 @@ export const Settings: React.FC = () => {
                   onChange={(e) => setLogoUrl(e.target.value)}
                   disabled={!canEdit || loading}
                   placeholder="Oppure inserisci URL diretto del logo (https://...)"
-                  className="w-full px-3 py-2 bg-slate-900/80 border border-cyber-border rounded-lg text-xs text-slate-300 placeholder-slate-500 focus:outline-none focus:border-cyan-500 disabled:opacity-60"
+                  className="w-full px-3 py-2 bg-slate-900/80 border border-cyber-border rounded-lg text-xs text-slate-300 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500 disabled:opacity-60"
                 />
               </div>
             </div>
@@ -371,7 +372,7 @@ export const Settings: React.FC = () => {
                       value={brandColors.primary}
                       onChange={(e) => setBrandColors({ ...brandColors, primary: e.target.value })}
                       disabled={!canEdit}
-                      className="w-full px-2 py-1 bg-slate-950 border border-cyber-border rounded text-xs font-mono text-white focus:outline-none focus:border-cyan-500 uppercase"
+                      className="w-full px-2 py-1 bg-slate-950 border border-cyber-border rounded text-xs font-mono text-white focus:outline-hidden focus:border-cyan-500 uppercase"
                     />
                   </div>
                 </div>
@@ -392,7 +393,7 @@ export const Settings: React.FC = () => {
                       value={brandColors.secondary}
                       onChange={(e) => setBrandColors({ ...brandColors, secondary: e.target.value })}
                       disabled={!canEdit}
-                      className="w-full px-2 py-1 bg-slate-950 border border-cyber-border rounded text-xs font-mono text-white focus:outline-none focus:border-cyan-500 uppercase"
+                      className="w-full px-2 py-1 bg-slate-950 border border-cyber-border rounded text-xs font-mono text-white focus:outline-hidden focus:border-cyan-500 uppercase"
                     />
                   </div>
                 </div>
@@ -413,7 +414,7 @@ export const Settings: React.FC = () => {
                       value={brandColors.accent}
                       onChange={(e) => setBrandColors({ ...brandColors, accent: e.target.value })}
                       disabled={!canEdit}
-                      className="w-full px-2 py-1 bg-slate-950 border border-cyber-border rounded text-xs font-mono text-white focus:outline-none focus:border-cyan-500 uppercase"
+                      className="w-full px-2 py-1 bg-slate-950 border border-cyber-border rounded text-xs font-mono text-white focus:outline-hidden focus:border-cyan-500 uppercase"
                     />
                   </div>
                 </div>
@@ -462,6 +463,7 @@ export const Settings: React.FC = () => {
           />
         </div>
       </div>
+      <AlertChannelsCard />
     </div>
   );
 };

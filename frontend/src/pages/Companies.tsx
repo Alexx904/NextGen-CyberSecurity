@@ -148,7 +148,7 @@ export const Companies: React.FC = () => {
 
       {/* KPI Cards Panoramica */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 backdrop-blur-sm">
+        <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 backdrop-blur-xs">
           <div className="flex items-center justify-between text-slate-400">
             <span className="text-xs font-medium">Aziende Registrate</span>
             <Building2 className="h-4 w-4 text-cyan-400" />
@@ -157,7 +157,7 @@ export const Companies: React.FC = () => {
           <p className="mt-1 text-[11px] text-slate-500">Perimetri organizzativi configurati</p>
         </div>
 
-        <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 backdrop-blur-sm">
+        <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 backdrop-blur-xs">
           <div className="flex items-center justify-between text-slate-400">
             <span className="text-xs font-medium">Reparti Aziendali</span>
             <FolderTree className="h-4 w-4 text-emerald-400" />
@@ -166,7 +166,7 @@ export const Companies: React.FC = () => {
           <p className="mt-1 text-[11px] text-slate-500">Divisioni interne censite</p>
         </div>
 
-        <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 backdrop-blur-sm">
+        <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 backdrop-blur-xs">
           <div className="flex items-center justify-between text-slate-400">
             <span className="text-xs font-medium">Bersagli IP Totali</span>
             <Crosshair className="h-4 w-4 text-purple-400" />
@@ -175,7 +175,7 @@ export const Companies: React.FC = () => {
           <p className="mt-1 text-[11px] text-slate-500">Host, subnet e range assegnati</p>
         </div>
 
-        <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 backdrop-blur-sm">
+        <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 backdrop-blur-xs">
           <div className="flex items-center justify-between text-slate-400">
             <span className="text-xs font-medium">Scope Attivo Globale</span>
             <Sparkles className="h-4 w-4 text-amber-400" />
@@ -210,7 +210,7 @@ export const Companies: React.FC = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Cerca azienda per nome o descrizione..."
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 pl-9 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
+            className="w-full rounded-lg border border-slate-700 bg-slate-800/80 pl-9 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-hidden"
           />
         </div>
       </div>
@@ -371,7 +371,7 @@ export const Companies: React.FC = () => {
 
       {/* Modale Conferma Eliminazione */}
       {companyToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-xs">
           <div className="relative w-full max-w-md rounded-xl border border-red-500/40 bg-slate-900 p-6 shadow-2xl">
             <button
               onClick={() => setCompanyToDelete(null)}

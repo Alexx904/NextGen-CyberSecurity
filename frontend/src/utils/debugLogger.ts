@@ -17,7 +17,7 @@ export const DEFAULT_MAX_LOG_ENTRIES = 500;
 
 // Pattern regex per individuare chiavi contenenti credenziali o segreti foglia
 const LEAF_SECRET_KEY_REGEX =
-  /(?:password|passwd|passphrase|secret|encrypted_secret|token|access_token|refresh_token|api[_-]?key|private[_-]?key|cert(?:ificate)?)/i;
+  /(?:password|passwd|passphrase|secret|encrypted_secret|token|access_token|refresh_token|api[_-]?key|private[_-]?key|cert(?:ificate)?|^config$|^endpoint$)/i;
 
 // Pattern regex per container o header di autenticazione
 const CONTAINER_OR_HEADER_KEY_REGEX =

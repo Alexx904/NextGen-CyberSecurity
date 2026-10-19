@@ -147,7 +147,7 @@ export const AppLayout: React.FC = () => {
             setSelectedCompanyId(e.target.value ? e.target.value : null);
             if (onItemClick) onItemClick();
           }}
-          className="w-full appearance-none rounded-lg border border-slate-700 bg-slate-800/90 py-2 pl-3 pr-8 text-xs font-medium text-white focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 cursor-pointer truncate"
+          className="w-full appearance-none rounded-lg border border-slate-700 bg-slate-800/90 py-2 pl-3 pr-8 text-xs font-medium text-white focus:border-cyan-500 focus:outline-hidden focus:ring-1 focus:ring-cyan-500 cursor-pointer truncate"
           aria-label="Seleziona Azienda Scope"
         >
           <option value="">🌐 Tutte le Aziende (Globale)</option>
@@ -323,7 +323,7 @@ export const AppLayout: React.FC = () => {
 
         {/* Mobile Navigation Drawer */}
         {mobileMenuOpen && (
-          <div className="md:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm flex">
+          <div className="md:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-xs flex">
             <div className="w-72 bg-[#0d121f] border-r border-cyber-border p-4 flex flex-col justify-between overflow-y-auto">
               <div className="mt-14">
                 {renderCompanySwitcher(() => setMobileMenuOpen(false))}

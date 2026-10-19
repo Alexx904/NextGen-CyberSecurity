@@ -115,7 +115,7 @@ export const SSHServerModal: React.FC<SSHServerModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
       <div className="bg-[#0d121f] border border-cyber-border rounded-2xl max-w-lg max-h-[90vh] overflow-y-auto w-full p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150">
         <div className="flex items-center justify-between border-b border-cyber-border pb-3">
           <div className="flex items-center space-x-2.5 text-white font-bold text-base">
@@ -141,7 +141,7 @@ export const SSHServerModal: React.FC<SSHServerModalProps> = ({
           </label>
           {error && (
             <div className="p-3 rounded-lg border border-rose-900/50 bg-rose-950/20 text-rose-300 text-xs flex items-center space-x-2">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{error}</span>
             </div>
           )}
@@ -156,7 +156,7 @@ export const SSHServerModal: React.FC<SSHServerModalProps> = ({
               onChange={(e) => setName(e.target.value)}
               placeholder="es. Web Server Produzione"
               required
-              className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-xs text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500"
+              className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-xs text-white placeholder-slate-600 focus:outline-hidden focus:border-cyan-500"
             />
           </div>
 
@@ -171,7 +171,7 @@ export const SSHServerModal: React.FC<SSHServerModalProps> = ({
                 onChange={(e) => { setHost(e.target.value); setHostKeyFingerprint(''); }}
                 placeholder="es. 192.168.1.100 o srv.local"
                 required
-                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-xs text-white placeholder-slate-600 font-mono focus:outline-none focus:border-cyan-500"
+                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-xs text-white placeholder-slate-600 font-mono focus:outline-hidden focus:border-cyan-500"
               />
             </div>
             <div>
@@ -185,7 +185,7 @@ export const SSHServerModal: React.FC<SSHServerModalProps> = ({
                 min={1}
                 max={65535}
                 required
-                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-xs text-white font-mono focus:outline-none focus:border-cyan-500"
+                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-xs text-white font-mono focus:outline-hidden focus:border-cyan-500"
               />
             </div>
           </div>
@@ -201,7 +201,7 @@ export const SSHServerModal: React.FC<SSHServerModalProps> = ({
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="es. root o ubuntu"
                 required
-                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-xs text-white font-mono focus:outline-none focus:border-cyan-500"
+                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-xs text-white font-mono focus:outline-hidden focus:border-cyan-500"
               />
             </div>
 
@@ -253,7 +253,7 @@ export const SSHServerModal: React.FC<SSHServerModalProps> = ({
                 onChange={(e) => setRawSecret(e.target.value)}
                 placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;...&#10;-----END OPENSSH PRIVATE KEY-----"
                 rows={5}
-                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-xs text-slate-200 placeholder-slate-700 font-mono focus:outline-none focus:border-cyan-500 resize-none"
+                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-xs text-slate-200 placeholder-slate-700 font-mono focus:outline-hidden focus:border-cyan-500 resize-none"
               />
             ) : (
               <input
@@ -261,7 +261,7 @@ export const SSHServerModal: React.FC<SSHServerModalProps> = ({
                 value={rawSecret}
                 onChange={(e) => setRawSecret(e.target.value)}
                 placeholder={isEditing ? '••••••••••••••••' : 'Inserisci password SSH'}
-                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500"
+                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-xs text-slate-200 placeholder-slate-600 focus:outline-hidden focus:border-cyan-500"
               />
             )}
             <p className="text-[11px] text-cyan-400/80 mt-1 flex items-center space-x-1">

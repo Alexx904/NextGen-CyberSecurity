@@ -586,7 +586,7 @@ export const Reports: React.FC = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Cerca per Azienda, descrizione o IP..."
-            className="w-full pl-9 pr-8 py-2 bg-slate-950 border border-cyber-border rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+            className="w-full pl-9 pr-8 py-2 bg-slate-950 border border-cyber-border rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500"
           />
           {search && (
             <button
@@ -603,7 +603,7 @@ export const Reports: React.FC = () => {
             aria-label="Severità massima"
             value={severityFilter}
             onChange={(e) => setSeverityFilter(e.target.value)}
-            className="px-3 py-2 bg-slate-950 border border-cyber-border rounded-lg text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
+            className="px-3 py-2 bg-slate-950 border border-cyber-border rounded-lg text-xs text-slate-200 focus:outline-hidden focus:border-cyan-500"
           >
             <option value="">Tutte le severità</option>
             <option value="CRITICAL">Critica</option>

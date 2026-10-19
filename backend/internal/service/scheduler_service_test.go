@@ -80,6 +80,19 @@ func (m *mockScheduleRepo) Update(ctx context.Context, schedule *domain.Schedule
 	return nil
 }
 
+func (m *mockScheduleRepo) UpdateRunTimes(ctx context.Context, schedule *domain.Schedule) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	current, ok := m.schedules[schedule.ID]
+	if ok && current.IsActive && current.CronExpression == schedule.CronExpression {
+		copy := *current
+		copy.LastRunAt = schedule.LastRunAt
+		copy.NextRunAt = schedule.NextRunAt
+		m.schedules[schedule.ID] = &copy
+	}
+	return nil
+}
+
 func (m *mockScheduleRepo) Delete(ctx context.Context, tenantID, id uuid.UUID) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -143,6 +156,8 @@ func TestSchedulerService_TriggerJob_Success(t *testing.T) {
 	scheduler := NewSchedulerService(schedRepo, scanRepo, orchClient, nil)
 
 	// Trigger esplicito del job
+	authorizeScheduleFixture(scheduler, schedule)
+	_ = schedRepo.Update(context.Background(), schedule)
 	scheduler.TriggerJob(schedule)
 
 	// Verifica che la scansione sia stata creata in scanRepo
@@ -207,6 +222,8 @@ func TestSchedulerService_TriggerJob_SkipIfRunning(t *testing.T) {
 	scheduler := NewSchedulerService(schedRepo, scanRepo, orchClient, nil)
 
 	// Trigger: deve rilevare la scansione attiva e saltare l'esecuzione
+	authorizeScheduleFixture(scheduler, schedule)
+	_ = schedRepo.Update(context.Background(), schedule)
 	scheduler.TriggerJob(schedule)
 
 	// Nessuna nuova scansione deve essere stata accodata
@@ -237,6 +254,7 @@ func TestSchedulerService_DynamicOperations(t *testing.T) {
 		IsActive:       true,
 	}
 
+	ctx = authorizeScheduleFixture(scheduler, sched)
 	// 1. AddSchedule
 	if err := scheduler.AddSchedule(ctx, sched); err != nil {
 		t.Fatalf("AddSchedule fallito: %v", err)
@@ -262,6 +280,10 @@ func TestSchedulerService_DynamicOperations(t *testing.T) {
 
 	// 4. UpdateSchedule
 	sched.CronExpression = "30 14 * * *"
+	if err := scheduler.UpdateSchedule(ctx, sched); err != domain.ErrScanAuthorizationRequired {
+		t.Fatalf("changed recurrence must invalidate consent, got: %v", err)
+	}
+	sched.CronExpression = "0 12 * * *"
 	if err := scheduler.UpdateSchedule(ctx, sched); err != nil {
 		t.Fatalf("UpdateSchedule fallito: %v", err)
 	}

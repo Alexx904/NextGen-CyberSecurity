@@ -33,7 +33,8 @@ type UpdateTargetGroupRequest struct {
 
 // StartGroupScanRequest modella la richiesta di avvio scansione ricorsiva su cartella
 type StartGroupScanRequest struct {
-	ProfileID uuid.UUID `json:"profile_id"`
+	Authorization *domain.ScanAuthorizationRequest `json:"authorization"`
+	ProfileID     uuid.UUID                        `json:"profile_id"`
 }
 
 // TargetGroupResponse rappresenta la struttura JSON pubblica di un gruppo
@@ -236,6 +237,10 @@ func (h *TargetGroupHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.groupService.DeleteGroup(r.Context(), tenantID, groupID); err != nil {
+		if errors.Is(err, domain.ErrConflict) {
+			response.Error(w, http.StatusConflict, "GROUP_IN_USE", "Rimuovere o riassegnare i canali di notifica collegati prima di eliminare l’azienda")
+			return
+		}
 		if errors.Is(err, domain.ErrNotFound) {
 			response.Error(w, http.StatusNotFound, "NOT_FOUND", "Cartella non trovata")
 			return
@@ -273,8 +278,14 @@ func (h *TargetGroupHandler) StartScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	scans, err := h.scanService.StartGroupScan(r.Context(), tenantID, groupID, req.ProfileID)
+	userID, _ := middleware.GetUserID(r.Context())
+	ctx := domain.WithScanAuthorization(r.Context(), tenantID, userID, req.Authorization)
+	scans, err := h.scanService.StartGroupScan(ctx, tenantID, groupID, req.ProfileID)
 	if err != nil {
+		if errors.Is(err, domain.ErrScanAuthorizationRequired) {
+			response.Error(w, http.StatusConflict, "SCAN_AUTHORIZATION_REQUIRED", err.Error())
+			return
+		}
 		if errors.Is(err, domain.ErrNotFound) {
 			response.Error(w, http.StatusNotFound, "NOT_FOUND", "Cartella o profilo di scansione non trovato")
 			return
@@ -306,4 +317,3 @@ func (h *TargetGroupHandler) StartScan(w http.ResponseWriter, r *http.Request) {
 		CreatedScans: scanResponses,
 	})
 }
-

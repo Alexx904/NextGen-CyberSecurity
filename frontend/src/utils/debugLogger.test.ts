@@ -16,6 +16,10 @@ describe('generateLogId', () => {
 });
 
 describe('sanitizeData', () => {
+  it('redacts write-only alert config including webhook secrets in URL paths', () => {
+    const result = sanitizeData({ kind: 'slack', config: { endpoint: 'https://hooks.slack.com/services/synthetic/private-path', token: 'synthetic-token' } });
+    expect(result).toEqual({ kind: 'slack', config: '[REDACTED]' });
+  });
   it('handles null, undefined, and primitive types without modification', () => {
     expect(sanitizeData(null)).toBeNull();
     expect(sanitizeData(undefined)).toBeUndefined();

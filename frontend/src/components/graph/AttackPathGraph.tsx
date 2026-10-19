@@ -131,7 +131,7 @@ export const AttackPathGraph: React.FC<AttackPathGraphProps> = ({
                 onClick={() => onSelectNode?.(node)}
                 onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectNode?.(node); } }}
                 opacity={!focusedPath && activePath && !pathNodes.has(node.id) ? .25 : 1}
-                className="cursor-pointer outline-none focus:stroke-white">
+                className="cursor-pointer outline-hidden focus:stroke-white">
                 <title>{node.label}{node.ip ? ' · ' + node.ip : ''}{cp ? ' · Chokepoint del modello' : ''}</title>
                 {focusedPath && <text x={node.x} y={node.y - 15} fontSize="11" fill="#94a3b8">{i + 1}. {names[node.type]}</text>}
                 <rect x={node.x} y={node.y} width={width} height={height} rx="12" fill="#0f172a"

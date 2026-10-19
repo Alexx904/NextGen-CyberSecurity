@@ -20,9 +20,10 @@ import (
 
 // StartScanRequest definisce il payload per l'avvio on-demand di una scansione (su target singolo o intera cartella)
 type StartScanRequest struct {
-	TargetID  *uuid.UUID `json:"target_id,omitempty"`
-	GroupID   *uuid.UUID `json:"group_id,omitempty"`
-	ProfileID uuid.UUID  `json:"profile_id"`
+	Authorization *domain.ScanAuthorizationRequest `json:"authorization"`
+	TargetID      *uuid.UUID                       `json:"target_id,omitempty"`
+	GroupID       *uuid.UUID                       `json:"group_id,omitempty"`
+	ProfileID     uuid.UUID                        `json:"profile_id"`
 }
 
 // ScanResponse rappresenta il modello pubblico di una scansione
@@ -242,9 +243,15 @@ func (h *ScanHandler) Start(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 1. Avvio scansione su cartella ricorsiva se specificato group_id
+	userID, _ := middleware.GetUserID(r.Context())
+	r = r.WithContext(domain.WithScanAuthorization(r.Context(), tenantID, userID, req.Authorization))
 	if req.GroupID != nil && *req.GroupID != uuid.Nil {
 		scans, err := h.scanService.StartGroupScan(r.Context(), tenantID, *req.GroupID, req.ProfileID)
 		if err != nil {
+			if errors.Is(err, domain.ErrScanAuthorizationRequired) {
+				response.Error(w, http.StatusConflict, "SCAN_AUTHORIZATION_REQUIRED", err.Error())
+				return
+			}
 			if errors.Is(err, domain.ErrNotFound) {
 				response.Error(w, http.StatusNotFound, "NOT_FOUND", "Cartella o profilo di scansione non trovato")
 				return
@@ -273,6 +280,10 @@ func (h *ScanHandler) Start(w http.ResponseWriter, r *http.Request) {
 
 	scan, err := h.scanService.StartScan(r.Context(), tenantID, *req.TargetID, req.ProfileID)
 	if err != nil {
+		if errors.Is(err, domain.ErrScanAuthorizationRequired) {
+			response.Error(w, http.StatusConflict, "SCAN_AUTHORIZATION_REQUIRED", err.Error())
+			return
+		}
 		if errors.Is(err, domain.ErrNotFound) {
 			response.Error(w, http.StatusNotFound, "NOT_FOUND", "Target o profilo di scansione non trovato")
 			return

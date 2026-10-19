@@ -539,7 +539,7 @@ export const Scans: React.FC = () => {
 
       {/* Banner Scope Aziendale Attivo */}
       {selectedCompany && (
-        <div className="p-3.5 rounded-xl border border-cyan-500/30 bg-cyan-950/20 backdrop-blur-sm flex items-center justify-between text-xs">
+        <div className="p-3.5 rounded-xl border border-cyan-500/30 bg-cyan-950/20 backdrop-blur-xs flex items-center justify-between text-xs">
           <div className="flex items-center space-x-2.5">
             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
             <span className="text-slate-300">
@@ -594,7 +594,7 @@ export const Scans: React.FC = () => {
               <select
                 value={selectedGroupFilter}
                 onChange={(e) => setSelectedGroupFilter(e.target.value)}
-                className="bg-slate-900 border border-cyber-border rounded-lg px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:border-cyan-500"
+                className="bg-slate-900 border border-cyber-border rounded-lg px-2.5 py-1 text-xs text-slate-300 focus:outline-hidden focus:border-cyan-500"
               >
                 <option value="">
                   {selectedCompany ? `Tutti i reparti di ${selectedCompany.name}` : 'Tutte le cartelle scope'}
@@ -645,7 +645,7 @@ export const Scans: React.FC = () => {
               value={searchFilter}
               onChange={(e) => setSearchFilter(e.target.value)}
               placeholder="Cerca per IP, host, cartella scope o ID scansione..."
-              className="w-full pl-9 pr-7 py-1.5 rounded-lg bg-slate-950 border border-cyber-border text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500 text-xs font-mono"
+              className="w-full pl-9 pr-7 py-1.5 rounded-lg bg-slate-950 border border-cyber-border text-slate-200 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500 text-xs font-mono"
             />
             {searchFilter && (
               <button
@@ -687,7 +687,7 @@ export const Scans: React.FC = () => {
                 onClick={() => setViewMode('GROUPED')}
                 className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
                   viewMode === 'GROUPED'
-                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-xs'
                     : 'text-slate-400 hover:text-white'
                 }`}
                 title="Visualizzazione organizzata per Cartella / Azienda e singoli IP"
@@ -700,7 +700,7 @@ export const Scans: React.FC = () => {
                 onClick={() => setViewMode('TABLE')}
                 className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
                   viewMode === 'TABLE'
-                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-xs'
                     : 'text-slate-400 hover:text-white'
                 }`}
                 title="Visualizzazione tabellare lineare"
@@ -866,7 +866,7 @@ export const Scans: React.FC = () => {
                         {group.targets.map((tgt) => (
                           <div
                             key={tgt.targetId}
-                            className="rounded-lg border border-cyber-border/70 bg-[#0d121f]/90 overflow-hidden shadow-sm"
+                            className="rounded-lg border border-cyber-border/70 bg-[#0d121f]/90 overflow-hidden shadow-xs"
                           >
                             {/* Header per singolo Target / IP */}
                             <div className="px-3.5 py-2.5 bg-slate-900/60 border-b border-cyber-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -1239,6 +1239,7 @@ export const Scans: React.FC = () => {
       {/* Scheda 2: Pianificazioni Ricorrenti (Cron) */}
       {activeTab === 'SCHEDULES' && (
         <div className="rounded-xl border border-cyber-border bg-cyber-card/40 overflow-hidden shadow-xl">
+          {displayedSchedules.some(schedule => schedule.authorization_required) && <p role="status" className="m-4 rounded-lg border border-amber-500/30 p-3 text-sm text-amber-300">Le pianificazioni con autorizzazione richiesta non vengono eseguite. Sospendi quella precedente e crea una nuova pianificazione confermando target, configurazione e frequenza.</p>}
           {schedulesError && (
             <div className="m-4 p-3.5 rounded-lg border border-rose-800/50 bg-rose-950/30 text-rose-300 text-xs flex items-center justify-between">
               <div className="flex items-center space-x-2">
@@ -1304,6 +1305,7 @@ export const Scans: React.FC = () => {
                       <td className="py-3.5 px-4">
                         <button
                           onClick={() => handleToggleSchedule(schedule.id)}
+                          disabled={schedule.authorization_required && !schedule.is_active}
                           className={`inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border transition-colors ${
                             schedule.is_active
                               ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
@@ -1312,7 +1314,7 @@ export const Scans: React.FC = () => {
                           title="Clicca per attivare/disattivare"
                         >
                           <Power className="w-3 h-3" />
-                          <span>{schedule.is_active ? 'Attivo' : 'Sospeso'}</span>
+                          <span>{schedule.authorization_required ? 'Autorizzazione richiesta' : schedule.is_active ? 'Attivo' : 'Sospeso'}</span>
                         </button>
                       </td>
                       <td className="py-3.5 px-4 text-slate-400">
@@ -1368,7 +1370,7 @@ export const Scans: React.FC = () => {
 
       {/* Dialog Conferma Annullamento Scansione */}
       {scanToCancel && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="max-w-md w-full p-6 rounded-2xl border border-rose-800/40 bg-[#111726] shadow-2xl space-y-4">
             <div className="flex items-center space-x-3">
               <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400">
@@ -1409,7 +1411,7 @@ export const Scans: React.FC = () => {
 
       {/* Dialog Conferma Eliminazione Schedulazione */}
       {scheduleToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="max-w-md w-full p-6 rounded-2xl border border-rose-800/40 bg-[#111726] shadow-2xl space-y-4">
             <div className="flex items-center space-x-3">
               <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400">

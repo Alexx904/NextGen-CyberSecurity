@@ -332,7 +332,7 @@ export const Targets: React.FC = () => {
         </div>
         <Link
           to="/scans"
-          className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs whitespace-nowrap transition-colors shadow-sm self-start sm:self-auto"
+          className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs whitespace-nowrap transition-colors shadow-xs self-start sm:self-auto"
         >
           <span>Vai a Scansioni</span>
           <ArrowRight className="w-3.5 h-3.5" />
@@ -422,7 +422,7 @@ export const Targets: React.FC = () => {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Cerca per IP, CIDR, dominio o descrizione..."
-                className="w-full pl-9 pr-3 py-2 bg-slate-900/80 border border-cyber-border rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+                className="w-full pl-9 pr-3 py-2 bg-slate-900/80 border border-cyber-border rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
               />
             </div>
 
@@ -434,7 +434,7 @@ export const Targets: React.FC = () => {
                 <select
                   value={selectedType}
                   onChange={(e) => setSelectedType(e.target.value)}
-                  className="bg-slate-900 border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-cyan-500"
+                  className="bg-slate-900 border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-hidden focus:border-cyan-500"
                 >
                   <option value="ALL">Tutti i tipi</option>
                   <option value="IP">IP Singolo</option>
@@ -448,7 +448,7 @@ export const Targets: React.FC = () => {
               <select
                 value={selectedStatus}
                 onChange={(e) => setSelectedStatus(e.target.value)}
-                className="bg-slate-900 border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-cyan-500"
+                className="bg-slate-900 border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-hidden focus:border-cyan-500"
               >
                 <option value="ALL">Tutti gli stati</option>
                 <option value="AUTHORIZED">Solo Autorizzati</option>
@@ -693,7 +693,7 @@ export const Targets: React.FC = () => {
 
       {/* Conferma Eliminazione Target Dialog */}
       {targetToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="max-w-md w-full p-6 rounded-2xl border border-rose-800/40 bg-[#111726] shadow-2xl space-y-4">
             <div className="flex items-center space-x-3">
               <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400">
@@ -734,7 +734,7 @@ export const Targets: React.FC = () => {
 
       {/* Conferma Eliminazione Multipla Target Dialog */}
       {isBulkDeleteModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="max-w-md w-full p-6 rounded-2xl border border-rose-800/40 bg-[#111726] shadow-2xl space-y-4">
             <div className="flex items-center space-x-3">
               <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400">

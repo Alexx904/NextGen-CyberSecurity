@@ -8,6 +8,13 @@ Ownership trasversale ricostruita dai percorsi esistenti; questa revisione docum
 
 ## Confini e fonti
 
+TECH-DEBT-09 · 2026-10-18 · working tree: shared CSS uses Tailwind 4/PostCSS;
+custom theme and v3 control/border defaults are retained, and renamed focus,
+shadow, blur and shrink utilities are migrated across consuming domains.
+Authentication/tenant logic is unchanged. Toolchain/browser requirements and
+verification limits are owned by [Frontend Setup](../04-development/FRONTEND_SETUP.md#dependency-baseline-2026-10-18)
+and the [dependency assessment](../05-qa/TECH-DEBT-09.md).
+
 - Wiring: `backend/cmd/server/main.go`, `frontend/src/App.tsx`, entrypoint e layout. Se collega domini, consultare i rispettivi contratti.
 - Auth/tenant: `backend/pkg/auth/`, middleware HTTP, domain user/tenant, auth/tenant service e handler; frontend AuthContext, ProtectedRoute, client API, tipi auth/tenant, Login/Settings. Intento RBAC in [PRD](../01-product/PRD.md); interfacce in [API_SPEC](../03-architecture/LLD/API_SPEC.md). Scope aziendale è distinto dal tenant e documentato nel [dominio assets](reporting_and_assets.md).
 - Configurazione: `backend/internal/config/`; inventario sicuro dei nomi in `.env.example`, senza leggere valori reali. Cifratura SSH usa `backend/pkg/crypto/`; gestione fiducia, credenziali e deadline resta nel [dominio SSH](ssh_and_firewall.md).
@@ -34,3 +41,9 @@ Il provider viene smontato al logout. Test `frontend/src/App.test.tsx` rosso→v
 con regressione CompanyContext; [evidenza](../05-qa/M11_CLOSURE_QA.md#browser-e-pdf--2026-10-18).
 
 Auth/tenant/config comuni richiedono entrambi i lati secondo [AGENTS](../../AGENTS.md); repository/schema aggiungono PostgreSQL. Test rilevanti nei package auth/crypto/middleware/service e nei test client/route; scegliere i casi dai comportamenti cambiati, non dall'ownership soltanto. Nessun nuovo PASS applicativo attribuito alla mappatura.
+
+TECH-DEBT-05 · 2026-10-19 · working tree: scan authorization actor/tenant are derived
+from authenticated context, never body identity/time. Schedule/profile repositories
+are wired before starting workers; live consent checks supplement existing RBAC
+and tenant/scope rules. JWT and role contracts are unchanged.
+[Scanning contract and evidence](scanning_and_discovery.md#3-impatto-e-autorizzazione).

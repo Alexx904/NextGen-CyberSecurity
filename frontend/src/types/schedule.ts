@@ -1,4 +1,5 @@
 export interface ScheduleItem {
+  authorization_required?: boolean;
   id: string;
   tenant_id: string;
   target_id: string;

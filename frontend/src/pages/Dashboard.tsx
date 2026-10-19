@@ -512,7 +512,7 @@ export const Dashboard: React.FC = () => {
             value={companySearch}
             onChange={(e) => setCompanySearch(e.target.value)}
             placeholder="Filtra aziende o IP perimetrali..."
-            className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-cyber-border rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+            className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-cyber-border rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500"
           />
         </div>
 
@@ -740,7 +740,7 @@ export const Dashboard: React.FC = () => {
           </div>
           <Link
             to="/targets"
-            className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-semibold text-xs whitespace-nowrap transition-colors shadow-sm self-start sm:self-auto"
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-semibold text-xs whitespace-nowrap transition-colors shadow-xs self-start sm:self-auto"
           >
             <span>Assegna in Target</span>
             <ArrowRight className="w-3.5 h-3.5" />

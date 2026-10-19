@@ -1,6 +1,6 @@
 # PROJECT STATE
 
-**Ultimo aggiornamento:** 2026-10-18 · working tree.
+**Ultimo aggiornamento:** 2026-10-19 · working tree.
 Memoria corrente: aggiornare solo fatti persistenti. Task/stati dettagliati in [TASK_LIST](04-development/TASK_LIST.md); evidenze precedenti nello [storico](../.agent/history/PROJECT_STATE-2026-10-18.md). Lo storico non autorizza nuove azioni.
 
 ## Project Profile
@@ -12,6 +12,7 @@ Preferenza PO persistente: lavorare su main senza nuovi branch; commit/push/merg
 ## Baseline test (prima di ogni intervento)
 
 Consultare, non rilanciare automaticamente; la freschezza dipende dagli input effettivi, non solo da HEAD.
+- TECH-DEBT-05/09: Final All/Integration PASS, 233 frontend tests/typecheck/build plus backend/DB/up-down (20261019-130817-5cbdbed6); initialization-order correction then Final Backend PASS (20261019-131043-b80beb8c). Real browser desktop/390px PASS on QA 3000/8081 and disposable nextgen_consent_test 55432. QA services stopped; 3080 deployment untouched. No real scans or provider sends.
 - Publication snapshot without deferred alerting: backend test/vet/build, 220 frontend tests/build and PostgreSQL/up-down PASS in `20261018-194107-662e86c9`. Docs mapping correction verified separately; no application changes after this gate.
 - DB/000010 up/down/up storico nel [piano SSH](04-development/plans/SSH-HARDEN-01.md), non nuovo PASS della working tree.
 - AGENT-HARNESS-01: Docs/22 prove/preservazione PASS; report `20261018-114735-c1bb6cad`, dettagli nel piano. Nessuna suite applicativa attribuita.
@@ -24,15 +25,21 @@ Consultare, non rilanciare automaticamente; la freschezza dipende dagli input ef
 
 All previous pending deliveries accepted: AGENT-HARNESS-01, M11-CLOSE-01, M11-DISCOVERY-UI-01, M11-REPORT-01, M11-FIREWALL-01, M11-PERSIST-01, CI-CONTEXT-01, README-GH-01, SSH-HARDEN-01, E28-S1-T1, E28-S1-T2, E28-S1-T3. ROADMAP-PENTEST-01 planning accepted too. IDs, evidence and limits archived in [CHANGELOG](../CHANGELOG.md#accepted-tasks-and-priority-reorganization--2026-10-18).
 
+## Accepted by PO - 2026-10-19
+
+- **TECH-DEBT-05 [x]**: mandatory inventory scan consent, recurring scope/configuration binding and transactional immutable audit; API/service/worker/scheduler/DB up-down/browser PASS. [Evidence and compatibility](04-development/plans/TECH-DEBT-05.md).
+- **TECH-DEBT-09 [x]**: dependency remediation plus real Chromium desktop/390px compatibility and keyboard gates PASS. [Assessment/completion](05-qa/TECH-DEBT-09.md#browser-completion---2026-10-19).
+PO explicitly accepted both deliveries with `OK 05/09`; test evidence and limitations remain unchanged.
+
 ## In attesa di accettazione utente
 
-None for these deliveries. T4/T5 remain incomplete, deferred and excluded from publication.
+None. T4/T5 remain incomplete, deferred and excluded from publication.
 
 ## Bloccati / Domande aperte per l'utente
 
 - TECH-DEBT-07 mitigation accepted with M11-FIREWALL-01; residual limits retained. Fixture firewall .3/SSH .4, rete interna `nextgen-m11-lab`; backend .2, DB test 55432. Limiti host/UID/stato temporaneo nel piano.
 - SSH-CONNECT-01 è una diagnosi storica superata dalla connessione confermata dal PO; il relativo `[!]` nella task list è conservato come storia, non richiede ripetere vecchie domande.
-- TECH-DEBT-05 consenso API, 08 modello Attack Path, 09 advisory dipendenze, 10 costo archivio report e debiti 01..04 restano nel registro task.
+- TECH-DEBT-08 modello Attack Path, 10 costo archivio report e debiti 01..04 restano nel registro task; 05/09 accettati dal PO il 2026-10-19.
 
 ## Assunzioni confermate
 
@@ -42,6 +49,7 @@ Assunzione AGENT-HARNESS-01: skill condivise a livello repository, nessuna modif
 
 ## Decisioni recenti (ultime 10, dettagli negli ADR)
 
+- ADR-27: explicit inventory scan consent, immutable transactional snapshots and live scheduler/worker checks; legacy schedules require explicit replacement. [Decision](03-architecture/ADR/README.md#adr-27--inventory-scan-authorization-snapshots-2026-10-19).
 - ADR-26: outbox alert transazionale, retry/lease, config cifrata, destinatari pubblici TLS e scope/versioni; limiti at-least-once. [Decisione](03-architecture/ADR/README.md#adr-26--transactional-alert-outbox-and-restricted-egress-2026-10-18).
 - ADR-25: transazione firewall sull'host, lock per UID, watchdog senza kill PID, backup su stdin e revisioni editor; limiti reboot/amministratori esterni espliciti.
 - ADR-24: snapshot PostgreSQL discovery e callback stdout host/finding; scrittura prima di SSE, replay tenant e limiti restart/pub-sub locale.
@@ -51,11 +59,15 @@ Assunzione AGENT-HARNESS-01: skill condivise a livello repository, nessuna modif
 - ADR-20: pin host separato e deadline SSH; nessuna garanzia remota dedotta.
 - ADR-19: gate finale condiviso e PostgreSQL esplicito.
 - ADR-18: dashboard unica e clienti SSH indipendenti.
-- ADR-17: Attack Path euristico; supera l'interpretazione probabilistica ADR-06.
 
 ## Prossimi passi
 
-Security debt 05/09 -> M4 -> M5 -> M6/M7/M8 -> measured remaining debt -> T4/T5 -> full E28 T6 gate. [Queue](04-development/TASK_LIST.md). No new deploy or external send authorized. QA T2/T3 remains limited to 3081 and synthetic fixtures.
+UI-TOOLS-01: post-login tool hub planned; future features must justify placement in existing/independent tools. [Scope and gates](04-development/TASK_LIST.md#p4---technical-debt).
+
+E28-S1-T7: P4 replacement of virtual patch generator with external mitigation sources, without DB growth/sync; implementation pending. [Scope](04-development/TASK_LIST.md#p4---technical-debt).
+
+TECH-DEBT-05/09 accepted by PO on 2026-10-19. Next: M4 Compliance; contracts and limits in linked reports.
+M4 -> M5 -> M6/M7/M8 -> measured remaining debt -> T4/T5 -> full E28 T6 gate. [Queue](04-development/TASK_LIST.md). No new deploy or external send authorized. QA T2/T3 remains limited to 3081 and synthetic fixtures.
 
 ## Log sessioni (ultime 5, la più recente in alto)
 

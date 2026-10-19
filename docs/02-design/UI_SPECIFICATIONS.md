@@ -1,5 +1,12 @@
 # UI Specifications
 
+TECH-DEBT-09 · 2026-10-19 · working tree: Tailwind 4 migration retains custom
+brand colors, v3 small shadows/blurs, transparent keyboard outlines and enabled
+button pointer cursors. Supported browser minimums: Safari 16.4, Chrome 111,
+Firefox 128. Automatic gates and connected Chromium desktop/390px visual and
+keyboard checks pass; PO accepted the delivery on 2026-10-19. Evidence and browser limits are
+listed in the [dependency assessment](../05-qa/TECH-DEBT-09.md#browser-completion---2026-10-19).
+
 > Publication scope 2026-10-18: alert-channel / outbox / migration 000012 sections describe deferred T4/T5 design and local prototype evidence. Their code and routes are excluded from this release; published migration is 000011. Alert-specific commands are future gates.
 
 
@@ -120,3 +127,15 @@ draft without saving/activating. Config changes clear acknowledgement/result.
 Accepted test asks operator to check receipt; failure never claims delivery.
 Draft secrets clear on close/save and do not enter diagnostic exports.
 [Contract and limits](../domains/active_defense_and_soar.md#alerting-hub-e28-s1-t4t5-in-progress).
+
+## TECH-DEBT-05 - Mandatory scan consent (2026-10-19, working tree)
+
+All inventory scan configurations require the ownership/authorization checkbox,
+including SAFE profiles. Changes to command, target selection, group, timeout or
+recurrence reset it. Scheduled consent text explains the configuration-bound
+recurring scope. Quick scans bind their exact target/profile; recursive group
+entry uses the main scan dialog. API rejections appear in the dialog without
+launching or closing it. Legacy/stale schedules show "Autorizzazione richiesta",
+explain suspension/recreation, and cannot be reactivated without current consent.
+Disabled launch controls remain outside the keyboard focus cycle. No standalone
+LAN discovery consent redesign is included. [Contract](../04-development/plans/TECH-DEBT-05.md).

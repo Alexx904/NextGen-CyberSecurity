@@ -461,7 +461,7 @@ export const NetworkDiscovery: React.FC = () => {
                 onChange={(e) => setSubnet(e.target.value)}
                 placeholder="es. 192.168.1.0/24 oppure 10.0.0.1-50"
                 disabled={isScanning}
-                className="w-full px-3.5 py-2.5 rounded-lg bg-slate-950/80 border border-cyber-border text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-colors font-mono"
+                className="w-full px-3.5 py-2.5 rounded-lg bg-slate-950/80 border border-cyber-border text-sm text-slate-100 placeholder-slate-600 focus:outline-hidden focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-colors font-mono"
               />
             </div>
           </div>
@@ -541,7 +541,7 @@ export const NetworkDiscovery: React.FC = () => {
         <div className="p-4 rounded-xl border border-cyan-500/40 bg-cyan-950/20 shadow-md space-y-3 animate-in fade-in duration-300">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div className="flex items-center space-x-3 text-cyan-300">
-              <Zap className="w-5 h-5 text-cyan-400 animate-pulse flex-shrink-0" />
+              <Zap className="w-5 h-5 text-cyan-400 animate-pulse shrink-0" />
               <div>
                 <span className="font-semibold text-white text-xs sm:text-sm">
                   Ricognizione LAN Live in corso su {subnet}
@@ -581,7 +581,7 @@ export const NetworkDiscovery: React.FC = () => {
       {/* Notifica di errore */}
       {error && (
         <div role="alert" className="p-4 rounded-xl border border-rose-900/50 bg-rose-950/20 flex items-center space-x-3 text-rose-300">
-          <AlertCircle className="w-5 h-5 flex-shrink-0 text-rose-400" />
+          <AlertCircle className="w-5 h-5 shrink-0 text-rose-400" />
           <div className="text-sm font-medium">{error}</div>
         </div>
       )}
@@ -603,7 +603,7 @@ export const NetworkDiscovery: React.FC = () => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Cerca per IP, Hostname, Produttore o MAC..."
-              className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-slate-950 border border-cyber-border text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500"
+              className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-slate-950 border border-cyber-border text-xs text-slate-200 placeholder-slate-600 focus:outline-hidden focus:border-cyan-500"
             />
           </div>
 
@@ -868,7 +868,7 @@ export const NetworkDiscovery: React.FC = () => {
 
       {/* Modal di Importazione Massiva */}
       {isImportModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-[#0d121f] border border-cyber-border rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-cyber-border pb-3">
               <div className="flex items-center space-x-2 text-white font-bold text-base">
@@ -903,7 +903,7 @@ export const NetworkDiscovery: React.FC = () => {
                       onClick={() => setImportMode('select')}
                       className={`py-1.5 px-3 rounded-md text-xs font-semibold transition-all ${
                         importMode === 'select'
-                          ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                          ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-xs'
                           : 'text-slate-400 hover:text-white'
                       }`}
                     >
@@ -914,7 +914,7 @@ export const NetworkDiscovery: React.FC = () => {
                       onClick={() => setImportMode('create')}
                       className={`py-1.5 px-3 rounded-md text-xs font-semibold transition-all ${
                         importMode === 'create'
-                          ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                          ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-xs'
                           : 'text-slate-400 hover:text-white'
                       }`}
                     >
@@ -935,7 +935,7 @@ export const NetworkDiscovery: React.FC = () => {
                         value={targetGroupId}
                         onChange={(e) => setTargetGroupId(e.target.value)}
                         disabled={isImporting}
-                        className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
+                        className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-xs text-slate-200 focus:outline-hidden focus:border-cyan-500"
                       >
                         <option value="">📁 Cartella Principale (Root / Senza Cartella)</option>
                         {groupOptions.map((g) => (
@@ -958,7 +958,7 @@ export const NetworkDiscovery: React.FC = () => {
                         value={newFolderName}
                         onChange={(e) => setNewFolderName(e.target.value)}
                         placeholder="es. ACME Corporation, Sede Centrale, Server DMZ..."
-                        className="w-full px-3 py-1.5 rounded-lg bg-slate-950 border border-cyber-border text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                        className="w-full px-3 py-1.5 rounded-lg bg-slate-950 border border-cyber-border text-xs text-slate-200 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500"
                       />
                     </div>
 
@@ -971,7 +971,7 @@ export const NetworkDiscovery: React.FC = () => {
                         value={newFolderDesc}
                         onChange={(e) => setNewFolderDesc(e.target.value)}
                         placeholder="es. Rete uffici e postazioni lavoro..."
-                        className="w-full px-3 py-1.5 rounded-lg bg-slate-950 border border-cyber-border text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                        className="w-full px-3 py-1.5 rounded-lg bg-slate-950 border border-cyber-border text-xs text-slate-200 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500"
                       />
                     </div>
 
@@ -1004,7 +1004,7 @@ export const NetworkDiscovery: React.FC = () => {
 
                 {importError && (
                   <div className="p-3 rounded-lg border border-rose-900/50 bg-rose-950/20 text-rose-300 text-xs flex items-center space-x-2">
-                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                    <AlertCircle className="w-4 h-4 shrink-0" />
                     <span>{importError}</span>
                   </div>
                 )}

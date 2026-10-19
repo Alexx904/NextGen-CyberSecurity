@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -17,24 +18,26 @@ import (
 
 // CreateScheduleRequest modella il payload per la registrazione di una pianificazione
 type CreateScheduleRequest struct {
-	TargetID       uuid.UUID `json:"target_id"`
-	ProfileID      uuid.UUID `json:"profile_id"`
-	CronExpression string    `json:"cron_expression"`
-	IsActive       *bool     `json:"is_active,omitempty"`
+	Authorization  *domain.ScanAuthorizationRequest `json:"authorization"`
+	TargetID       uuid.UUID                        `json:"target_id"`
+	ProfileID      uuid.UUID                        `json:"profile_id"`
+	CronExpression string                           `json:"cron_expression"`
+	IsActive       *bool                            `json:"is_active,omitempty"`
 }
 
 // ScheduleResponse modella la rappresentazione JSON pubblica di una pianificazione
 type ScheduleResponse struct {
-	ID             string     `json:"id"`
-	TenantID       string     `json:"tenant_id"`
-	TargetID       string     `json:"target_id"`
-	ProfileID      string     `json:"profile_id"`
-	CronExpression string     `json:"cron_expression"`
-	IsActive       bool       `json:"is_active"`
-	NextRunAt      *time.Time `json:"next_run_at,omitempty"`
-	LastRunAt      *time.Time `json:"last_run_at,omitempty"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	AuthorizationRequired bool       `json:"authorization_required"`
+	ID                    string     `json:"id"`
+	TenantID              string     `json:"tenant_id"`
+	TargetID              string     `json:"target_id"`
+	ProfileID             string     `json:"profile_id"`
+	CronExpression        string     `json:"cron_expression"`
+	IsActive              bool       `json:"is_active"`
+	NextRunAt             *time.Time `json:"next_run_at,omitempty"`
+	LastRunAt             *time.Time `json:"last_run_at,omitempty"`
+	CreatedAt             time.Time  `json:"created_at"`
+	UpdatedAt             time.Time  `json:"updated_at"`
 }
 
 func toScheduleResponse(s *domain.Schedule) ScheduleResponse {
@@ -50,6 +53,12 @@ func toScheduleResponse(s *domain.Schedule) ScheduleResponse {
 		CreatedAt:      s.CreatedAt,
 		UpdatedAt:      s.UpdatedAt,
 	}
+}
+
+func (h *ScheduleHandler) scheduleResponse(ctx context.Context, s *domain.Schedule) ScheduleResponse {
+	result := toScheduleResponse(s)
+	result.AuthorizationRequired = h.schedulerService.AuthorizationRequired(ctx, s)
+	return result
 }
 
 // ScheduleHandler gestisce le richieste HTTP relative alle pianificazioni ricorrenti
@@ -88,7 +97,7 @@ func (h *ScheduleHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	items := make([]ScheduleResponse, 0, len(list))
 	for _, s := range list {
-		items = append(items, toScheduleResponse(s))
+		items = append(items, h.scheduleResponse(r.Context(), s))
 	}
 
 	response.JSON(w, http.StatusOK, map[string]interface{}{
@@ -122,7 +131,7 @@ func (h *ScheduleHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.JSON(w, http.StatusOK, toScheduleResponse(schedule))
+	response.JSON(w, http.StatusOK, h.scheduleResponse(r.Context(), schedule))
 }
 
 // Create gestisce POST /api/v1/schedules per creare una nuova pianificazione periodica
@@ -185,12 +194,18 @@ func (h *ScheduleHandler) Create(w http.ResponseWriter, r *http.Request) {
 		IsActive:       isActive,
 	}
 
-	if err := h.schedulerService.AddSchedule(r.Context(), schedule); err != nil {
+	userID, _ := middleware.GetUserID(r.Context())
+	ctx := domain.WithScanAuthorization(r.Context(), tenantID, userID, req.Authorization)
+	if err := h.schedulerService.AddSchedule(ctx, schedule); err != nil {
+		if errors.Is(err, domain.ErrScanAuthorizationRequired) {
+			response.Error(w, http.StatusConflict, "SCAN_AUTHORIZATION_REQUIRED", err.Error())
+			return
+		}
 		response.Error(w, http.StatusBadRequest, "INVALID_CRON", err.Error())
 		return
 	}
 
-	response.JSON(w, http.StatusCreated, toScheduleResponse(schedule))
+	response.JSON(w, http.StatusCreated, h.scheduleResponse(r.Context(), schedule))
 }
 
 // Toggle gestisce PUT /api/v1/schedules/{id}/toggle per commutare lo stato attivo/disattivo
@@ -210,6 +225,10 @@ func (h *ScheduleHandler) Toggle(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := h.schedulerService.ToggleSchedule(r.Context(), tenantID, scheduleID)
 	if err != nil {
+		if errors.Is(err, domain.ErrScanAuthorizationRequired) {
+			response.Error(w, http.StatusConflict, "SCAN_AUTHORIZATION_REQUIRED", err.Error())
+			return
+		}
 		if errors.Is(err, domain.ErrNotFound) {
 			response.Error(w, http.StatusNotFound, "NOT_FOUND", "Pianificazione non trovata")
 			return
@@ -218,7 +237,7 @@ func (h *ScheduleHandler) Toggle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.JSON(w, http.StatusOK, toScheduleResponse(updated))
+	response.JSON(w, http.StatusOK, h.scheduleResponse(r.Context(), updated))
 }
 
 // Delete gestisce DELETE /api/v1/schedules/{id} per eliminare la pianificazione
@@ -249,4 +268,3 @@ func (h *ScheduleHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		"message": "Pianificazione eliminata con successo",
 	})
 }
-

@@ -260,6 +260,7 @@ func TestScanOrchestrator_Lifecycle_Success(t *testing.T) {
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
+	authorizeScanFixture(initialScan, targetRepo, profileRepo)
 	_ = scanRepo.Create(context.Background(), initialScan)
 
 	orchestrator := NewScanOrchestrator(
@@ -394,6 +395,7 @@ func TestScanOrchestrator_WorkerPoolConcurrency(t *testing.T) {
 			TriggerType: domain.TriggerManual,
 			Status:      domain.ScanStatusQueued,
 		}
+		authorizeScanFixture(s, targetRepo, profileRepo)
 		_ = scanRepo.Create(context.Background(), s)
 		_ = orchestrator.Enqueue(tenantID, sID)
 	}
@@ -457,6 +459,7 @@ func TestScanOrchestrator_TargetBlacklisted(t *testing.T) {
 		TriggerType: domain.TriggerManual,
 		Status:      domain.ScanStatusQueued,
 	}
+	authorizeScanFixture(scan, targetRepo, profileRepo)
 	_ = scanRepo.Create(context.Background(), scan)
 
 	orchestrator := NewScanOrchestrator(
@@ -534,6 +537,7 @@ func TestScanOrchestrator_CancelScan(t *testing.T) {
 		TriggerType: domain.TriggerManual,
 		Status:      domain.ScanStatusQueued,
 	}
+	authorizeScanFixture(scan, targetRepo, profileRepo)
 	_ = scanRepo.Create(context.Background(), scan)
 
 	orchestrator := NewScanOrchestrator(
@@ -693,6 +697,7 @@ func TestScanOrchestrator_AliveOnlyFiltering(t *testing.T) {
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
+	authorizeScanFixture(initialScan, targetRepo, profileRepo)
 	_ = scanRepo.Create(context.Background(), initialScan)
 
 	orchestrator := NewScanOrchestrator(
@@ -796,6 +801,7 @@ func TestScanOrchestrator_EventBroadcasting(t *testing.T) {
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
+	authorizeScanFixture(initialScan, targetRepo, profileRepo)
 	_ = scanRepo.Create(context.Background(), initialScan)
 
 	broadcaster := NewEventBroadcaster(50, silentLogger())
@@ -978,6 +984,7 @@ func TestScanOrchestrator_EdgeCase_CorruptedXMLOutput(t *testing.T) {
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
+	authorizeScanFixture(initialScan, targetRepo, profileRepo)
 	_ = scanRepo.Create(context.Background(), initialScan)
 
 	orchestrator := NewScanOrchestrator(
@@ -1074,6 +1081,7 @@ func TestScanOrchestrator_EdgeCase_SuddenKillOrProcessCrash(t *testing.T) {
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
+	authorizeScanFixture(initialScan, targetRepo, profileRepo)
 	_ = scanRepo.Create(context.Background(), initialScan)
 
 	orchestrator := NewScanOrchestrator(
@@ -1171,6 +1179,7 @@ func TestScanOrchestrator_EdgeCase_ContextTimeoutDuringExecution(t *testing.T) {
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
+	authorizeScanFixture(initialScan, targetRepo, profileRepo)
 	_ = scanRepo.Create(context.Background(), initialScan)
 
 	orchestrator := NewScanOrchestrator(
@@ -1217,6 +1226,3 @@ func TestScanOrchestrator_EdgeCase_ContextTimeoutDuringExecution(t *testing.T) {
 		t.Errorf("ErrorMessage deve indicare il superamento del timeout, trovato: %v", finalScan.ErrorMessage)
 	}
 }
-
-
-

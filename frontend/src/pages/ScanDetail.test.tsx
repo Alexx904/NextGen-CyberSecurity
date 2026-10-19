@@ -90,7 +90,6 @@ describe('ScanDetail Live Real-Time Monitoring & Progressive Findings', () => {
     return render(
       <MemoryRouter
         initialEntries={[initialPath]}
-        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <DebugProvider>
           <Routes>

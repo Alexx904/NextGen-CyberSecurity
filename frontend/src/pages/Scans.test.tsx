@@ -177,6 +177,16 @@ describe('Scans Page - Workstation Multi-Company Grouped View', () => {
     expect(screen.getByRole('progressbar', { name: 'Avanzamento del gruppo' }).getAttribute('aria-valuenow')).toBe('100');
   });
 
+  it('shows legacy schedules as requiring authorization and blocks reactivation', async () => {
+    const previous = vi.mocked(apiClient.get).getMockImplementation()!;
+    vi.mocked(apiClient.get).mockImplementation((url: string) => url.startsWith('/schedules') ? Promise.resolve({ data: { success:true, data:{items:[{id:'legacy-schedule',target_id:mockTargets[0].id,cron_expression:'0 2 * * *',is_active:false,authorization_required:true,created_at:'2026-10-19T00:00:00Z'}],total:1} } }) : previous(url));
+    render(<MemoryRouter><Scans /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button',{name:/Pianificazioni Ricorrenti/}));
+    const blocked = await screen.findByRole('button',{name:'Autorizzazione richiesta'});
+    expect((blocked as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('status').textContent).toContain('crea una nuova pianificazione');
+  });
+
   it('renders company groups and specific target IPs in grouped view by default', async () => {
     render(
       <MemoryRouter>

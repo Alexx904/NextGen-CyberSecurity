@@ -6,6 +6,7 @@
 - **FR-01.1:** Inserimento e validazione target: IP singoli, range IP (`10.0.0.1-10.0.0.25`), blocchi CIDR (`192.168.1.0/24`) o FQDN (`scanme.org`).
 - **FR-01.2:** Assegnazione ad asset group e verifica blacklist a livello tenant.
 - **FR-01.3:** Attestazione di Consenso & Autorizzazione Legale (Scan Authorization Gate): Richiesta di attestazione esplicita di autorizzazione/ownership per target pubblici e reti terze prima dell'esecuzione di scansioni attive, registrata immutabilmente nell'audit log con timestamp e user_id (conformità normativa art. 615-ter c.p. / CFAA).
+  - PO policy, 2026-10-19: require explicit consent for every inventory scan, including private targets and SAFE profiles. Recurring consent is bound to its exact authorized scope/configuration. The internal-network boundary remains; an operator attestation does not establish legal ownership or certify regulatory compliance. [Implementation and limits](../04-development/plans/TECH-DEBT-05.md).
 - **FR-01.4:** Deny-List e Isolamento Infrastruttura Interna: Blocco proattivo di target diretti verso loopback (`127.0.0.0/8`, `::1`), link-local/cloud metadata (`169.254.169.254`), container bridge Docker e host della piattaforma (`postgres`, `backend`), con verifica e risoluzione DNS preventiva anti-rebinding.
 
 ### FR-02: Motore di Scansione Basato su Nmap Containerizzato

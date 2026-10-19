@@ -122,7 +122,7 @@ export const TargetModal: React.FC<TargetModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="max-w-md w-full bg-[#111726] border border-cyber-border rounded-2xl shadow-2xl overflow-hidden relative">
         {/* Header Modale */}
         <div className="p-5 border-b border-cyber-border flex items-center justify-between">
@@ -185,7 +185,7 @@ export const TargetModal: React.FC<TargetModalProps> = ({
               onChange={(e) => setValue(e.target.value)}
               placeholder="es: 192.168.1.50, 10.0.0.0/24, scanme.nmap.org"
               required
-              className="w-full px-3.5 py-2.5 bg-slate-900 border border-cyber-border rounded-lg text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 font-mono"
+              className="w-full px-3.5 py-2.5 bg-slate-900 border border-cyber-border rounded-lg text-sm text-slate-100 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 font-mono"
             />
             <p className="text-[11px] text-slate-500 mt-1">
               Supporta IPv4, IPv6, notazione CIDR (es. /24), Range IP (es. 10.0.0.1-50) o FQDN.
@@ -201,7 +201,7 @@ export const TargetModal: React.FC<TargetModalProps> = ({
             <select
               value={groupId}
               onChange={(e) => setGroupId(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-900 border border-cyber-border rounded-lg text-sm text-slate-100 focus:outline-none focus:border-cyan-500"
+              className="w-full px-3.5 py-2.5 bg-slate-900 border border-cyber-border rounded-lg text-sm text-slate-100 focus:outline-hidden focus:border-cyan-500"
             >
               <option value="">📁 Nessuna Cartella (Non Assegnato / Root)</option>
               {availableGroups.map((g) => (
@@ -222,7 +222,7 @@ export const TargetModal: React.FC<TargetModalProps> = ({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="es: Server DMZ Web, Gateway Ufficio, Cloud Bastion"
-              className="w-full px-3.5 py-2 bg-slate-900 border border-cyber-border rounded-lg text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+              className="w-full px-3.5 py-2 bg-slate-900 border border-cyber-border rounded-lg text-sm text-slate-100 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500"
             />
           </div>
 

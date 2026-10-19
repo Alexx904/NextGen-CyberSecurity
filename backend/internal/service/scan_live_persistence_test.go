@@ -35,6 +35,7 @@ func TestScanOrchestratorLivePersistence(t *testing.T) {
 			_ = scans.Create(context.Background(), &domain.Scan{ID: scanID, TenantID: tenant, TargetID: targetID, ProfileID: profileID, Status: domain.ScanStatusQueued, TriggerType: domain.TriggerManual, CreatedAt: time.Now()})
 			targets := &mockTargetRepo{targets: map[uuid.UUID]*domain.Target{targetID: {ID: targetID, TenantID: tenant, Type: domain.TargetTypeIP, Value: "192.168.1.10"}}, blacklistedMap: map[string]bool{}}
 			profiles := &mockProfileRepo{profiles: map[uuid.UUID]*domain.ScanProfile{profileID: {ID: profileID, Name: "Fixture", NmapArgs: "-sV", TimeoutSeconds: 5}}}
+			scans.scans[scanID].Authorization = domain.ScanAuthorizationFromContext(authorizedScanContext(tenant, profiles.profiles[profileID], targets.targets[targetID]))
 			findings := &liveFindingRepo{mockFindingRepo: newMockFindingRepo(), fail: fail}
 			xml := []byte(`<nmaprun><host><status state="up"/><address addr="192.168.1.10" addrtype="ipv4"/><ports><port protocol="tcp" portid="80"><state state="open"/></port></ports></host><runstats><finished elapsed="1"/><hosts up="1" total="1"/></runstats></nmaprun>`)
 			runner := &mockRunner{runFunc: func(_ context.Context, _ string, p scanner.ProfileConfig) (*scanner.ScanExecutionResult, error) {

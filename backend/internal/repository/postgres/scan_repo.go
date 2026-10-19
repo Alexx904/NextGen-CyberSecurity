@@ -28,7 +28,7 @@ func NewScanRepo(pool *pgxpool.Pool) *ScanRepo {
 func (r *ScanRepo) GetByID(ctx context.Context, tenantID, id uuid.UUID) (*domain.Scan, error) {
 	query := `
 		SELECT id, tenant_id, target_id, profile_id, trigger_type, status,
-		       started_at, completed_at, summary_stats, error_message, created_at, updated_at
+		       started_at, completed_at, summary_stats, error_message, created_at, updated_at, consent_snapshot
 		FROM scans
 		WHERE tenant_id = $1 AND id = $2
 	`
@@ -50,6 +50,7 @@ func (r *ScanRepo) GetByID(ctx context.Context, tenantID, id uuid.UUID) (*domain
 		&s.ErrorMessage,
 		&s.CreatedAt,
 		&s.UpdatedAt,
+		&s.Authorization,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -86,7 +87,7 @@ func (r *ScanRepo) List(ctx context.Context, tenantID uuid.UUID, limit, offset i
 
 	query := `
 		SELECT id, tenant_id, target_id, profile_id, trigger_type, status,
-		       started_at, completed_at, summary_stats, error_message, created_at, updated_at
+		       started_at, completed_at, summary_stats, error_message, created_at, updated_at, consent_snapshot
 		FROM scans
 		WHERE tenant_id = $1
 		ORDER BY created_at DESC
@@ -118,6 +119,7 @@ func (r *ScanRepo) List(ctx context.Context, tenantID uuid.UUID, limit, offset i
 			&s.ErrorMessage,
 			&s.CreatedAt,
 			&s.UpdatedAt,
+			&s.Authorization,
 		); err != nil {
 			return nil, 0, fmt.Errorf("lettura riga scansione fallita: %w", err)
 		}
@@ -164,8 +166,8 @@ func (r *ScanRepo) Create(ctx context.Context, scan *domain.Scan) error {
 
 	query := `
 		INSERT INTO scans (id, tenant_id, target_id, profile_id, trigger_type, status,
-		                   started_at, completed_at, summary_stats, error_message, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		                   started_at, completed_at, summary_stats, error_message, created_at, updated_at, consent_snapshot)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 	`
 
 	_, err = r.pool.Exec(
@@ -183,6 +185,7 @@ func (r *ScanRepo) Create(ctx context.Context, scan *domain.Scan) error {
 		scan.ErrorMessage,
 		scan.CreatedAt,
 		scan.UpdatedAt,
+		scan.Authorization,
 	)
 	if err != nil {
 		return fmt.Errorf("inserimento nuova scansione fallito: %w", err)
@@ -234,7 +237,7 @@ func (r *ScanRepo) Update(ctx context.Context, scan *domain.Scan) error {
 func (r *ScanRepo) GetActiveByTarget(ctx context.Context, tenantID, targetID uuid.UUID) (*domain.Scan, error) {
 	query := `
 		SELECT id, tenant_id, target_id, profile_id, trigger_type, status,
-		       started_at, completed_at, summary_stats, error_message, created_at, updated_at
+		       started_at, completed_at, summary_stats, error_message, created_at, updated_at, consent_snapshot
 		FROM scans
 		WHERE tenant_id = $1 AND target_id = $2 AND status IN ('QUEUED', 'RUNNING')
 		LIMIT 1
@@ -257,6 +260,7 @@ func (r *ScanRepo) GetActiveByTarget(ctx context.Context, tenantID, targetID uui
 		&s.ErrorMessage,
 		&s.CreatedAt,
 		&s.UpdatedAt,
+		&s.Authorization,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -278,7 +282,7 @@ func (r *ScanRepo) GetActiveByTarget(ctx context.Context, tenantID, targetID uui
 func (r *ScanRepo) GetPreviousCompletedByTarget(ctx context.Context, tenantID, targetID, excludeScanID uuid.UUID) (*domain.Scan, error) {
 	query := `
 		SELECT id, tenant_id, target_id, profile_id, trigger_type, status,
-		       started_at, completed_at, summary_stats, error_message, created_at, updated_at
+		       started_at, completed_at, summary_stats, error_message, created_at, updated_at, consent_snapshot
 		FROM scans
 		WHERE tenant_id = $1 AND target_id = $2 AND status = 'COMPLETED' AND id != $3
 		ORDER BY completed_at DESC NULLS LAST, created_at DESC
@@ -302,6 +306,7 @@ func (r *ScanRepo) GetPreviousCompletedByTarget(ctx context.Context, tenantID, t
 		&s.ErrorMessage,
 		&s.CreatedAt,
 		&s.UpdatedAt,
+		&s.Authorization,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -318,7 +323,6 @@ func (r *ScanRepo) GetPreviousCompletedByTarget(ctx context.Context, tenantID, t
 
 	return &s, nil
 }
-
 
 // ============================================================================
 // SCAN PROFILE REPOSITORY IMPLEMENTATION

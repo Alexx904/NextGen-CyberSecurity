@@ -32,6 +32,8 @@ async function open() {
   return { ...props, ...view };
 }
 const launch = () => screen.getByRole('button', { name: 'Avvia scansione' }) as HTMLButtonElement;
+const confirm = () => { const checkbox = screen.getByLabelText(/Confermo di possedere/) as HTMLInputElement; if (!checkbox.checked) fireEvent.click(checkbox); };
+const submit = () => { confirm(); fireEvent.click(launch()); };
 const edit = () => fireEvent.click(screen.getByRole('button', { name: 'Comando Nmap' }));
 const setCommand = (value: string) => fireEvent.change(screen.getByLabelText('Comando / opzioni Nmap'), { target: { value } });
 
@@ -42,6 +44,24 @@ beforeEach(() => {
 });
 
 describe('Minimal Nmap scan workflow', () => {
+  it('requires consent even for the default TCP profile and binds its exact scope and timeout', async () => {
+    await open();
+    expect(launch().disabled).toBe(true);
+    fireEvent.click(launch()); expect(apiClient.post).not.toHaveBeenCalled();
+    submit();
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/scans', expect.objectContaining({ authorization: {
+      accepted: true, statement: 'scan-authorization-v1',
+      targets: [{ id: 'one', value: '192.168.1.10' }, { id: 'two', value: '192.168.1.20' }],
+      nmap_args: SCAN_PRESETS[0].args, timeout_seconds: SCAN_PRESETS[0].timeout, cron_expression: '',
+    } })));
+  });
+  it('invalidates recurring consent when the frequency changes', async () => {
+    await open(); fireEvent.click(screen.getByLabelText('Pianifica scansione ricorrente')); confirm();
+    const create = () => screen.getByRole('button', { name: 'Crea pianificazione' }) as HTMLButtonElement;
+    expect(create().disabled).toBe(false);
+    fireEvent.change(screen.getByLabelText('Frequenza (fuso orario del server)'), { target: { value: '0 */6 * * *' } });
+    expect(create().disabled).toBe(true); expect(apiClient.post).not.toHaveBeenCalled();
+  });
   it('honors a blacklisted duplicate IP in the selected subtree', async () => {
     vi.mocked(apiClient.get).mockImplementation(((url: string) => url.startsWith('/targets?') ? Promise.resolve(success({ items: [targets[0], { ...targets[0], id: 'duplicate-blocked', group_id: 'department', is_blacklisted: true }], total: 2 })) : get(url)) as never);
     render(<NewScanModal isOpen onClose={vi.fn()} onScanLaunched={vi.fn()} targetValues={['192.168.1.10']} />);
@@ -52,23 +72,23 @@ describe('Minimal Nmap scan workflow', () => {
   it('schedules the chosen preset only for the selected eligible device', async () => {
     const close = vi.fn();
     render(<NewScanModal isOpen onClose={close} onScanLaunched={vi.fn()} targetValues={['192.168.1.10']} />);
-    await waitFor(() => expect(launch().disabled).toBe(false));
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull()); confirm(); expect(launch().disabled).toBe(false);
     fireEvent.change(screen.getByLabelText('Tipo di scansione'), { target: { value: 'quick' } });
     fireEvent.click(screen.getByLabelText('Pianifica scansione ricorrente'));
-    fireEvent.click(screen.getByRole('button', { name: 'Crea pianificazione' }));
+    confirm(); fireEvent.click(screen.getByRole('button', { name: 'Crea pianificazione' }));
     await waitFor(() => expect(close).toHaveBeenCalledOnce());
     expect(apiClient.post).toHaveBeenCalledWith('/scan-profiles', expect.objectContaining({ name: 'Porte TCP frequenti (100)', nmap_args: '-sS -F -T3', timeout_seconds: 900 }));
-    expect(vi.mocked(apiClient.post).mock.calls.filter(([url]) => url === '/schedules')).toEqual([['/schedules', { target_id: 'one', profile_id: 'created', cron_expression: '0 2 * * *', is_active: true }]]);
+    expect(vi.mocked(apiClient.post).mock.calls.filter(([url]) => url === '/schedules')).toEqual([['/schedules', expect.objectContaining({ target_id: 'one', profile_id: 'created', cron_expression: '0 2 * * *', is_active: true, authorization: expect.objectContaining({ cron_expression: '0 2 * * *' }) })]]);
   });
   it('launches only the selected discovered IP and excludes other same-group and blacklisted targets', async () => {
     const onScanLaunched = vi.fn();
     vi.mocked(apiClient.post).mockImplementation(((url: string, body: object) => Promise.resolve(success(url === '/scan-profiles' ? { ...body, id: 'created' } : { id: 'scan-one' }))) as never);
     render(<NewScanModal isOpen onClose={vi.fn()} onScanLaunched={onScanLaunched} targetValues={['192.168.1.10', '192.168.1.30']} />);
-    await waitFor(() => expect(launch().disabled).toBe(false));
-    fireEvent.click(launch());
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull()); confirm(); expect(launch().disabled).toBe(false);
+    submit();
     await waitFor(() => expect(onScanLaunched).toHaveBeenCalledWith([{ id: 'scan-one' }]));
     const requests = vi.mocked(apiClient.post).mock.calls.filter(([url]) => url === '/scans');
-    expect(requests).toEqual([['/scans', { target_id: 'one', profile_id: 'created' }]]);
+    expect(requests).toEqual([['/scans', expect.objectContaining({ target_id: 'one', profile_id: 'created', authorization: expect.objectContaining({ targets: [{ id: 'one', value: '192.168.1.10' }] }) })]]);
   });
 
   it('retries only failed selected devices after a partial launch', async () => {
@@ -80,11 +100,11 @@ describe('Minimal Nmap scan workflow', () => {
     }) as never);
     const close = vi.fn();
     render(<NewScanModal isOpen onClose={close} onScanLaunched={vi.fn()} targetValues={['192.168.1.10', '192.168.1.20']} />);
-    await waitFor(() => expect(launch().disabled).toBe(false));
-    fireEvent.click(launch());
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull()); confirm(); expect(launch().disabled).toBe(false);
+    submit();
     expect(await screen.findByRole('alert')).toHaveProperty('textContent', expect.stringContaining('1 non riuscite'));
     expect(close).not.toHaveBeenCalled();
-    fireEvent.click(launch());
+    submit();
     await waitFor(() => expect(close).toHaveBeenCalledOnce());
     expect(vi.mocked(apiClient.post).mock.calls.filter(([url, body]) => url === '/scans' && (body as {target_id?: string}).target_id === 'one')).toHaveLength(1);
   });
@@ -99,11 +119,11 @@ describe('Minimal Nmap scan workflow', () => {
   it('blocks retry after a lost launch response instead of risking a duplicate scan', async () => {
     vi.mocked(apiClient.post).mockImplementation(((url: string, body: object) => url === '/scan-profiles' ? Promise.resolve(success({ ...body, id: 'created' })) : Promise.reject(new Error('connection lost'))) as never);
     render(<NewScanModal isOpen onClose={vi.fn()} onScanLaunched={vi.fn()} targetValues={['192.168.1.10']} />);
-    await waitFor(() => expect(launch().disabled).toBe(false));
-    fireEvent.click(launch());
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull()); confirm(); expect(launch().disabled).toBe(false);
+    submit();
     expect((await screen.findByRole('alert')).textContent).toContain('verifica lo storico');
     expect(launch().disabled).toBe(true);
-    fireEvent.click(launch());
+    submit();
     expect(vi.mocked(apiClient.post).mock.calls.filter(([url]) => url === '/scans')).toHaveLength(1);
   });
   it('contains keyboard focus, closes on Escape and restores the previous focus', async () => {
@@ -111,7 +131,7 @@ describe('Minimal Nmap scan workflow', () => {
     const props = await open(); const dialog = screen.getByRole('dialog');
     expect(document.activeElement).toBe(dialog);
     fireEvent.keyDown(dialog, { key: 'Tab' }); expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Chiudi' }));
-    fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true }); expect(document.activeElement).toBe(launch());
+    fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true }); expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Annulla' }));
     fireEvent.keyDown(dialog, { key: 'Escape' }); expect(props.onClose).toHaveBeenCalledOnce();
     props.unmount(); expect(document.activeElement).toBe(trigger); trigger.remove();
   });
@@ -127,17 +147,17 @@ describe('Minimal Nmap scan workflow', () => {
   });
 
   it('creates the exact preview configuration instead of matching a misleading system name', async () => {
-    const props = await open(); fireEvent.click(launch());
+    const props = await open(); submit();
     await waitFor(() => expect(props.onScanLaunched).toHaveBeenCalledOnce());
     expect(apiClient.post).toHaveBeenCalledWith('/scan-profiles', expect.objectContaining({ nmap_args: SCAN_PRESETS[0].args, name: SCAN_PRESETS[0].name }));
-    expect(apiClient.post).toHaveBeenCalledWith('/scans', { group_id: 'company', profile_id: 'created' });
+    expect(apiClient.post).toHaveBeenCalledWith('/scans', expect.objectContaining({ group_id: 'company', profile_id: 'created', authorization: expect.objectContaining({ accepted: true, statement: 'scan-authorization-v1', targets: [{ id: 'one', value: '192.168.1.10' }, { id: 'two', value: '192.168.1.20' }] }) }));
     expect(props.onClose).toHaveBeenCalledOnce();
   });
 
   it('reuses only an equivalent stored configuration and timeout', async () => {
     vi.mocked(apiClient.get).mockImplementation(((url: string) => url === '/scan-profiles' ? Promise.resolve(success({ items: [{ ...profiles[0], id: 'exact', nmap_args: SCAN_PRESETS[0].args }] })) : get(url)) as never);
-    await open(); fireEvent.click(launch());
-    await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/scans', { group_id: 'company', profile_id: 'exact' }));
+    await open(); submit();
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/scans', expect.objectContaining({ group_id: 'company', profile_id: 'exact', authorization: expect.objectContaining({ accepted: true }) })));
     expect(apiClient.post).not.toHaveBeenCalledWith('/scan-profiles', expect.anything());
   });
 
@@ -149,14 +169,14 @@ describe('Minimal Nmap scan workflow', () => {
   it('accepts a nmap prefix and sends only options; preview includes managed output', async () => {
     await open(); edit(); setCommand('nmap -sS -sV -p 22,443 -T3');
     expect(screen.getByTestId('nmap-preview').textContent).toBe('nmap -oX - -sS -sV -p 22,443 -T3 --stats-every 5s -- <target>');
-    fireEvent.click(launch());
+    submit();
     await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/scan-profiles', expect.objectContaining({ nmap_args: '-sS -sV -p 22,443 -T3' })));
   });
 
   it.each(['nmap -sS 192.168.1.1', '-sS; whoami', '-oX file.xml', '-sS -sA', '-p80 -p443', '-p70000', '-sA --open', '-sn -sV'])('blocks invalid command %s before any request', async (command) => {
     await open(); edit(); setCommand(command);
     expect(launch().disabled).toBe(true); expect(screen.getByRole('alert')).toBeTruthy();
-    fireEvent.click(launch()); expect(apiClient.post).not.toHaveBeenCalled();
+    submit(); expect(apiClient.post).not.toHaveBeenCalled();
   });
 
   it('gates NSE controls and resets consent after edits', async () => {
@@ -189,7 +209,7 @@ describe('Minimal Nmap scan workflow', () => {
 
   it('shows server rejection without launching or closing', async () => {
     vi.mocked(apiClient.post).mockResolvedValue({ data: { success: false, error: { message: 'Opzione rifiutata dal server' } } });
-    const props = await open(); fireEvent.click(launch());
+    const props = await open(); submit();
     await screen.findByText('Opzione rifiutata dal server'); expect(props.onClose).not.toHaveBeenCalled();
     expect(apiClient.post).toHaveBeenCalledTimes(1);
   });
@@ -201,13 +221,13 @@ describe('Minimal Nmap scan workflow', () => {
       return Promise.resolve(success(url === '/scan-profiles' ? { ...body, id: 'created' } : {}));
     }) as never);
     const props = await open(); fireEvent.click(screen.getByLabelText('Pianifica scansione ricorrente'));
-    fireEvent.click(screen.getByRole('button', { name: 'Crea pianificazione' }));
+    confirm(); fireEvent.click(screen.getByRole('button', { name: 'Crea pianificazione' }));
     await screen.findByText(/1 pianificazioni create; 1 non riuscite/);
-    fireEvent.click(screen.getByRole('button', { name: 'Crea pianificazione' }));
+    confirm(); fireEvent.click(screen.getByRole('button', { name: 'Crea pianificazione' }));
     await waitFor(() => expect(props.onClose).toHaveBeenCalledOnce());
     const calls = vi.mocked(apiClient.post).mock.calls.filter(([url]) => url === '/schedules');
     expect(calls.map(([, body]) => (body as { target_id: string }).target_id)).toEqual(['one', 'two', 'two']);
-    expect(calls[0][1]).toEqual({ target_id: 'one', profile_id: 'created', cron_expression: '0 2 * * *', is_active: true });
+    expect(calls[0][1]).toEqual(expect.objectContaining({ target_id: 'one', profile_id: 'created', cron_expression: '0 2 * * *', is_active: true, authorization: expect.objectContaining({ cron_expression: '0 2 * * *' }) }));
   });
 
   it('supports a named saved profile and rejects invalid timeout', async () => {
@@ -215,6 +235,6 @@ describe('Minimal Nmap scan workflow', () => {
     fireEvent.change(screen.getByLabelText('Timeout per target (minuti)'), { target: { value: '0' } }); expect(launch().disabled).toBe(true);
     fireEvent.change(screen.getByLabelText('Timeout per target (minuti)'), { target: { value: '30' } });
     fireEvent.change(screen.getByLabelText('Nome profilo (facoltativo)'), { target: { value: 'Internal TCP inventory' } });
-    fireEvent.click(launch()); await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/scan-profiles', expect.objectContaining({ name: 'Internal TCP inventory', timeout_seconds: 1800 })));
+    submit(); await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/scan-profiles', expect.objectContaining({ name: 'Internal TCP inventory', timeout_seconds: 1800 })));
   });
 });

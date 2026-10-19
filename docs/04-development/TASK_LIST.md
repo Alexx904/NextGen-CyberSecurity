@@ -1,6 +1,6 @@
 # 3. Interactive Task List & Implementation Backlog
 
-> **Updated:** 2026-10-18 - working tree
+> **Updated:** 2026-10-19 - working tree
 > **Related:** [Requirements](../01-product/REQUIREMENTS.md), [PRD](../01-product/PRD.md), [HLD](../03-architecture/HLD.md), [accepted tasks](../../CHANGELOG.md#accepted-tasks-and-priority-reorganization--2026-10-18).
 
 ## Execution priorities
@@ -18,9 +18,21 @@ PO request: order by risk and dependencies. Previous pending acceptance tasks ar
 
 ## P0 - Security prerequisites
 
+- [x] TECH-DEBT-05 · Mandatory server-side inventory scan consent, scope/configuration-bound recurring authorization and immutable audit. Backend/frontend/PostgreSQL/up-down/browser PASS; accepted by PO on 2026-10-19. [Contract and evidence](plans/TECH-DEBT-05.md).
+
 TECH-DEBT-05 retains its detailed contract in the debt register below.
 
-- [ ] TECH-DEBT-09 · Alta · Dipendenze frontend: analizzare advisory e distinguere dipendenze runtime/build, aggiornare in incremento dedicato con test/build e verifica compatibilità. Impatto: vulnerabilità segnalate dal resolver npm durante la build Docker; dettaglio advisory ancora da valutare.
+2026-10-19: PO selected consent for every inventory scan, recurring consent bound
+to authorized scope/configuration. TECH-DEBT-05 implementation covers services,
+API, scheduler, worker, immutable transactional audit and UI; Final All/Integration and final backend gates PASS; accepted by PO on 2026-10-19.
+[Design and evidence](plans/TECH-DEBT-05.md). Browser is now connected; real QA
+checks run on updated sources at 3000/8081 with disposable PostgreSQL on 55432,
+separate from the existing deployment at 3080. No scans or external sends performed.
+
+- [x] TECH-DEBT-09 · Alta · Dipendenze frontend: analizzare advisory e distinguere dipendenze runtime/build, aggiornare in incremento dedicato con test/build e verifica compatibilità. Impatto: vulnerabilità segnalate dal resolver npm durante la build Docker; dettaglio advisory ancora da valutare.
+  - 2026-10-18: Router/Vite/Vitest/Tailwind 4 updated; official PostCSS plugin authorized by PO. Full and runtime npm audits: zero vulnerabilities; frontend Final PASS (229 tests + typecheck/build/docs). Real-browser visual gate NOT EXECUTED: no browser connected, task remains `[ ]`. Assessment, checks and limits: [dependency report](../05-qa/TECH-DEBT-09.md).
+
+  - 2026-10-19: connected Chromium desktop/390px compatibility and keyboard checks PASS on updated QA sources; Final integrated frontend 233 tests/build PASS. Original browser blocker resolved; accepted by PO on 2026-10-19. [Completion](../05-qa/TECH-DEBT-09.md#browser-completion---2026-10-19).
 
 ## P1 - M4 - Compliance
 
@@ -62,11 +74,32 @@ TECH-DEBT-05 retains its detailed contract in the debt register below.
 
 ## P4 - Technical debt
 
+- [ ] UI-TOOLS-01 · Introduce a post-login tool selection hub and contextual navigation
+  - PO request (2026-10-18): after login, show a tool selection screen instead of entering the current unified operational interface. Planning only; implementation and final UI design remain pending.
+  - Tool 1: keep Network Discovery, Nmap scans, CVE findings, reports and Attack Path Graph together as one connected assessment workflow. Final tool name to be defined during design.
+  - Tool 2: group SSH Servers and Firewall management in a separate operational tool. Define navigation within each tool and an accessible return to the tool selection hub; preserve existing capabilities and data.
+  - Future feature placement: at design time for every upcoming feature/milestone, explicitly decide whether it extends an existing tool or warrants an independent tool, based on user goal, workflow and shared data. Record the rationale in the relevant task/design; do not automatically create one tool per milestone. Identify shared settings and cross-tool entry points during design.
+  - Files: frontend authentication redirect/router, `frontend/src/components/layout/AppLayout.tsx`, new tool hub page and affected navigation/pages/tests; definitive paths after route inventory. No backend/schema changes assumed.
+  - Dependencies: inspect current auth, routes, roles and shared company/target context; assess ADR-18 and document any supersession before implementation. Preserve existing priority queue; consider placement when designing upcoming milestones.
+  - Tests: post-login hub, both tool entry flows, return/switch navigation, direct authenticated links, refresh/back/logout, unauthorized access and context preservation; keyboard/focus and responsive desktop/mobile browser checks. Targeted routing regressions, Final Frontend; extend gate scope if shared backend/auth contracts change.
+  - Docs: PRD/requirements, UI_SPECIFICATIONS, relevant domains/DOMAIN_MAP, ADR for navigation architecture where warranted and PROJECT_STATE. Future milestone plans must include tool placement and rationale.
+  - DoD: two clearly distinguished tools accessible after login, coherent navigation without lost features or broken deep links, shared concerns placed explicitly, required gates PASS, self-review and Doc Sync; PO validates the designed experience and implementation separately.
+
+- [ ] E28-S1-T7 · Replace the virtual patch generator with online mitigation sources
+  - PO decision (2026-10-18): plan the deprecation of the eight-CVE generator in favor of "Mitigazioni e fonti" in finding details. Planning only; the current feature remains unchanged until implementation.
+  - Scope: consolidate existing NVD/MITRE references; link to vendor advisories through CVE references and offer an explicitly labeled CrowdSec Hub search using the CVE ID. A search link is not evidence that a compatible rule exists. Verify official destination URLs when implementing.
+  - Constraints: no new database tables, local template catalog expansion, periodic synchronization, automatic external content retrieval, rule generation or installation. No new API dependency; links disclose only the public CVE ID, never asset or tenant information.
+  - Files: `frontend/src/components/FindingDetailModal.tsx`, `VirtualPatchModal.tsx`, `frontend/src/api/virtualPatching.ts`; backend virtual-patching service/catalog, handler, route and tests after usage/compatibility inspection. Retire obsolete code coherently and document endpoint compatibility before removal.
+  - Dependencies: accepted E28-S1-T3 baseline; inspect shared finding details and current API consumers. Queue with P4 maintenance; no change to the PO deferral of T4/T5.
+  - Tests: valid/missing/invalid CVE IDs, safe external URLs and new-tab behavior, absence of duplicate links, accessible desktop/mobile finding flow; targeted regressions and Final Frontend, plus Final Backend if backend code changes. Real-browser verification required for the changed UI.
+  - Docs: PRD, REQUIREMENTS, UI_SPECIFICATIONS, active_defense_and_soar domain, DOMAIN_MAP/API documentation where contracts change, E28-S1-T3 plan and PROJECT_STATE; preserve the accepted historical task and mark its behavior superseded only upon implementation.
+  - DoD: useful external references for any valid CVE without claiming mitigation coverage or automatic correction; generator entry point replaced, obsolete paths handled explicitly, required gates PASS, self-review/security review and Doc Sync complete; PO acceptance separate.
+
 - [ ] TECH-DEBT-10 · Media · Archivio Report: caricamento e memoria proporzionali allo storico del tenant; paginazione offset senza snapshot transazionale. Misurare sui volumi reali, poi introdurre filtro profilo/aggregazioni server e ordinamento stabile con integrazione PostgreSQL. ADR-22; nessun limite silenzioso accettato.
 
 | ID | Priorità | Componente / Percorso | Descrizione & Impatto | Piano di Rientro |
 |---|---|---|---|---|
-| `TECH-DEBT-05` | Alta | `backend/internal/delivery/http/handler/scan_handler.go`, scheduler, audit | FR-01.3 incompleto: consenso solo UI, non attestato immutabilmente né imposto dall'API; classificazione impatto euristica. | Definire contratto di attestazione per scope/configurazione, validazione server e registrazione audit; coprire API diretta e pianificazioni con test. Nessuna attestazione di conformità finché il gap resta. |
+| `TECH-DEBT-05` | High | Scan API, services, scheduler, worker, PostgreSQL audit and UI | Mandatory server consent implemented; impact classification remains heuristic. | Gates PASS; accepted by PO on 2026-10-19. Legacy schedules require suspension and explicitly authorized replacement. [Contract/limits](plans/TECH-DEBT-05.md). |
 | `TECH-DEBT-06` | Alta | `backend/internal/service/ssh_service.go` | SSH-HARDEN-01 implementa pin host SHA256 separato dalla chiave client: assente/mismatch bloccano connessioni. Migrazione 000010 e test rotazione/up/down/up PASS; visual gate PASS; accepted with SSH-HARDEN-01. | Form verified; independent legacy-pin verification remains an operational prerequisite. |
 | `TECH-DEBT-07` | Alta · mitigato, attende PO | `backend/internal/service/firewall_service.go`, `ssh_service.go` | M11-FIREWALL-01: transazione/lock/watchdog remoto senza kill PID, stdin e revisioni; Linux nft/legacy, multiistanza, OpenSSH con modifica tardiva e browser PASS. | Mitigation accepted with M11-FIREWALL-01; residual limits: stesso UID SSH, disponibilità host/tool/stato temporaneo; reboot, altri amministratori/account e cancellazione dello stato fuori garanzia. E28-S1-T1 richiede comunque prova del proprio flusso remediation. |
 | `TECH-DEBT-08` | Media | Attack Path service, scope UI | Analisi euristica senza routing/ACL/identità/prerequisiti; cap globale prima dello scope, osservazioni storiche e letture non transazionali possono sottorappresentare un'azienda. | Mantenere avvisi; futuro contratto di evidenze di raggiungibilità e scope backend prima del cap, snapshot coerente e ciclo di vita finding. Validare in laboratorio autorizzato prima di dichiarare lateral movement reale. |

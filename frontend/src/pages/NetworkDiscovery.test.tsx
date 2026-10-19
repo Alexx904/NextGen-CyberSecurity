@@ -114,9 +114,11 @@ describe('NetworkDiscovery Live Real-Time SSE Integration', () => {
     fireEvent.change(screen.getByLabelText('Cartella Scope (Gerarchia ad Albero)'), { target: { value: 'qa' } });
     fireEvent.click(screen.getByRole('button', { name: 'Importa e configura scansione' }));
     const launch = await screen.findByRole('button', { name: 'Avvia scansione' });
-    await waitFor(() => expect((launch as HTMLButtonElement).disabled).toBe(false));
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+    fireEvent.click(screen.getByLabelText(/Confermo di possedere/));
+    expect((launch as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(launch);
-    await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/scans', { target_id: 'target-1', profile_id: 'profile' }));
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/scans', expect.objectContaining({ target_id: 'target-1', profile_id: 'profile', authorization: expect.objectContaining({ accepted: true, targets: [{ id: 'target-1', value: '192.0.2.1' }] }) })));
     expect(vi.mocked(apiClient.post).mock.calls.filter(([url]) => url === '/scans')).toHaveLength(1);
     expect(discoveryApi.importTargets).toHaveBeenCalledTimes(alreadyImported ? 0 : 1);
   });

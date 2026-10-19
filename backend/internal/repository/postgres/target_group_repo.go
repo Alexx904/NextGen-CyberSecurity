@@ -128,7 +128,7 @@ func (r *TargetGroupRepo) Create(ctx context.Context, group *domain.TargetGroup)
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.ConstraintName == "company_department_depth" {
+		if errors.As(err, &pgErr) && (pgErr.ConstraintName == "company_department_depth" || pgErr.ConstraintName == "alert_company_scope") {
 			return domain.ErrValidation
 		}
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
@@ -165,7 +165,7 @@ func (r *TargetGroupRepo) Update(ctx context.Context, group *domain.TargetGroup)
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.ConstraintName == "company_department_depth" {
+		if errors.As(err, &pgErr) && (pgErr.ConstraintName == "company_department_depth" || pgErr.ConstraintName == "alert_company_scope") {
 			return domain.ErrValidation
 		}
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
@@ -185,6 +185,10 @@ func (r *TargetGroupRepo) Update(ctx context.Context, group *domain.TargetGroup)
 func (r *TargetGroupRepo) Delete(ctx context.Context, tenantID, id uuid.UUID) error {
 	cmdTag, err := r.pool.Exec(ctx, "DELETE FROM target_groups WHERE tenant_id = $1 AND id = $2", tenantID, id)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.ForeignKeyViolation {
+			return domain.ErrConflict
+		}
 		return fmt.Errorf("eliminazione gruppo fallita: %w", err)
 	}
 

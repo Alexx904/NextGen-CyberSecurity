@@ -285,7 +285,7 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
         {status?.active_safety_timer && (
           <div className="mt-4 p-4 rounded-xl border border-amber-500/50 bg-amber-950/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-pulse shadow-lg">
             <div className="flex items-center space-x-3">
-              <AlertTriangle className="w-6 h-6 text-amber-400 flex-shrink-0 animate-bounce" />
+              <AlertTriangle className="w-6 h-6 text-amber-400 shrink-0 animate-bounce" />
               <div>
                 <div className="text-xs sm:text-sm font-bold text-amber-300 flex items-center gap-2">
                   <span>{countdown > 0 ? 'Safety Rollback Timer ATTIVO!' : 'Scadenza raggiunta: ripristino da verificare.'}</span>
@@ -513,7 +513,7 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
         {terminalOpen && <React.Suspense fallback={<p role="status">Caricamento terminale...</p>}><DockedTerminal server={server} docked onClose={() => setTerminalOpen(false)} /></React.Suspense>}
 
         {isAddRuleOpen && (
-          <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
             <div role="dialog" aria-modal="true" aria-label={editingLine === null ? 'Nuova regola firewall' : `Sostituisci regola ${editingLine}`} onKeyDown={event => {
               if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeRuleForm(); }
               if (event.key === 'Tab') {
@@ -547,7 +547,7 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
                       autoFocus
                       value={newAction}
                       onChange={(e) => setNewAction(e.target.value as RuleAction)}
-                      className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-white focus:outline-none focus:border-cyan-500"
+                      className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-white focus:outline-hidden focus:border-cyan-500"
                     >
                       <option value="ACCEPT">ACCEPT (Consenti)</option>
                       <option value="DROP">DROP (Scarta silenziosamente)</option>
@@ -565,7 +565,7 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
                         setNewProtocol(e.target.value);
                         if (!['tcp', 'udp'].includes(e.target.value)) setNewPort('');
                       }}
-                      className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-white focus:outline-none focus:border-cyan-500 uppercase font-mono"
+                      className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-white focus:outline-hidden focus:border-cyan-500 uppercase font-mono"
                     >
                       <option value="tcp">TCP</option>
                       <option value="udp">UDP</option>
@@ -584,7 +584,7 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
                       aria-label="IP o CIDR Sorgente"
                       onChange={(e) => setNewSource(e.target.value)}
                       placeholder="0.0.0.0/0 oppure 192.168.1.0/24"
-                      className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-white font-mono focus:outline-none focus:border-cyan-500"
+                      className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-white font-mono focus:outline-hidden focus:border-cyan-500"
                     />
                   </div>
 
@@ -597,7 +597,7 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
                       onChange={(e) => setNewPort(e.target.value)}
                       disabled={newProtocol !== 'tcp' && newProtocol !== 'udp'}
                       placeholder="es. 22 oppure 80:443"
-                      className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-white font-mono focus:outline-none focus:border-cyan-500 disabled:opacity-50"
+                      className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-white font-mono focus:outline-hidden focus:border-cyan-500 disabled:opacity-50"
                     />
                   </div>
                 </div>
@@ -610,7 +610,7 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
                     aria-label="IP o CIDR Destinazione"
                     onChange={(e) => setNewDestination(e.target.value)}
                     placeholder="0.0.0.0/0 oppure lasciare vuoto"
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-white font-mono focus:outline-none focus:border-cyan-500"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-white font-mono focus:outline-hidden focus:border-cyan-500"
                   />
                 </div>
 
@@ -621,7 +621,7 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
                     aria-label="Posizione nella Catena"
                     disabled={editingLine !== null}
                     onChange={(e) => setNewPosition(parseInt(e.target.value, 10))}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-white focus:outline-none focus:border-cyan-500 font-sans"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-white focus:outline-hidden focus:border-cyan-500 font-sans"
                   >
                     <option value={0}>In coda (Append alla fine)</option>
                     <option value={1}>In cima (#1 - Massima priorità)</option>
@@ -636,7 +636,7 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
                     aria-label="Commento Descrittivo"
                     onChange={(e) => setNewComment(e.target.value)}
                     placeholder="es. Allow Web HTTPS from Office"
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-white focus:outline-none focus:border-cyan-500 font-sans"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-cyber-border text-white focus:outline-hidden focus:border-cyan-500 font-sans"
                   />
                 </div>
 
@@ -660,7 +660,7 @@ export const FirewallManager: React.FC<FirewallManagerProps> = ({
                         max={300}
                         value={newTimeoutSec}
                         onChange={(e) => setNewTimeoutSec(parseInt(e.target.value, 10) || 60)}
-                        className="w-20 px-2 py-1 rounded bg-slate-950 border border-cyan-700/50 text-white font-mono text-xs focus:outline-none focus:border-cyan-400"
+                        className="w-20 px-2 py-1 rounded bg-slate-950 border border-cyan-700/50 text-white font-mono text-xs focus:outline-hidden focus:border-cyan-400"
                       />
                     </div>
                   )}

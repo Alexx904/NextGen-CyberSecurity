@@ -27,7 +27,7 @@ export const ReportPreview: React.FC<ReportPreviewProps> = ({
               />
             ) : (
               <div
-                className="w-10 h-10 rounded-lg flex items-center justify-center text-white shadow-sm"
+                className="w-10 h-10 rounded-lg flex items-center justify-center text-white shadow-xs"
                 style={{ backgroundColor: brandColors.primary }}
               >
                 <ShieldCheck className="w-6 h-6 text-white" />

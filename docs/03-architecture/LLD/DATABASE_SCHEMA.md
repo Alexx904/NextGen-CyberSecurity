@@ -223,3 +223,32 @@ erDiagram
 ```
 
 ---
+
+## TECH-DEBT-05 - Authorization evidence (2026-10-19, working tree)
+
+Migration `000013_scan_authorization` adds nullable `consent_snapshot JSONB` to
+`scans` and `schedules`. Null preserves historical reads without fabricating
+consent; application services/workers reject covered execution without evidence.
+The public JSON name is `authorization`. Snapshots contain the versioned explicit
+statement, exact target IDs/values, Nmap arguments, timeout, recurrence, tenant,
+actor and server acceptance time; recurring evidence also records schedule ID.
+Source snapshot changes are rejected by triggers; status/timestamps remain mutable.
+
+`scan_authorization_audit`: UUID primary key, tenant/user UUIDs, object type
+(scans/schedules), object UUID, database-generated recorded_at and evidence JSONB;
+unique (object_type, object_id), index (tenant_id, recorded_at DESC, id). No inventory
+FK is intentional: evidence survives scan/schedule/tenant deletion. Source inserts
+and audit insertion share the source transaction. UPDATE/DELETE/TRUNCATE evidence
+operations are rejected; PUBLIC mutation privileges are revoked. A database owner
+can remove triggers; this is application-level immutability, not external notarization.
+No automatic retention/purge policy or unlimited storage claim is introduced.
+
+Runtime schedule writes update only last/next-run timestamps conditionally on the
+same enabled schedule/configuration, never overwriting concurrent disable/edit.
+Down removes the two snapshot columns, new audit table, triggers and functions;
+it loses authorization history. Back up those columns/table before application
+rollback. Up/down/up tests use only disposable `nextgen_consent_test` on 55432.
+Migration 000012 remains the preexisting deferred alerting prototype; no release
+or deployment of that work is implied by testing the integrated local tree.
+[ADR-27](../ADR/README.md#adr-27--inventory-scan-authorization-snapshots-2026-10-19),
+[implementation and evidence](../../04-development/plans/TECH-DEBT-05.md).

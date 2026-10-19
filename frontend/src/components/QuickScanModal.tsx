@@ -5,6 +5,7 @@ import { apiClient } from '../api/client';
 import { ApiResponse } from '../types/auth';
 import { TargetItem } from '../types/target';
 import { ScanItem } from '../types/scan';
+import { scanAuthorization } from './scans/scanAuthorization';
 
 interface ScanProfileItem {
   id: string;
@@ -33,6 +34,8 @@ export const QuickScanModal: React.FC<QuickScanModalProps> = ({
   const [loadingProfiles, setLoadingProfiles] = useState<boolean>(false);
   const [launching, setLaunching] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
+  useEffect(() => { setConfirmed(false); }, [isOpen, target?.id, target?.value, selectedProfileId]);
 
   useEffect(() => {
     if (isOpen && target) {
@@ -61,7 +64,7 @@ export const QuickScanModal: React.FC<QuickScanModalProps> = ({
   if (!isOpen || !target) return null;
 
   const handleLaunch = async () => {
-    if (!selectedProfileId) {
+    if (!selectedProfileId || !confirmed) {
       setError('Seleziona un profilo di scansione');
       return;
     }
@@ -72,6 +75,7 @@ export const QuickScanModal: React.FC<QuickScanModalProps> = ({
       const response = await apiClient.post<ApiResponse<ScanItem>>('/scans', {
         target_id: target.id,
         profile_id: selectedProfileId,
+        authorization: scanAuthorization([target], profiles.find(profile => profile.id === selectedProfileId)!),
       });
 
       if (response.data && response.data.success) {
@@ -93,7 +97,7 @@ export const QuickScanModal: React.FC<QuickScanModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="max-w-lg w-full bg-[#111726] border border-cyber-border rounded-2xl shadow-2xl overflow-hidden relative">
         {/* Header */}
         <div className="p-5 border-b border-cyber-border flex items-center justify-between">
@@ -189,6 +193,7 @@ export const QuickScanModal: React.FC<QuickScanModalProps> = ({
           </div>
 
           {/* Footer Actions */}
+          <label className="flex gap-2 text-xs text-slate-300"><input type="checkbox" checked={confirmed} disabled={launching || loadingProfiles} onChange={event => setConfirmed(event.target.checked)} />Confermo di possedere esplicita autorizzazione scritta per questo target e questa configurazione.</label>
           <div className="pt-2 flex items-center justify-end space-x-3 border-t border-cyber-border/60">
             <button
               type="button"
@@ -201,7 +206,7 @@ export const QuickScanModal: React.FC<QuickScanModalProps> = ({
             <button
               type="button"
               onClick={handleLaunch}
-              disabled={launching || !selectedProfileId}
+              disabled={launching || loadingProfiles || !selectedProfileId || !confirmed}
               className="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-semibold transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1.5"
             >
               <Play className="w-3.5 h-3.5" />

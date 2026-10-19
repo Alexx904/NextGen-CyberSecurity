@@ -138,7 +138,7 @@ export const DebugConsoleDrawer: React.FC = () => {
     <div className="fixed inset-0 z-50 overflow-hidden">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+        className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
         onClick={closeDrawer}
         aria-hidden="true"
       />
@@ -181,7 +181,7 @@ export const DebugConsoleDrawer: React.FC = () => {
               <button
                 onClick={handleCopyAiMarkdown}
                 data-testid="copy-ai-btn"
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 text-xs font-semibold shadow-sm transition-all"
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 text-xs font-semibold shadow-xs transition-all"
                 title="Copia report Markdown strutturato pronto per la chat AI"
               >
                 {copiedMd ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Sparkles className="w-3.5 h-3.5" />}
@@ -223,7 +223,7 @@ export const DebugConsoleDrawer: React.FC = () => {
                   placeholder="Cerca per titolo, URL, o errore..."
                   value={filterOptions.search || ''}
                   onChange={(e) => setFilterOptions({ search: e.target.value })}
-                  className="w-full pl-9 pr-3 py-1.5 bg-[#0e1320] border border-cyber-border rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/60"
+                  className="w-full pl-9 pr-3 py-1.5 bg-[#0e1320] border border-cyber-border rounded-lg text-xs text-white placeholder-slate-500 focus:outline-hidden focus:border-cyan-500/60"
                 />
               </div>
 
@@ -231,7 +231,7 @@ export const DebugConsoleDrawer: React.FC = () => {
               <select
                 value={filterOptions.source || 'all'}
                 onChange={(e) => setFilterOptions({ source: e.target.value as DebugLogSource | 'all' })}
-                className="bg-[#0e1320] border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-cyan-500/60"
+                className="bg-[#0e1320] border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-hidden focus:border-cyan-500/60"
               >
                 {sourceBadges.map((s) => (
                   <option key={s.key} value={s.key}>
@@ -252,7 +252,7 @@ export const DebugConsoleDrawer: React.FC = () => {
                     onClick={() => setFilterOptions({ level: lvl.key })}
                     className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
                       isActive
-                        ? 'bg-slate-700 border border-cyan-500/50 text-white shadow-sm'
+                        ? 'bg-slate-700 border border-cyan-500/50 text-white shadow-xs'
                         : 'bg-slate-900/80 border border-transparent text-slate-400 hover:text-slate-200'
                     }`}
                   >

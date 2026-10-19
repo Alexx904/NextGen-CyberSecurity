@@ -75,7 +75,7 @@ describe('Debug Console E2E & Integrated Workflow', () => {
 
     // 2. Render dell'applicazione
     render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <MemoryRouter>
         <DebugProvider>
           <MockAppDashboard />
         </DebugProvider>

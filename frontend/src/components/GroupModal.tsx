@@ -114,7 +114,7 @@ export const GroupModal: React.FC<GroupModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="max-w-md w-full bg-[#111726] border border-cyber-border rounded-2xl shadow-2xl overflow-hidden relative">
         {/* Header */}
         <div className="p-5 border-b border-cyber-border flex items-center justify-between">
@@ -166,7 +166,7 @@ export const GroupModal: React.FC<GroupModalProps> = ({
               onChange={(e) => setName(e.target.value)}
               placeholder="es: Sede Milano, DMZ Produzione, Cloud AWS"
               required
-              className="w-full px-3.5 py-2.5 bg-slate-900 border border-cyber-border rounded-lg text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+              className="w-full px-3.5 py-2.5 bg-slate-900 border border-cyber-border rounded-lg text-sm text-slate-100 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
             />
           </div>
 
@@ -180,7 +180,7 @@ export const GroupModal: React.FC<GroupModalProps> = ({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="es: Rete perimeteriale esposta al pubblico"
-              className="w-full px-3.5 py-2 bg-slate-900 border border-cyber-border rounded-lg text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+              className="w-full px-3.5 py-2 bg-slate-900 border border-cyber-border rounded-lg text-sm text-slate-100 placeholder-slate-500 focus:outline-hidden focus:border-cyan-500"
             />
           </div>
 
@@ -194,7 +194,7 @@ export const GroupModal: React.FC<GroupModalProps> = ({
               value={companyId || parentId}
               disabled={!!companyId}
               onChange={(e) => setParentId(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-900 border border-cyber-border rounded-lg text-sm text-slate-100 focus:outline-none focus:border-cyan-500"
+              className="w-full px-3.5 py-2.5 bg-slate-900 border border-cyber-border rounded-lg text-sm text-slate-100 focus:outline-hidden focus:border-cyan-500"
             >
               {!companyId && <option value="">Azienda (radice)</option>}
               {selectableParents.map((g) => (

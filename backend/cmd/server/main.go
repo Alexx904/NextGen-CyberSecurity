@@ -120,10 +120,12 @@ func main() {
 	scanOrchestrator.SetFindingRepo(findingRepo)
 	scanOrchestrator.SetCorrelator(cveCorrelator)
 	scanOrchestrator.SetEventBroadcaster(eventBroadcaster)
-	scanOrchestrator.Start(context.Background())
 
 	scheduleRepo := postgres.NewScheduleRepo(db.Pool)
+	scanOrchestrator.SetScheduleRepo(scheduleRepo)
+	scanOrchestrator.Start(context.Background())
 	schedulerService := service.NewSchedulerService(scheduleRepo, scanRepo, scanOrchestrator, logger)
+	schedulerService.ConfigureAuthorizationRepositories(targetRepo, scanProfileRepo)
 	if err := schedulerService.Start(context.Background()); err != nil {
 		slog.Error("Avvio SchedulerService fallito", "error", err)
 	}
@@ -141,6 +143,11 @@ func main() {
 	firewallService := service.NewFirewallService(sshService, sshServerRepo)
 	attackPathService := service.NewAttackPathService(targetRepo, findingRepo, sshServerRepo)
 	defenseService := service.NewDefenseService(attackPathService, sshServerRepo, firewallService)
+	alertService := service.NewAlertService(postgres.NewAlertRepo(db.Pool), service.NewAlertDispatcher(), []byte(cfg.SSHMasterKey), logger)
+	alertCtx, cancelAlerts := context.WithCancel(context.Background())
+	alertDone := make(chan struct{})
+	go func() { defer close(alertDone); alertService.Run(alertCtx) }()
+	defer func() { cancelAlerts(); <-alertDone }()
 
 	// 8. Configurazione Router Chi & Middleware Standard
 	r := chi.NewRouter()
@@ -168,6 +175,7 @@ func main() {
 	attackPathHandler := handler.NewAttackPathHandler(attackPathService)
 	defenseHandler := handler.NewDefenseHandler(defenseService)
 	virtualPatchingHandler := handler.NewVirtualPatchingHandler(service.NewVirtualPatchingService(findingRepo))
+	alertHandler := handler.NewAlertHandler(alertService)
 
 	r.Get("/healthz", healthHandler.HealthCheck)
 	r.Route("/api/v1", func(api chi.Router) {
@@ -322,6 +330,14 @@ func main() {
 		})
 
 		api.With(authMiddleware, appmw.RequireTenant()).Get("/findings/{id}/virtual-patches", virtualPatchingHandler.Generate)
+		api.Route("/alert-channels", func(channels chi.Router) {
+			channels.Use(authMiddleware, appmw.RequireTenant(), appmw.RequireAdmin())
+			channels.Get("/", alertHandler.List)
+			channels.Post("/", alertHandler.Create)
+			channels.Post("/test", alertHandler.Test)
+			channels.Put("/{id}", alertHandler.Update)
+			channels.Delete("/{id}", alertHandler.Delete)
+		})
 
 		api.Route("/ssh/servers", func(sshRouter chi.Router) {
 			sshRouter.Use(authMiddleware)

@@ -406,7 +406,7 @@ export const Findings: React.FC = () => {
                   setSelectedTargetId('');
                   setSelectedScanId('');
                 }}
-                className="bg-slate-900 border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-500 font-medium"
+                className="bg-slate-900 border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-hidden focus:border-cyan-500 font-medium"
               >
                 <option value="">Tutti i reparti ({departments.length})</option>
                 {departments.map((d) => (
@@ -501,7 +501,7 @@ export const Findings: React.FC = () => {
               }}
               className={`px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center space-x-2 transition-all ${
                 selectedTargetId === ''
-                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow-sm'
+                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow-xs'
                   : 'bg-slate-900 border-cyber-border text-slate-400 hover:text-white hover:bg-slate-800'
               }`}
             >
@@ -522,7 +522,7 @@ export const Findings: React.FC = () => {
                   }}
                   className={`px-3 py-1.5 rounded-lg border text-xs transition-all flex items-center space-x-2 font-mono ${
                     isSelected
-                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 font-bold shadow-sm'
+                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 font-bold shadow-xs'
                       : 'bg-slate-900 border-cyber-border text-slate-300 hover:text-white hover:bg-slate-800'
                   }`}
                 >
@@ -570,7 +570,7 @@ export const Findings: React.FC = () => {
                   <select
                     value={selectedScanId}
                     onChange={(e) => setSelectedScanId(e.target.value)}
-                    className="bg-slate-900 border border-cyber-border rounded px-2 py-1 text-xs text-cyan-400 font-mono focus:outline-none"
+                    className="bg-slate-900 border border-cyber-border rounded px-2 py-1 text-xs text-cyan-400 font-mono focus:outline-hidden"
                   >
                     <option value="">Ultima Scansione (Consigliata)</option>
                     {activeTarget.scans.map((s) => (

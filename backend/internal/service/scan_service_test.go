@@ -245,7 +245,7 @@ func TestScanService_StartScan_Success(t *testing.T) {
 
 	svc := NewScanService(scanRepo, profileRepo, targetRepo, newMockFindingRepo(), newMockScanGroupRepo(), orchClient)
 
-	scan, err := svc.StartScan(context.Background(), tenantID, targetID, profileID)
+	scan, err := svc.StartScan(authorizedScanContext(tenantID, profileRepo.profiles[profileID], targetRepo.targets[targetID]), tenantID, targetID, profileID)
 	if err != nil {
 		t.Fatalf("StartScan ha fallito inaspettatamente: %v", err)
 	}
@@ -285,7 +285,7 @@ func TestScanService_StartScan_BlacklistedTarget(t *testing.T) {
 
 	svc := NewScanService(scanRepo, profileRepo, targetRepo, newMockFindingRepo(), newMockScanGroupRepo(), orchClient)
 
-	_, err := svc.StartScan(context.Background(), tenantID, targetID, profileID)
+	_, err := svc.StartScan(authorizedScanContext(tenantID, profileRepo.profiles[profileID], targetRepo.targets[targetID]), tenantID, targetID, profileID)
 	if err == nil || !errors.Is(err, domain.ErrTargetBlacklisted) {
 		t.Errorf("atteso ErrTargetBlacklisted, ottenuto: %v", err)
 	}
@@ -326,7 +326,7 @@ func TestScanService_StartScan_AlreadyRunning(t *testing.T) {
 
 	svc := NewScanService(scanRepo, profileRepo, targetRepo, newMockFindingRepo(), newMockScanGroupRepo(), orchClient)
 
-	_, err := svc.StartScan(context.Background(), tenantID, targetID, profileID)
+	_, err := svc.StartScan(authorizedScanContext(tenantID, profileRepo.profiles[profileID], targetRepo.targets[targetID]), tenantID, targetID, profileID)
 	if err == nil || !errors.Is(err, domain.ErrScanAlreadyRunning) {
 		t.Errorf("atteso ErrScanAlreadyRunning, ottenuto: %v", err)
 	}
@@ -463,7 +463,7 @@ func TestScanService_StartGroupScan_RecursiveTargets(t *testing.T) {
 
 	svc := NewScanService(scanRepo, profileRepo, targetRepo, newMockFindingRepo(), groupRepo, orchClient)
 
-	scans, err := svc.StartGroupScan(context.Background(), tenantID, rootGroupID, profileID)
+	scans, err := svc.StartGroupScan(authorizedScanContext(tenantID, profileRepo.profiles[profileID], targetRepo.targets[t1ID], targetRepo.targets[t2ID]), tenantID, rootGroupID, profileID)
 	if err != nil {
 		t.Fatalf("StartGroupScan ha fallito inaspettatamente: %v", err)
 	}
@@ -521,7 +521,7 @@ func TestScanService_StartGroupScan_SkipsBlacklistedAndActive(t *testing.T) {
 
 	svc := NewScanService(scanRepo, profileRepo, targetRepo, newMockFindingRepo(), groupRepo, orchClient)
 
-	scans, err := svc.StartGroupScan(context.Background(), tenantID, groupID, profileID)
+	scans, err := svc.StartGroupScan(authorizedScanContext(tenantID, profileRepo.profiles[profileID], targetRepo.targets[t2ID], targetRepo.targets[t3ID]), tenantID, groupID, profileID)
 	if err != nil {
 		t.Fatalf("StartGroupScan ha fallito: %v", err)
 	}

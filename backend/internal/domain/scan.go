@@ -104,19 +104,20 @@ type ScanProfile struct {
 
 // Scan rappresenta un'esecuzione (on-demand o schedulata) di vulnerability scanning
 type Scan struct {
-	Progress     *ScanProgressPayload `json:"progress,omitempty" db:"-"`
-	ID           uuid.UUID            `json:"id" db:"id"`
-	TenantID     uuid.UUID            `json:"tenant_id" db:"tenant_id"`
-	TargetID     uuid.UUID            `json:"target_id" db:"target_id"`
-	ProfileID    uuid.UUID            `json:"profile_id" db:"profile_id"`
-	TriggerType  ScanTriggerType      `json:"trigger_type" db:"trigger_type"`
-	Status       ScanStatus           `json:"status" db:"status"`
-	StartedAt    *time.Time           `json:"started_at,omitempty" db:"started_at"`
-	CompletedAt  *time.Time           `json:"completed_at,omitempty" db:"completed_at"`
-	SummaryStats ScanSummaryStats     `json:"summary_stats" db:"summary_stats"`
-	ErrorMessage *string              `json:"error_message,omitempty" db:"error_message"`
-	CreatedAt    time.Time            `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time            `json:"updated_at" db:"updated_at"`
+	Authorization *ScanAuthorization   `json:"authorization,omitempty" db:"consent_snapshot"`
+	Progress      *ScanProgressPayload `json:"progress,omitempty" db:"-"`
+	ID            uuid.UUID            `json:"id" db:"id"`
+	TenantID      uuid.UUID            `json:"tenant_id" db:"tenant_id"`
+	TargetID      uuid.UUID            `json:"target_id" db:"target_id"`
+	ProfileID     uuid.UUID            `json:"profile_id" db:"profile_id"`
+	TriggerType   ScanTriggerType      `json:"trigger_type" db:"trigger_type"`
+	Status        ScanStatus           `json:"status" db:"status"`
+	StartedAt     *time.Time           `json:"started_at,omitempty" db:"started_at"`
+	CompletedAt   *time.Time           `json:"completed_at,omitempty" db:"completed_at"`
+	SummaryStats  ScanSummaryStats     `json:"summary_stats" db:"summary_stats"`
+	ErrorMessage  *string              `json:"error_message,omitempty" db:"error_message"`
+	CreatedAt     time.Time            `json:"created_at" db:"created_at"`
+	UpdatedAt     time.Time            `json:"updated_at" db:"updated_at"`
 }
 
 // CanCancel determina se la scansione può essere annullata dall'utente
@@ -176,16 +177,17 @@ func (s *Scan) MarkCancelled() error {
 
 // Schedule definisce una pianificazione ricorrente per l'esecuzione di scansioni periodiche
 type Schedule struct {
-	ID             uuid.UUID  `json:"id" db:"id"`
-	TenantID       uuid.UUID  `json:"tenant_id" db:"tenant_id"`
-	TargetID       uuid.UUID  `json:"target_id" db:"target_id"`
-	ProfileID      uuid.UUID  `json:"profile_id" db:"profile_id"`
-	CronExpression string     `json:"cron_expression" db:"cron_expression"`
-	IsActive       bool       `json:"is_active" db:"is_active"`
-	NextRunAt      *time.Time `json:"next_run_at,omitempty" db:"next_run_at"`
-	LastRunAt      *time.Time `json:"last_run_at,omitempty" db:"last_run_at"`
-	CreatedAt      time.Time  `json:"created_at" db:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at" db:"updated_at"`
+	Authorization  *ScanAuthorization `json:"authorization,omitempty" db:"consent_snapshot"`
+	ID             uuid.UUID          `json:"id" db:"id"`
+	TenantID       uuid.UUID          `json:"tenant_id" db:"tenant_id"`
+	TargetID       uuid.UUID          `json:"target_id" db:"target_id"`
+	ProfileID      uuid.UUID          `json:"profile_id" db:"profile_id"`
+	CronExpression string             `json:"cron_expression" db:"cron_expression"`
+	IsActive       bool               `json:"is_active" db:"is_active"`
+	NextRunAt      *time.Time         `json:"next_run_at,omitempty" db:"next_run_at"`
+	LastRunAt      *time.Time         `json:"last_run_at,omitempty" db:"last_run_at"`
+	CreatedAt      time.Time          `json:"created_at" db:"created_at"`
+	UpdatedAt      time.Time          `json:"updated_at" db:"updated_at"`
 }
 
 // ScanDiffStatus classifica lo stato differenziale di un finding tra due scansioni temporali (SEC-P2-03)

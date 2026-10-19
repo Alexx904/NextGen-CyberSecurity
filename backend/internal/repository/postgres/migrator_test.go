@@ -12,8 +12,8 @@ func TestGetMaxSourceVersion(t *testing.T) {
 		t.Fatalf("GetMaxSourceVersion ha restituito un errore imprevisto: %v", err)
 	}
 
-	// Latest source includes persisted discovery snapshots.
-	if maxVer != 11 {
-		t.Errorf("Attesa versione massima 11, ottenuta %d", maxVer)
+	// Latest source includes immutable scan authorization evidence.
+	if maxVer != 13 {
+		t.Errorf("Attesa versione massima 13, ottenuta %d", maxVer)
 	}
 }

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { expect, it, vi } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { FirewallManager } from './FirewallManager';
 import { sshApi } from '../api/ssh';
 import type { FirewallStatus, SSHServerItem } from '../types/ssh';
@@ -8,6 +8,8 @@ vi.mock('../api/ssh', () => ({ sshApi: {
   getFirewallStatus: vi.fn(), setFirewallPolicy: vi.fn(), moveFirewallRule: vi.fn(), replaceFirewallRule: vi.fn(),
 } }));
 vi.mock('./WebTerminalModal', () => ({ WebTerminalModal: ({ docked, onClose }: { docked?: boolean; onClose: () => void }) => <section aria-label="Docked terminal fixture">{docked ? 'Docked' : 'Overlay'}<button onClick={onClose}>Close terminal fixture</button></section> }));
+
+afterEach(() => vi.unstubAllGlobals());
 
 it('shows the actionable API error for a firewall HTTP 502', async () => {
   const message = 'Accesso firewall negato: configurare sudo non interattivo.';
@@ -87,7 +89,9 @@ it('opens a docked terminal only on request and closes it without closing the fi
 it('requires confirmation and sends the current revision for a policy change', async () => {
   vi.mocked(sshApi.getFirewallStatus).mockResolvedValue(editableStatus());
   vi.mocked(sshApi.setFirewallPolicy).mockResolvedValue(pendingStatus());
-  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+  // happy-dom does not implement the browser confirmation dialog.
+  const confirm = vi.fn(() => true);
+  vi.stubGlobal('confirm', confirm);
   render(<FirewallManager server={labServer} onClose={vi.fn()} />);
   const policy = await screen.findByLabelText('Nuova policy INPUT');
   await waitFor(() => expect((policy as HTMLSelectElement).disabled).toBe(false));
@@ -95,7 +99,6 @@ it('requires confirmation and sends the current revision for a policy change', a
   fireEvent.click(screen.getByRole('button', { name: 'Applica policy' }));
   await waitFor(() => expect(sshApi.setFirewallPolicy).toHaveBeenCalledWith('server', 'INPUT', 'DROP', 'a'.repeat(64)));
   expect(confirm).toHaveBeenCalledWith(expect.stringContaining('DROP'));
-  confirm.mockRestore();
 });
 
 it('clears the transport port when replacing a TCP rule with ICMP', async () => {

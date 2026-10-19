@@ -6,6 +6,7 @@ import { TargetGroupNode, TargetItem, TargetListResponseData } from '../types/ta
 import { ScanItem, ScanProfileItem } from '../types/scan';
 import { getAllDescendantGroupIds, useCompany } from '../context/CompanyContext';
 import { SCAN_PRESETS, canonicalArgs, commandError, isIntrusive, normalizeNmapInput, profileDurationLabel } from './scans/scanConfiguration';
+import { scanAuthorization } from './scans/scanAuthorization';
 
 interface NewScanModalProps {
   isOpen: boolean;
@@ -29,7 +30,7 @@ function errorMessage(error: unknown): string {
   return response.response?.data?.error?.message || response.message || 'Impossibile completare la richiesta.';
 }
 
-const fieldClass = 'w-full rounded-lg border border-cyber-border bg-slate-950 p-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-cyan-500';
+const fieldClass = 'w-full rounded-lg border border-cyber-border bg-slate-950 p-2.5 text-sm text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-cyan-500';
 
 export const NewScanModal: React.FC<NewScanModalProps> = ({ isOpen, onClose, onScanLaunched, onScheduleCreated, defaultGroupId, targetValues }) => {
   const { selectedCompanyId } = useCompany();
@@ -148,7 +149,7 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({ isOpen, onClose, onS
   useEffect(() => { setCompletedScheduleIds(new Set()); }, [args, groupId, cron, timeout, scheduled]);
   useEffect(() => { setCompletedScanIds(new Set()); setConfirmed(false); }, [isOpen, args, groupId, timeout, scheduled, selectionKey]);
   useEffect(() => { setLaunchUncertain(false); }, [isOpen, selectionKey]);
-  const disabled = loading || loadFailed || submitting || launchUncertain || !selectedGroup || eligibleTargets.length === 0 || !!validationError || timeoutInvalid || cronInvalid || (intrusive && !confirmed);
+  const disabled = loading || loadFailed || submitting || launchUncertain || !selectedGroup || eligibleTargets.length === 0 || !!validationError || timeoutInvalid || cronInvalid || !confirmed;
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -173,7 +174,7 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({ isOpen, onClose, onS
         const results: PromiseSettledResult<{ targetId: string; scan: ScanItem }>[] = [];
         for (let offset = 0; offset < pending.length; offset += 4) {
           results.push(...await Promise.allSettled(pending.slice(offset, offset + 4).map(async target => {
-          const res = await apiClient.post<ApiResponse<ScanItem>>('/scans', { target_id: target.id, profile_id: profileId });
+          const res = await apiClient.post<ApiResponse<ScanItem>>('/scans', { target_id: target.id, profile_id: profileId, authorization: scanAuthorization([target], profile!) });
           if (!res.data.success || !res.data.data) throw new Error('Avvio target fallito.');
           return { targetId: target.id, scan: res.data.data };
           })));
@@ -195,14 +196,14 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({ isOpen, onClose, onS
         }
         if (failures) throw new Error(`${succeeded.size} scansioni avviate; ${failures} non riuscite. Riprova solo quelle mancanti.`);
       } else if (!scheduled) {
-        const res = await apiClient.post<ApiResponse<ScanItem[] | ScanItem>>('/scans', { group_id: groupId, profile_id: profile.id });
+        const res = await apiClient.post<ApiResponse<ScanItem[] | ScanItem>>('/scans', { group_id: groupId, profile_id: profile.id, authorization: scanAuthorization(eligibleTargets, profile) });
         if (!res.data.success) throw new Error(res.data.error?.message || 'Avvio scansione fallito.');
         onScanLaunched(res.data.data ? Array.isArray(res.data.data) ? res.data.data : [res.data.data] : []);
       } else {
         const pending = eligibleTargets.filter((target) => !completedScheduleIds.has(target.id));
         const profileId = profile.id;
         const results = await Promise.allSettled(pending.map(async (target) => {
-          const res = await apiClient.post<ApiResponse<unknown>>('/schedules', { target_id: target.id, profile_id: profileId, cron_expression: cron, is_active: true });
+          const res = await apiClient.post<ApiResponse<unknown>>('/schedules', { target_id: target.id, profile_id: profileId, cron_expression: cron, is_active: true, authorization: scanAuthorization([target], profile!, cron) });
           if (!res.data.success) throw new Error(res.data.error?.message || 'Creazione pianificazione fallita.');
           return target.id;
         }));
@@ -282,10 +283,11 @@ export const NewScanModal: React.FC<NewScanModalProps> = ({ isOpen, onClose, onS
               {cronPreset === 'CUSTOM' && <><label htmlFor="scan-cron" className="block text-sm text-slate-300">Espressione cron a 5 campi</label><input id="scan-cron" className={fieldClass} value={customCron} onChange={(event) => setCustomCron(event.target.value)} /></>}
               {cronInvalid && <p role="alert" className="text-xs text-amber-300">Inserisci 5 campi cron; la sintassi verrà verificata dal server.</p>}
             </div>}
-            {intrusive && <div className="rounded-lg border border-amber-500/30 p-3 space-y-2">
-              <p className="text-sm text-amber-300">Configurazione a impatto elevato o con controlli attivi</p>
+            <div className="rounded-lg border border-amber-500/30 p-3 space-y-2">
+              <p className="text-sm text-amber-300">{intrusive ? 'Configurazione a impatto elevato o con controlli attivi' : 'Autorizzazione alla scansione attiva'}</p>
               <label className="flex items-start gap-2 text-xs text-slate-300"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />Confermo di possedere esplicita autorizzazione scritta per questa configurazione e questo scope.</label>
-            </div>}
+              {scheduled && <p className="text-xs text-slate-400">Il consenso vale per le esecuzioni ricorrenti su questi target con queste opzioni, timeout e frequenza. Se cambiano, serve una nuova autorizzazione.</p>}
+            </div>
             <details className="text-xs text-slate-400"><summary className="cursor-pointer">Limiti dei risultati</summary><p className="mt-2">La scansione non è un penetration test né una verifica di conformità. Le versioni, le CVE correlate e gli esiti NSE richiedono validazione professionale; risultati vuoti non dimostrano assenza di vulnerabilità. -Pn salta la verifica preliminare degli host, non aggira i firewall. SYN resta rilevabile.</p></details>
           </fieldset>
           <footer className="flex justify-end gap-3 border-t border-cyber-border pt-4">
